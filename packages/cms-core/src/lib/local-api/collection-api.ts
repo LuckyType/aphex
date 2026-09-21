@@ -404,10 +404,13 @@ export class CollectionAPI<T = Document> {
 		}
 
 		// Resolve org IDs via hierarchy service (cached) and pass directly —
-		// this avoids the adapter opening a transaction just to set RLS context
+		// this avoids the adapter opening a transaction just to set RLS context.
+		// Child organizations are opt-in (`includeChildOrganizations`, documented
+		// `@default false`); a plain read is scoped to the context's org only.
 		if (this.hierarchyService && !findOptions.filterOrganizationIds) {
-			const orgIds = await this.hierarchyService.getOrgIdsWithChildren(context.organizationId);
-			findOptions.filterOrganizationIds = orgIds;
+			findOptions.filterOrganizationIds = options.includeChildOrganizations
+				? await this.hierarchyService.getOrgIdsWithChildren(context.organizationId)
+				: [context.organizationId];
 		}
 
 		const result = await this.databaseAdapter.findManyDocAdvanced(
@@ -525,8 +528,9 @@ export class CollectionAPI<T = Document> {
 		// Same as `find`: the resolved perspective must reach the adapter.
 		const findOptions: Partial<FindOptions<T>> = { ...options, perspective };
 		if (this.hierarchyService && !findOptions.filterOrganizationIds) {
-			const orgIds = await this.hierarchyService.getOrgIdsWithChildren(context.organizationId);
-			findOptions.filterOrganizationIds = orgIds;
+			findOptions.filterOrganizationIds = options?.includeChildOrganizations
+				? await this.hierarchyService.getOrgIdsWithChildren(context.organizationId)
+				: [context.organizationId];
 		}
 
 		const result = await this.findOwnDocById(context.organizationId, id, findOptions);
