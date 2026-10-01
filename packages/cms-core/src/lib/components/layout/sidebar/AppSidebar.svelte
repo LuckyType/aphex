@@ -121,7 +121,7 @@
 	const bottomGroups = $derived(renderedGroups.filter((g) => g.group.placement === 'bottom'));
 </script>
 
-<Sidebar collapsible="icon" {...restProps}>
+<Sidebar collapsible="icon" role="navigation" aria-label="Studio" {...restProps}>
 	<SidebarHeader>
 		<!-- Organization Switcher -->
 		{#if data?.organizations && data.organizations.length > 0}
