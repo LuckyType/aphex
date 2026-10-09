@@ -1,4 +1,5 @@
 <script lang="ts">
+	import * as i18n from '../../../../i18n/index';
 	import { Button } from '@aphexcms/ui/shadcn/button';
 	import { Input } from '@aphexcms/ui/shadcn/input';
 	import { Image as ImageIcon, Upload, Trash2, X } from '@lucide/svelte';
@@ -54,7 +55,7 @@
 			onkeydown={(e) => e.stopPropagation()}
 		>
 			<div class="border-border flex items-center justify-between border-b px-4 py-2">
-				<span class="text-sm font-medium">Edit image</span>
+				<span class="text-sm font-medium">{i18n.t('Edit image')}</span>
 				<Button variant="ghost" size="icon" class="h-7 w-7" onclick={onClose}>
 					<X class="h-3.5 w-3.5" />
 				</Button>
@@ -82,33 +83,35 @@
 							{:else}
 								<div class="text-muted-foreground flex flex-col items-center gap-1">
 									<ImageIcon class="h-8 w-8" />
-									<span class="text-xs">Image not found</span>
+									<span class="text-xs">{i18n.t('Image not found')}</span>
 								</div>
 							{/if}
 						{:catch}
 							<div class="text-muted-foreground flex flex-col items-center gap-1">
 								<ImageIcon class="h-8 w-8" />
-								<span class="text-xs">Failed to load</span>
+								<span class="text-xs">{i18n.t('Failed to load')}</span>
 							</div>
 						{/await}
 					{:else}
 						<div class="text-muted-foreground flex flex-col items-center gap-1">
 							<ImageIcon class="h-8 w-8" />
-							<span class="text-xs">No image</span>
+							<span class="text-xs">{i18n.t('No image')}</span>
 						</div>
 					{/if}
 				</div>
 
 				<!-- Alt text (per-placement override of the asset's default alt) -->
 				<div class="space-y-1.5">
-					<label class="text-sm font-medium" for="image-block-alt">Alt text</label>
+					<label class="text-sm font-medium" for="image-block-alt">{i18n.t('Alt text')}</label>
 					<p class="text-muted-foreground text-xs">
-						Overrides the image's default alt for this spot. Leave blank to use the default.
+						{i18n.t(
+							"Overrides the image's default alt for this spot. Leave blank to use the default."
+						)}
 					</p>
 					<Input
 						id="image-block-alt"
 						type="text"
-						placeholder="Describe this image..."
+						placeholder={i18n.t('Describe this image...')}
 						value={alt}
 						oninput={(e) => onAltChange(e.currentTarget.value)}
 						disabled={readonly}
@@ -120,7 +123,7 @@
 					<div class="flex items-center justify-between gap-2 pt-1">
 						<Button variant="outline" size="sm" onclick={onReplace}>
 							<Upload class="mr-1.5 h-4 w-4" />
-							Replace
+							{i18n.t('Replace')}
 						</Button>
 						<Button
 							variant="ghost"
@@ -129,7 +132,7 @@
 							onclick={onRemove}
 						>
 							<Trash2 class="mr-1.5 h-4 w-4" />
-							Remove
+							{i18n.t('Remove')}
 						</Button>
 					</div>
 				{/if}

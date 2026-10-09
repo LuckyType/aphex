@@ -33,12 +33,10 @@
 	let pickerOpen = $state(false);
 	let submitting = $state(false);
 
-	const actionVerb = $derived(action === 'publish' ? 'Publish' : 'Unpublish');
-
 	const minDate = today(getLocalTimeZone());
 	// Short local timezone label, e.g. "MST" — shown so the user knows what zone they're setting.
 	const tzLabel =
-		new Intl.DateTimeFormat('en-US', { timeZoneName: 'short' })
+		new Intl.DateTimeFormat(i18n.locale(), { timeZoneName: 'short' })
 			.formatToParts(new Date())
 			.find((p) => p.type === 'timeZoneName')?.value ?? '';
 
@@ -64,14 +62,14 @@
 	const runAtPreview = $derived(buildRunAt());
 	const fieldLabel = $derived(
 		runAtPreview
-			? runAtPreview.toLocaleString(undefined, {
+			? runAtPreview.toLocaleString(i18n.locale(), {
 					month: 'short',
 					day: 'numeric',
 					year: 'numeric',
 					hour: 'numeric',
 					minute: '2-digit'
 				})
-			: 'Select date and time'
+			: i18n.t('Select date and time')
 	);
 
 	function setToCurrentTime() {
@@ -83,7 +81,7 @@
 	async function submit() {
 		const runAt = buildRunAt();
 		if (!runAt) {
-			toast.error('Pick a date and time');
+			toast.error(i18n.t('Pick a date and time'));
 			return;
 		}
 		runAt.setSeconds(0, 0);
@@ -91,7 +89,7 @@
 		const currentMinute = new Date();
 		currentMinute.setSeconds(0, 0);
 		if (runAt.getTime() < currentMinute.getTime()) {
-			toast.error('Pick a time in the future');
+			toast.error(i18n.t('Pick a time in the future'));
 			return;
 		}
 
@@ -100,15 +98,19 @@
 			const res = await documents.schedule(documentId, { action, runAt: runAt.toISOString() });
 			if (res.success) {
 				toast.success(
-					`${action === 'publish' ? 'Publish' : 'Unpublish'} scheduled for ${runAt.toLocaleString()}`
+					action === 'publish'
+						? i18n.t('Publish scheduled for {time}', { time: runAt.toLocaleString(i18n.locale()) })
+						: i18n.t('Unpublish scheduled for {time}', {
+								time: runAt.toLocaleString(i18n.locale())
+							})
 				);
 				open = false;
 				if (res.data) onScheduled?.(res.data);
 			} else {
-				toast.error(res.error || res.message || 'Failed to schedule');
+				toast.error(res.error || res.message || i18n.t('Failed to schedule'));
 			}
 		} catch (err) {
-			toast.error(err instanceof Error ? err.message : 'Failed to schedule');
+			toast.error(err instanceof Error ? err.message : i18n.t('Failed to schedule'));
 		} finally {
 			submitting = false;
 		}
@@ -118,15 +120,21 @@
 <Dialog.Root bind:open>
 	<Dialog.Content class="max-w-md">
 		<Dialog.Header>
-			<Dialog.Title>Schedule {actionVerb}</Dialog.Title>
+			<Dialog.Title
+				>{action === 'publish'
+					? i18n.t('Schedule Publish')
+					: i18n.t('Schedule Unpublish')}</Dialog.Title
+			>
 			<Dialog.Description>
-				Select when this document should be {action === 'publish' ? 'published' : 'unpublished'}.
+				{action === 'publish'
+					? i18n.t('Select when this document should be published.')
+					: i18n.t('Select when this document should be unpublished.')}
 			</Dialog.Description>
 		</Dialog.Header>
 
 		<div class="space-y-4 py-2">
 			<div class="space-y-1.5">
-				<Label>Schedule on</Label>
+				<Label>{i18n.t('Schedule on')}</Label>
 				<Popover.Root bind:open={pickerOpen}>
 					<Popover.Trigger
 						class="border-input bg-background hover:bg-muted/40 focus-visible:ring-ring flex w-full items-center justify-between rounded-md border px-3 py-2 text-left text-sm focus-visible:ring-1 focus-visible:outline-none"
@@ -139,6 +147,7 @@
 							type="single"
 							bind:value={dateValue}
 							minValue={minDate}
+							locale={i18n.locale()}
 							class="w-full rounded-b-none [--cell-size:2.4rem]"
 						/>
 						<div class="border-rule flex flex-wrap items-center gap-x-2 gap-y-1 border-t p-3">
@@ -153,7 +162,7 @@
 								class="text-muted-foreground hover:text-foreground text-xs underline-offset-2 hover:underline"
 								onclick={setToCurrentTime}
 							>
-								Set to current time
+								{i18n.t('Set to current time')}
 							</button>
 							<span class="text-muted-foreground ml-auto flex items-center gap-1 text-xs">
 								<Globe class="h-3 w-3" />
@@ -167,10 +176,10 @@
 
 		<Dialog.Footer>
 			<Button variant="ghost" size="sm" onclick={() => (open = false)} disabled={submitting}>
-				Cancel
+				{i18n.t('Cancel')}
 			</Button>
 			<Button size="sm" onclick={submit} disabled={submitting}>
-				{submitting ? 'Scheduling…' : 'Schedule'}
+				{submitting ? i18n.t('Scheduling…') : i18n.t('Schedule')}
 			</Button>
 		</Dialog.Footer>
 	</Dialog.Content>
