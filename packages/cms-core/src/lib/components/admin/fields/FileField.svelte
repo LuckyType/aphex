@@ -18,6 +18,8 @@
 	import elementEvents from '../../../utils/element-events';
 	import { copyUrlToClipboard, downloadFile } from '../../../utils/asset-actions';
 	import AssetBrowserModal from '../AssetBrowserModal.svelte';
+	import { extractVideoInfo } from '../../../utils/video-metadata';
+	import { cmsLogger } from '../../../utils/logger';
 	import { usePermissions } from '../../../permissions-context.svelte';
 	import {
 		acceptedFileTypesInputValue,
@@ -96,6 +98,25 @@
 			}
 
 			const asset = result.data;
+
+			// A video gets its first frame, duration and size as it does in the
+			// media browser, otherwise the only place they are read; without them a
+			// site shows no cover and the page shifts as the video loads.
+			// Losing them must not fail an upload that succeeded.
+			if (asset && file.type.startsWith('video/')) {
+				try {
+					const info = await extractVideoInfo(file);
+					if (info.poster || info.duration != null) {
+						await assets.uploadPoster(asset.id, info.poster, {
+							duration: info.duration,
+							width: info.width,
+							height: info.height
+						});
+					}
+				} catch (err) {
+					cmsLogger.warn('[Media]', 'Poster upload failed; video is fine:', err);
+				}
+			}
 
 			return {
 				_type: 'file',
