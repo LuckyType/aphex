@@ -1,4 +1,6 @@
 <script lang="ts">
+	import * as i18n from '../../../i18n/index';
+	import TimeInput from './TimeInput.svelte';
 	import CalendarIcon from '@lucide/svelte/icons/calendar';
 	import { type DateValue, parseDate } from '@internationalized/date';
 	import { Input } from '@aphexcms/ui/shadcn/input';
@@ -131,9 +133,9 @@
 	}
 
 	// Handle time input changes
-	function handleTimeChange(event: Event) {
-		const target = event.target as HTMLInputElement;
-		const newTime = target.value; // HH:mm format
+	function handleTimeChange(newTime: string) {
+		// Blank while the time is still half typed: nothing to combine yet.
+		if (!newTime) return;
 		timeValue = newTime;
 
 		// If we have a date, update the datetime
@@ -200,11 +202,10 @@
 				<div class="border-border border-t">
 					<div class="flex items-center gap-2 p-3">
 						<div class="flex-1">
-							<Input
-								type="time"
+							<TimeInput
 								value={timeValue}
-								oninput={handleTimeChange}
-								aria-label="Select time"
+								onChange={handleTimeChange}
+								label={i18n.t('Select time')}
 								disabled={readonly}
 								class="w-full"
 							/>
