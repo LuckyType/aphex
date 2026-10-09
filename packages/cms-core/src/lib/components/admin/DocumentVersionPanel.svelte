@@ -99,6 +99,7 @@
 				tab.value
 					? 'border-primary text-foreground border-b-2'
 					: 'text-muted-foreground hover:text-foreground'}"
+				aria-pressed={filter === tab.value}
 				onclick={() => {
 					filter = tab.value as any;
 				}}
