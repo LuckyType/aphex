@@ -325,3 +325,19 @@ export function validateFile(
 
 	return { valid: true, detectedMimeType };
 }
+
+/**
+ * The type an upload is stored and served as. Content with a recognised
+ * signature keeps the detected type. Plain text has no signature, so a
+ * declared `text/*` type (dangerous ones are refused earlier, by
+ * `validateFile`) is kept, without its parameters; anything else that could
+ * not be identified becomes `application/octet-stream`, never what the client
+ * claims.
+ */
+export function storedMimeType(detectedMimeType: string | null, clientMimeType: string): string {
+	if (detectedMimeType) return detectedMimeType;
+	const declared = clientMimeType.toLowerCase().split(';', 1)[0]?.trim() ?? '';
+	return declared.startsWith('text/') && !BLOCKED_MIME_TYPES.has(declared)
+		? declared
+		: 'application/octet-stream';
+}
