@@ -11,3 +11,12 @@ export function initialScheduleRunAt(initialRunAt: string | undefined, now: Date
 	}
 	return new Date(now.getTime() + 60 * 60 * 1000);
 }
+
+/** A scheduled time for a message: date and hour:minute in `locale`, no seconds. */
+export function formatScheduleTime(
+	date: Date,
+	locale: string | undefined,
+	hour12?: boolean
+): string {
+	return date.toLocaleString(locale, { dateStyle: 'medium', timeStyle: 'short', hour12 });
+}

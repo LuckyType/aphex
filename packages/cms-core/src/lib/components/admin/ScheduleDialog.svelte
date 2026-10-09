@@ -15,7 +15,7 @@
 	import { documents } from '../../api/documents';
 	import { toast } from 'svelte-sonner';
 	import { untrack } from 'svelte';
-	import { initialScheduleRunAt } from '../../utils/schedule-time';
+	import { formatScheduleTime, initialScheduleRunAt } from '../../utils/schedule-time';
 
 	interface Props {
 		open: boolean;
@@ -105,12 +105,11 @@
 		try {
 			const res = await documents.schedule(documentId, { action, runAt: runAt.toISOString() });
 			if (res.success) {
+				const time = formatScheduleTime(runAt, i18n.locale(), i18n.hour12());
 				toast.success(
 					action === 'publish'
-						? i18n.t('Publish scheduled for {time}', { time: runAt.toLocaleString(i18n.locale()) })
-						: i18n.t('Unpublish scheduled for {time}', {
-								time: runAt.toLocaleString(i18n.locale())
-							})
+						? i18n.t('Publish scheduled for {time}', { time })
+						: i18n.t('Unpublish scheduled for {time}', { time })
 				);
 				open = false;
 				if (res.data) onScheduled?.(res.data);
