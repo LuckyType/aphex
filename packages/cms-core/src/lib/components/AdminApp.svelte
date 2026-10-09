@@ -1285,6 +1285,18 @@
 	<div class="flex-1 overflow-hidden">
 		<Tabs.Root value={activeTab.value} onValueChange={handleTabChange} class="h-full">
 			<Tabs.Content value="structure" class="h-full overflow-hidden">
+				<!-- The editor renders its own h1 (the document title), so only the list and
+				     dashboard views need one here. -->
+				{#if currentView !== 'editor' && !currentTypeIsSingleton}
+					<h1 class="sr-only">
+						{selectedDocumentType
+							? pluralize(
+									documentTypes.find((t) => t.name === selectedDocumentType)?.title ||
+										selectedDocumentType
+								)
+							: 'Content'}
+					</h1>
+				{/if}
 				{#key `${currentView}-${selectedDocumentType}`}
 					<div
 						bind:clientWidth={contentWidth}
@@ -1462,9 +1474,9 @@
 														</div>
 													{/if}
 													<div>
-														<h3 class="text-sm font-medium">
+														<h2 class="text-sm font-medium">
 															{pluralize(currentDocType?.title || selectedDocumentType)}
-														</h3>
+														</h2>
 														<p class="text-muted-foreground text-xs">
 															{docTotalDocs} document{docTotalDocs !== 1 ? 's' : ''}
 														</p>
