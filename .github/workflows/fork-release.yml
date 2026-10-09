@@ -4,10 +4,18 @@ name: Fork release
 # cms-core and visual-editing and attaches their packed tarballs to a GitHub
 # Release. An app depends on the asset URL, e.g.
 #   https://github.com/<owner>/aphex/releases/download/<tag>/aphexcms-cms-core-<version>.tgz
+#
+# Run it by pushing a `fork-v*` tag, or by hand with the tag to create on the
+# commit the run is for.
 on:
   push:
     tags:
       - 'fork-v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Tag to create, e.g. fork-v11.2.1-1
+        required: true
 
 permissions:
   contents: write
@@ -49,4 +57,5 @@ jobs:
       - name: Create the release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" release/*.tgz --title "$GITHUB_REF_NAME" --generate-notes --verify-tag
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: gh release create "$TAG" release/*.tgz --title "$TAG" --target "$GITHUB_SHA" --generate-notes
