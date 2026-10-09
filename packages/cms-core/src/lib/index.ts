@@ -51,6 +51,16 @@ export * from './utils/index';
 // definition of "pending"/"expired" shared by cms-core, @aphexcms/auth and apps.
 export * from './auth/invitation-status';
 
+// Studio localization and the hooks an app hands the Studio. Plain TS (the
+// Svelte imports are type-only), safe for the universal barrel.
+export {
+	configureStudioI18n,
+	type StudioI18n,
+	type Message,
+	type MessageParams
+} from './i18n/index';
+export * from './studio-extensions';
+
 // Unified API client
 export * from './api/index';
 export type { ApiResponse } from './api/index';
