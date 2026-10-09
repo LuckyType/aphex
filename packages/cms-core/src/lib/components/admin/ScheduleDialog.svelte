@@ -14,6 +14,8 @@
 	import { CalendarDate, today, getLocalTimeZone, type DateValue } from '@internationalized/date';
 	import { documents } from '../../api/documents';
 	import { toast } from 'svelte-sonner';
+	import { untrack } from 'svelte';
+	import { initialScheduleRunAt } from '../../utils/schedule-time';
 
 	interface Props {
 		open: boolean;
@@ -25,8 +27,10 @@
 		 */
 		action: 'publish' | 'unpublish';
 		onScheduled?: (job: { jobId: string; type: string; runAt: string; status: string }) => void;
+		/** ISO time of the pending schedule, so rescheduling starts from it. */
+		initialRunAt?: string;
 	}
-	let { open = $bindable(), documentId, action, onScheduled }: Props = $props();
+	let { open = $bindable(), documentId, action, onScheduled, initialRunAt }: Props = $props();
 
 	let dateValue = $state<DateValue | undefined>(undefined);
 	let timeStr = $state('09:00'); // "HH:MM", 24h internally
@@ -42,10 +46,14 @@
 
 	const pad = (n: number) => String(n).padStart(2, '0');
 
-	// Reset the date/time each time the dialog opens: default to one hour out, floored to the minute.
+	// Reset the date/time each time the dialog opens: the pending schedule's time when there is
+	// one, else one hour out, floored to the minute.
 	$effect(() => {
 		if (open) {
-			const d = new Date(Date.now() + 60 * 60 * 1000);
+			const d = initialScheduleRunAt(
+				untrack(() => initialRunAt),
+				new Date()
+			);
 			dateValue = new CalendarDate(d.getFullYear(), d.getMonth() + 1, d.getDate());
 			timeStr = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 		}
