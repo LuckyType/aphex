@@ -1963,6 +1963,8 @@
 					size="icon"
 					onclick={() => (showHeaderMenu = !showHeaderMenu)}
 					class="h-8 w-8 cursor-pointer"
+					aria-label="Document actions"
+					aria-expanded={showHeaderMenu}
 				>
 					<Ellipsis class="h-4 w-4" />
 				</Button>
@@ -2224,6 +2226,7 @@
 				>
 					<button
 						type="button"
+						aria-pressed={activeGroup === 'all'}
 						onclick={() => (activeGroup = 'all')}
 						class="cursor-pointer rounded-md px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors {activeGroup ===
 						'all'
@@ -2235,6 +2238,7 @@
 					{#each visibleGroups as group (group.name)}
 						<button
 							type="button"
+							aria-pressed={activeGroup === group.name}
 							onclick={() => (activeGroup = group.name)}
 							class="flex cursor-pointer items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors {activeGroup ===
 							group.name
