@@ -1,4 +1,7 @@
 <script lang="ts">
+	import * as i18n from '../../i18n/index';
+	import { studioExtensions, type StudioPublishRefusal } from '../../studio-extensions';
+	import { isFieldVisible } from '../../schema-utils/visibility';
 	import { tick } from 'svelte';
 	import { Button } from '@aphexcms/ui/shadcn/button';
 	import { Badge } from '@aphexcms/ui/shadcn/badge';
@@ -42,7 +45,8 @@
 		ArrowLeft,
 		CalendarClock,
 		X,
-		Lock
+		Lock,
+		Undo2
 	} from '@lucide/svelte';
 	import { stegaEncodeDocument } from '../../preview/stega.js';
 	import { collectAssetRefs, injectAssetData, type ResolvedAsset } from '../../preview/assets.js';
@@ -327,6 +331,7 @@
 	);
 	function isFieldReadonly(fieldName: string): boolean {
 		const field = schema?.fields.find((f) => f.name === fieldName);
+		if (lock?.fields.includes(fieldName)) return true;
 		// In create mode, collection-level write ability is document.create;
 		// in edit mode it's document.update. Per-field `access.update` still
 		// wins as an additional restriction when the user IS able to write.
@@ -1064,6 +1069,9 @@
 		hasUnpublishedChanges(documentData, fullDocument?._meta?.publishedHash || null)
 	);
 	const isUnpublished = $derived(fullDocument?._meta?.status === 'unpublished');
+	// A schema's `lock` can hold a document against deletion and some fields
+	// against edits (DocumentType.lock).
+	const lock = $derived(schema?.lock?.(documentId ?? null, fullDocument) ?? null);
 	const canPublish = $derived(
 		(hasUnpublishedContent || isUnpublished) && !saving && documentId && !hasValidationErrors
 	);
@@ -1240,7 +1248,7 @@
 				schemaFields.forEach((fieldComponent, index) => {
 					const field = schema?.fields[index];
 					if (fieldComponent && field) {
-						fieldComponent.performValidation(documentData[field.name], documentData);
+						fieldComponent.performValidation(documentData[field.name]);
 					}
 				});
 			} else {
@@ -1499,7 +1507,7 @@
 				schemaFields.forEach((fieldComponent, index) => {
 					const field = schema?.fields[index];
 					if (fieldComponent && field) {
-						fieldComponent.performValidation(documentData[field.name], {});
+						fieldComponent.performValidation(documentData[field.name]);
 					}
 				}); // Notify parent of autosave with current title
 				if (onAutoSaved && documentId) {
@@ -1598,6 +1606,7 @@
 		saving = true;
 		saveError = null;
 
+		let refusal: StudioPublishRefusal | null = null;
 		try {
 			const response = await documents.publish(documentId, {
 				expectedRevision: fullDocument?._meta?.revision as number | undefined
@@ -1630,11 +1639,21 @@
 			}
 		} catch (err) {
 			if (err instanceof ApiError && err.status === 409) {
-				toast.error('This document was changed elsewhere. Reload to see the latest version.');
-				saveError =
-					'Conflict: this document was updated by someone else. Reload the page to continue editing.';
+				toast.error(
+					i18n.t('This document was changed elsewhere. Reload to see the latest version.')
+				);
+				saveError = i18n.t(
+					'Conflict: this document was updated by someone else. Reload the page to continue editing.'
+				);
+			} else if (
+				err instanceof ApiError &&
+				(refusal =
+					studioExtensions().describePublishRefusal?.(err.detail, documentData, schema) ?? null)
+			) {
+				saveError = refusal.text;
+				toast.error(refusal.heading);
 			} else {
-				toast.error(err instanceof ApiError ? err.message : 'Failed to publish document');
+				toast.error(err instanceof ApiError ? err.message : i18n.t('Failed to publish document'));
 
 				// Extract validation errors if present
 				if (err instanceof ApiError && err.response?.validationErrors) {
@@ -1672,6 +1691,63 @@
 		} else {
 			perspective = 'draft';
 			publishedData = null;
+		}
+	}
+
+	// Discard the draft: the server writes the published version back as the
+	// draft (the discarded edits stay in History), then the editor reloads it.
+	const canDiscardDraft = $derived(
+		!!documentId &&
+			canUpdate &&
+			perspective === 'draft' &&
+			fullDocument?._meta?.status === 'published' &&
+			hasUnpublishedContent
+	);
+
+	async function discardDraft() {
+		if (!documentId || saving || !canDiscardDraft) return;
+
+		const confirmDiscard = await confirmDialog({
+			title: i18n.t('Discard your changes?'),
+			description: i18n.t(
+				'The draft goes back to the published version. Your changes stay in History.'
+			),
+			confirmText: i18n.t('Discard changes', undefined, 'confirm discard'),
+			variant: 'destructive'
+		});
+		if (!confirmDiscard) return;
+
+		// A pending autosave would write the discarded edits straight back.
+		if (autoSaveTimer) {
+			clearTimeout(autoSaveTimer);
+			autoSaveTimer = null;
+		}
+		saving = true;
+		saveError = null;
+
+		try {
+			const response = await documents.discardDraft(documentId, {
+				expectedRevision: fullDocument?._meta?.revision as number | undefined
+			});
+			if (!response.success) {
+				throw new Error(response.error || 'Failed to discard draft');
+			}
+			await loadDocumentData();
+			lastSaved = new Date();
+			publishedData = null;
+			notifyDocumentChanged(documentId);
+			if (showVersionHistory) loadVersions();
+			toast.success(i18n.t('Changes discarded'));
+		} catch (err) {
+			if (err instanceof ApiError && err.status === 409) {
+				toast.error(
+					i18n.t('This document was changed elsewhere. Reload to see the latest version.')
+				);
+			} else {
+				toast.error(err instanceof ApiError ? err.message : i18n.t('Failed to discard changes'));
+			}
+		} finally {
+			saving = false;
 		}
 	}
 
@@ -1746,7 +1822,11 @@
 
 		const invalid: Array<{ name: string; title: string; messages: string[] }> = [];
 
-		for (const field of schema.fields) {
+		// Hidden fields are skipped, as the form and the server's own validation
+		// skip them: a required field nobody can see would block the publish.
+		for (const field of schema.fields.filter((f) =>
+			isFieldVisible(f, documentData, documentData)
+		)) {
 			if (field.validation) {
 				try {
 					const validationFunctions = Array.isArray(field.validation)
@@ -1945,6 +2025,19 @@
 					{/if}
 				</button>
 			</div>
+		{/if}
+
+		{#if canDiscardDraft}
+			<Button
+				variant="ghost"
+				size="sm"
+				class="text-muted-foreground h-7 cursor-pointer gap-1.5 px-2 text-xs"
+				onclick={discardDraft}
+				disabled={saving}
+			>
+				<Undo2 class="h-3.5 w-3.5" />
+				{i18n.t('Discard changes', undefined, 'discard draft')}
+			</Button>
 		{/if}
 
 		<!-- Plugin document actions (aphex/document/action), applicable to this type -->
@@ -2261,7 +2354,12 @@
 				<div class="flex flex-col gap-8 p-4 lg:p-6">
 					{#if saveError}
 						<div class="bg-destructive/10 border-destructive/20 rounded-md border p-3">
-							<p class="text-destructive text-sm">{saveError}</p>
+							{#if studioExtensions().ErrorBox}
+								{@const ErrorBox = studioExtensions().ErrorBox!}
+								<ErrorBox message={saveError} />
+							{:else}
+								<p class="text-destructive text-sm">{saveError}</p>
+							{/if}
 						</div>
 					{/if}
 
@@ -2367,7 +2465,9 @@
 										: ''}"
 								>
 									<SchemaField
-										{field}
+										field={lock?.fields.includes(field.name)
+											? { ...field, description: lock.reason }
+											: field}
 										value={viewData[field.name]}
 										documentData={viewData}
 										onUpdate={(newValue) => {
@@ -2478,8 +2578,8 @@
 						</div>
 
 						<!-- Viewport switcher -->
-						<div class="bg-muted flex items-center gap-0.5 rounded p-0.5">
-							{#each [{ v: 'desktop', Icon: Monitor, label: 'Desktop' }, { v: 'tablet', Icon: Tablet, label: 'Tablet' }, { v: 'mobile', Icon: Smartphone, label: 'Mobile' }] as { v, Icon, label } (v)}
+						<div class="bg-muted studio-track flex items-center gap-0.5 rounded p-0.5">
+							{#each [{ v: 'desktop', Icon: Monitor, label: 'Desktop' }, { v: 'tablet', Icon: Tablet, label: 'Tablet' }, { v: 'mobile', Icon: Smartphone, label: i18n.t('Mobile') }] as { v, Icon, label } (v)}
 								<button
 									onclick={() => (previewViewport = v as typeof previewViewport)}
 									class="cursor-pointer rounded p-1 transition-colors {previewViewport === v
@@ -2725,10 +2825,10 @@
 								{/if}
 							</Button>
 						{:else if isViewingReadOnly}
-							<Badge variant="secondary" class="text-xs">Read Only</Badge>
+							<Badge variant="secondary" class="text-xs">{i18n.t('Read Only')}</Badge>
 						{/if}
 
-						{#if canDelete && !schema?.singleton}
+						{#if canDelete && !schema?.singleton && !lock}
 							<Button
 								variant="ghost"
 								size="icon"
