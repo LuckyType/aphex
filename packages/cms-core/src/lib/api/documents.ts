@@ -86,6 +86,16 @@ export class DocumentsApi {
 	}
 
 	/**
+	 * Discard the draft: write what is published back as the draft.
+	 */
+	static async discardDraft(
+		id: string,
+		options?: RevisionGuardOptions
+	): Promise<ApiResponse<DocumentDTO>> {
+		return apiClient.post<DocumentDTO>(`/documents/${id}/discard-draft`, options);
+	}
+
+	/**
 	 * Publish document (copy draft -> published)
 	 */
 	static async publish(
@@ -216,6 +226,7 @@ export const documents = {
 	create: DocumentsApi.create.bind(DocumentsApi),
 	updateById: DocumentsApi.updateById.bind(DocumentsApi),
 	publish: DocumentsApi.publish.bind(DocumentsApi),
+	discardDraft: DocumentsApi.discardDraft.bind(DocumentsApi),
 	unpublish: DocumentsApi.unpublish.bind(DocumentsApi),
 	schedule: DocumentsApi.schedule.bind(DocumentsApi),
 	getSchedule: DocumentsApi.getSchedule.bind(DocumentsApi),
