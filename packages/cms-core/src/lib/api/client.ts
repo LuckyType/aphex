@@ -9,7 +9,22 @@ const DEFAULT_TIMEOUT = 10000; // 10 seconds
 // still reach this client from elsewhere, and it needs the same deadline.
 import { uploadTimeoutFor } from './upload-timeout';
 
+let describeApiError: ((error: ApiError) => string | undefined) | undefined;
+
+/**
+ * Rewrites the message of every ApiError the client throws, for an app that
+ * shows its own wording; `detail` keeps the server's original text.
+ */
+export function configureApiErrorMessage(
+	describe: ((error: ApiError) => string | undefined) | undefined
+): void {
+	describeApiError = describe;
+}
+
 export class ApiError extends Error {
+	/** The message as the server or transport gave it, before configureApiErrorMessage. */
+	declare detail: string;
+
 	constructor(
 		public status: number,
 		public response: any,
@@ -17,6 +32,8 @@ export class ApiError extends Error {
 	) {
 		super(message || `API Error: ${status}`);
 		this.name = 'ApiError';
+		this.detail = this.message;
+		this.message = describeApiError?.(this) ?? this.message;
 	}
 }
 
