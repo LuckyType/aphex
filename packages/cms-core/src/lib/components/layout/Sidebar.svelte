@@ -12,6 +12,7 @@
 	import AppSidebar from './sidebar/AppSidebar.svelte';
 	import { usePermissions } from '../../permissions-context.svelte';
 	import { setAdminSlots } from '../../admin/slots.svelte';
+	import { studioExtensions } from '../../studio-extensions';
 	import type { AdminArea } from '../../admin/types';
 	import type { CMSPlugin, AdminToolPart } from '../../plugins/types';
 	import AgentChat from '../admin/AgentChat.svelte';
@@ -31,6 +32,11 @@
 		onTabChange?: (value: string) => void;
 		/** Plugin registry — used to render sidebar-placed admin tools as persistent nav. */
 		plugins?: CMSPlugin[];
+		/**
+		 * The element around the Studio's content. `div` for an app whose own
+		 * layout already renders the page's one `main` landmark.
+		 */
+		contentElement?: 'main' | 'div';
 	};
 
 	let {
@@ -41,7 +47,8 @@
 		enableAssistant = false,
 		activeTab,
 		onTabChange,
-		plugins = []
+		plugins = [],
+		contentElement = 'main'
 	}: Props = $props();
 	let assistantOpen = $state(false);
 
@@ -81,7 +88,7 @@
 	const canSeeMedia = $derived(perms.can('asset.read'));
 </script>
 
-<ModeWatcher />
+<ModeWatcher nonce={studioExtensions().scriptNonce} />
 <Toaster closeButton />
 <SidebarProvider class="h-screen">
 	<AppSidebar {data} {onSignOut} {sidebarTools} onSelectTool={(id) => switchTab(`plugin:${id}`)} />
@@ -102,7 +109,7 @@
 				<!-- Center: Structure/Vision/Media Tabs (only on /admin page) -->
 				{#if showTabs && activeTab}
 					<div
-						class="bg-muted text-muted-foreground mx-auto inline-flex h-9 w-fit items-center justify-center rounded-lg p-[3px]"
+						class="bg-muted studio-track text-muted-foreground mx-auto inline-flex h-9 w-fit items-center justify-center rounded-lg p-[3px]"
 					>
 						<button
 							onclick={() => switchTab('structure')}
@@ -156,9 +163,12 @@
 				</div>
 			</div>
 		</header>
-		<main class="flex flex-1 flex-col overflow-x-hidden overflow-y-auto pt-0">
+		<svelte:element
+			this={contentElement}
+			class="flex flex-1 flex-col overflow-x-hidden overflow-y-auto pt-0"
+		>
 			{@render children()}
-		</main>
+		</svelte:element>
 	</SidebarInset>
 	{#if enableAssistant && !assistantOpen}
 		<Button

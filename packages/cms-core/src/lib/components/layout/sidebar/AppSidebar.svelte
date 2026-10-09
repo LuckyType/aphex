@@ -4,7 +4,8 @@
 		SidebarContent,
 		SidebarFooter,
 		SidebarHeader,
-		SidebarRail
+		SidebarRail,
+		SidebarSeparator
 	} from '@aphexcms/ui/shadcn/sidebar';
 	import OrganizationSwitcher from '../OrganizationSwitcher.svelte';
 	import NavGroup, { type NavGroupItem } from './NavGroup.svelte';
@@ -29,6 +30,21 @@
 		// An item that leaves the studio is never a studio location.
 		if (item.newTab) return false;
 		const path = page.url.pathname;
+		// An item whose url carries a query is open only while every one of its
+		// params matches, and then the bare-path item it shares a path with is not.
+		const queryOpen = (url: string) => {
+			const [urlPath, query] = url.split('?');
+			if (query === undefined || urlPath !== path) return false;
+			// An area shown with `?view=` (media) replaces the list, so no item is open beside it.
+			if (page.url.searchParams.has('view') && !new URLSearchParams(query).has('view'))
+				return false;
+			for (const [key, value] of new URLSearchParams(query)) {
+				if (page.url.searchParams.get(key) !== value) return false;
+			}
+			return true;
+		};
+		if (item.url.includes('?')) return queryOpen(item.url);
+		if (allNavItems.some((other) => queryOpen(other.url))) return false;
 		if (pluginToolActive && item.url === '/admin') return false;
 		if (item.exact) return path === item.url;
 		const matches = path === item.url || path.startsWith(item.url + '/');
@@ -134,11 +150,13 @@
 	</SidebarHeader>
 
 	<SidebarContent>
-		{#each topGroups as { group, items, tools } (group.id ?? group.label)}
+		{#each topGroups as { group, items, tools }, index (group.id ?? group.label)}
+			{#if data?.groupDividers && index > 0}<SidebarSeparator class="mx-2 w-auto" />{/if}
 			<NavGroup
 				{items}
 				{tools}
 				label={group.label}
+				collapsible={group.collapsible}
 				isActive={isNavActive}
 				{isToolActive}
 				{onSelectTool}
@@ -160,15 +178,29 @@
 		{/if}
 
 		{#each bottomGroups as { group, items, tools } (group.id ?? group.label)}
-			<NavGroup
-				{items}
-				{tools}
-				label={group.label}
-				placement="bottom"
-				isActive={isNavActive}
-				{isToolActive}
-				{onSelectTool}
-			/>
+			{#if data?.groupDividers}
+				<div class="mt-auto">
+					<SidebarSeparator class="mx-2 w-auto" />
+					<NavGroup
+						{items}
+						{tools}
+						label={group.label}
+						isActive={isNavActive}
+						{isToolActive}
+						{onSelectTool}
+					/>
+				</div>
+			{:else}
+				<NavGroup
+					{items}
+					{tools}
+					label={group.label}
+					placement="bottom"
+					isActive={isNavActive}
+					{isToolActive}
+					{onSelectTool}
+				/>
+			{/if}
 		{/each}
 	</SidebarContent>
 
