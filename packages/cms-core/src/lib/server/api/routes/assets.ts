@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { isAssetPrivate, resolveFieldPrivacy } from '../../../utils/asset-privacy';
 import { cmsLogger } from '../../../utils/logger';
-import { validateFile } from '../../../utils/mime-detect';
+import { storedMimeType, validateFile } from '../../../utils/mime-detect';
 import {
 	isAcceptedFileType,
 	normalizeAcceptedFileTypes,
@@ -272,18 +272,21 @@ export const assetsRouter: Hono<AphexEnv> = new Hono<AphexEnv>()
 			if (!validation.valid) {
 				return c.json({ success: false, error: validation.error }, 400);
 			}
-			const validatedMimeType = validation.detectedMimeType || file.type;
-			if (!isAcceptedFileType(file.name, validatedMimeType, fieldAllowedMimeTypes)) {
+			// Judge the type the file will be stored as, so a file the asset service
+			// would refuse is a 400 here rather than a 500 from the service.
+			const safeMimeType = storedMimeType(validation.detectedMimeType, file.type);
+			if (
+				!isAcceptedFileType(file.name, safeMimeType, fieldAllowedMimeTypes) ||
+				!isAcceptedFileType(file.name, safeMimeType, globalAllowedMimeTypes)
+			) {
 				return c.json(
 					{
 						success: false,
-						error: `File type "${validatedMimeType}" is not allowed`
+						error: `File type "${safeMimeType}" is not allowed`
 					},
 					400
 				);
 			}
-
-			const safeMimeType = validation.detectedMimeType || 'application/octet-stream';
 
 			const title = (formData.get('title') as string) || undefined;
 			const description = (formData.get('description') as string) || undefined;
