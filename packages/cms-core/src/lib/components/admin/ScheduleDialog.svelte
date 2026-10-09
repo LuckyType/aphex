@@ -1,4 +1,6 @@
 <script lang="ts">
+	import * as i18n from '../../i18n/index';
+	import TimeInput from './fields/TimeInput.svelte';
 	// Schedule a future publish/unpublish. Layout mirrors Sanity's scheduled-drafts dialog
 	// (title · description · "Schedule on" field → calendar+time popover · Cancel/Schedule),
 	// in Aphex's shadcn skin. Posts to /documents/:id/schedule; the worker runs it at `runAt`
@@ -140,10 +142,11 @@
 							class="w-full rounded-b-none [--cell-size:2.4rem]"
 						/>
 						<div class="border-rule flex flex-wrap items-center gap-x-2 gap-y-1 border-t p-3">
-							<input
-								type="time"
-								bind:value={timeStr}
-								class="border-input bg-background focus-visible:ring-ring rounded-md border px-2 py-1 text-sm focus-visible:ring-1 focus-visible:outline-none"
+							<TimeInput
+								value={timeStr}
+								onChange={(time) => (timeStr = time)}
+								label={i18n.t('Time')}
+								class="w-24"
 							/>
 							<button
 								type="button"
