@@ -303,7 +303,7 @@ export function validateFile(
 
 	// 5. Check against allowed MIME types (from schema field `accept`)
 	if (options.allowedMimeTypes && options.allowedMimeTypes.length > 0) {
-		const mimeToCheck = detectedMimeType || clientMimeType;
+		const mimeToCheck = detectedMimeType || normalizedClientMimeType;
 		if (!isAcceptedFileType(filename, mimeToCheck, options.allowedMimeTypes)) {
 			return {
 				valid: false,
