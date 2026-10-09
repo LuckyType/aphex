@@ -10,6 +10,8 @@ concurrency: ${{ github.workflow }}-${{ github.ref }}
 jobs:
   release:
     name: Version & Publish
+    # Publishes to npm under upstream's names with upstream's credentials. A fork releases through fork-release.yml instead.
+    if: github.repository == 'IcelandicIcecream/aphex'
     runs-on: ubuntu-latest
     permissions:
       contents: write

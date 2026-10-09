@@ -15,6 +15,9 @@ on:
 
 jobs:
   publish:
+    # Mirrors into upstream's own repositories with upstream's deploy keys,
+    # which a fork does not have.
+    if: github.repository == 'IcelandicIcecream/aphex'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout monorepo
