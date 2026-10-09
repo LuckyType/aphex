@@ -1824,6 +1824,7 @@
 														size="sm"
 														variant="ghost"
 														class="h-7 w-7 p-0"
+														aria-label={i18n.t('Previous page')}
 														disabled={docCurrentPage <= 1}
 														onclick={async () => {
 															docCurrentPage = Math.max(1, docCurrentPage - 1);
@@ -1843,6 +1844,7 @@
 														size="sm"
 														variant="ghost"
 														class="h-7 w-7 p-0"
+														aria-label={i18n.t('Next page')}
 														disabled={docCurrentPage >= docTotalPages}
 														onclick={async () => {
 															docCurrentPage = Math.min(docTotalPages, docCurrentPage + 1);
