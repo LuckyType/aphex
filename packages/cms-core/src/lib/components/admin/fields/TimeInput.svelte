@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { TimeField } from 'bits-ui';
 	import * as i18n from '../../../i18n/index';
-	import { readTime, writeTime } from '../../../utils/time-of-day';
+	import { readTime, segmentText, writeTime } from '../../../utils/time-of-day';
 
 	interface Props {
 		/** The stored `HH:MM`, or blank. */
@@ -61,7 +61,7 @@
 							{...props}
 							aria-label={segmentLabel(part, props['aria-label'])}
 							class="focus:bg-accent focus:text-accent-foreground rounded-sm px-px outline-none"
-							>{shown}</span
+							>{segmentText(shown)}</span
 						>
 					{/snippet}
 				</TimeField.Segment>
