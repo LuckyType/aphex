@@ -2,8 +2,9 @@
 	import * as i18n from '../../../i18n/index';
 	import { Input } from '@aphexcms/ui/shadcn/input';
 	import { Button } from '@aphexcms/ui/shadcn/button';
-	import type { SlugField } from '../../../types/schemas';
-	import { generateSlug } from '../../../utils/index';
+	import type { Field, SchemaType, SlugField } from '../../../types/schemas';
+	import { generateSlug, slugSourceTitle } from '../../../utils/index';
+	import { getSchemaContext } from '../../../schema-context.svelte';
 
 	interface Props {
 		field: SlugField;
@@ -12,6 +13,10 @@
 		documentData?: Record<string, any>;
 		/** The object this field lives in; `source`, like `dependsOn`, names a sibling. */
 		siblingData?: Record<string, any>;
+		/** The schema fields `siblingData` is shaped by — where `source`'s title is found. */
+		siblingFields?: Field[];
+		/** Document type, for the title of a root-level `source` field. */
+		schemaType?: string;
 		onUpdate: (value: any) => void;
 		validationClasses?: string;
 		onBlur?: (event: any) => void;
@@ -24,6 +29,8 @@
 		value,
 		documentData,
 		siblingData,
+		siblingFields,
+		schemaType,
 		onUpdate,
 		validationClasses,
 		onBlur,
@@ -37,6 +44,22 @@
 	// Own object scope first, document root second — same rule as a dependent list:
 	// a slug inside an array item derives from that item's title, not the document's.
 	const sourceValue = $derived(siblingData?.[sourceField] ?? documentData?.[sourceField]);
+
+	// The document's schemas are only provided inside the editor; elsewhere the
+	// label falls back to the sibling fields, then to the field name.
+	let schemas: SchemaType[] = [];
+	try {
+		schemas = getSchemaContext();
+	} catch {
+		// No schema context: nothing to look up.
+	}
+	const sourceTitle = $derived(
+		slugSourceTitle(
+			sourceField,
+			siblingFields,
+			schemas.find((schema) => schema.name === schemaType)?.fields
+		)
+	);
 
 	function handleInputChange(event: Event) {
 		const target = event.target as HTMLInputElement;
@@ -57,7 +80,7 @@
 		<Input
 			id={field.name}
 			value={value || ''}
-			placeholder="document-slug"
+			placeholder={i18n.t('document-slug')}
 			oninput={handleInputChange}
 			onblur={onBlur}
 			onfocus={onFocus}
@@ -79,13 +102,15 @@
 	{:else if sourceValue}
 		<p class="text-muted-foreground text-xs">
 			{i18n.t('Click "Generate" to create slug from {sourceField}: "{sourceValue}"', {
-				sourceField,
+				sourceField: sourceTitle,
 				sourceValue
 			})}
 		</p>
 	{:else if field.source}
 		<p class="text-muted-foreground text-xs">
-			{i18n.t('Enter a {sourceField} first to generate a slug automatically', { sourceField })}
+			{i18n.t('Enter a {sourceField} first to generate a slug automatically', {
+				sourceField: sourceTitle
+			})}
 		</p>
 	{:else}
 		<p class="text-muted-foreground text-xs">{i18n.t('Click "Generate" or enter a custom slug')}</p>
