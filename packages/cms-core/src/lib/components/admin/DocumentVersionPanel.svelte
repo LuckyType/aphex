@@ -1,4 +1,5 @@
 <script lang="ts">
+	import * as i18n from '../../i18n/index';
 	import { Badge } from '@aphexcms/ui/shadcn/badge';
 	import { Button } from '@aphexcms/ui/shadcn/button';
 	import { documents } from '../../api/documents';
@@ -50,7 +51,7 @@
 				versions = res.data;
 			}
 		} catch {
-			toast.error('Failed to load versions');
+			toast.error(i18n.t('Failed to load versions'));
 		} finally {
 			loading = false;
 		}
@@ -69,7 +70,7 @@
 				});
 			}
 		} catch {
-			toast.error('Failed to load version');
+			toast.error(i18n.t('Failed to load version'));
 		}
 	}
 </script>
@@ -77,7 +78,7 @@
 <div class="flex h-full flex-col">
 	<!-- Header -->
 	<div class="border-border bg-background flex h-14 items-center justify-between border-b px-3">
-		<h3 class="text-sm font-medium">History</h3>
+		<h3 class="text-sm font-medium">{i18n.t('History')}</h3>
 		<Button class="hover:bg-muted rounded p-1 transition-colors" variant="ghost" onclick={onClose}>
 			<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
 				<path
@@ -92,7 +93,7 @@
 
 	<!-- Filter tabs -->
 	<div class="border-border flex border-b">
-		{#each [{ value: 'all', label: 'All' }, { value: 'publish', label: 'Published' }, { value: 'draft', label: 'Drafts' }] as tab}
+		{#each [{ value: 'all', label: i18n.t('All') }, { value: 'publish', label: i18n.t('Published') }, { value: 'draft', label: i18n.t('Drafts') }] as tab}
 			<Button
 				variant="ghost"
 				class="flex-1 cursor-pointer rounded-none px-2 py-2 text-xs font-medium transition-colors {filter ===
@@ -113,12 +114,16 @@
 	<div class="flex-1 overflow-auto">
 		{#if loading}
 			<div class="p-4 text-center">
-				<span class="text-muted-foreground text-xs">Loading...</span>
+				<span class="text-muted-foreground text-xs">{i18n.t('Loading...')}</span>
 			</div>
 		{:else if filteredVersions.length === 0}
 			<div class="p-4 text-center">
 				<span class="text-muted-foreground text-xs"
-					>No {filter === 'all' ? '' : filter} versions</span
+					>{filter === 'all'
+						? i18n.t('No versions')
+						: filter === 'publish'
+							? i18n.t('No publish versions')
+							: i18n.t('No draft versions')}</span
 				>
 			</div>
 		{:else}
@@ -141,19 +146,19 @@
 				>
 					<div class="flex items-center justify-between">
 						<span class="text-muted-foreground text-[11px]">
-							{new Date(version.createdAt).toLocaleString(undefined, {
+							{new Date(version.createdAt).toLocaleString(i18n.locale(), {
 								month: 'short',
 								day: 'numeric',
 								hour: 'numeric',
 								minute: '2-digit',
-								hour12: true
+								hour12: i18n.hour12() ?? true
 							})}
 						</span>
 						<Badge
 							variant={version.eventType === 'publish' ? 'default' : 'secondary'}
 							class="px-1.5 py-0 text-[9px]"
 						>
-							{version.eventType}
+							{i18n.t(version.eventType, undefined, 'version event')}
 						</Badge>
 					</div>
 					{#if version.createdByName}

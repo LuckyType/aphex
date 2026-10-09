@@ -1,4 +1,5 @@
 <script lang="ts">
+	import * as i18n from '../../../i18n/index';
 	import { Button } from '@aphexcms/ui/shadcn/button';
 	import { Input } from '@aphexcms/ui/shadcn/input';
 	import { Textarea } from '@aphexcms/ui/shadcn/textarea';
@@ -352,7 +353,7 @@
 				asset: { _type: 'reference', _ref: result.data!.id }
 			};
 		} catch {
-			toast.error(`Failed to upload ${file.name}`);
+			toast.error(i18n.t('Failed to upload {name}', { name: file.name }));
 			return null;
 		}
 	}
@@ -372,7 +373,7 @@
 
 		if (newImages.length > 0) {
 			onUpdate([...arrayValue, ...newImages]);
-			toast.success(`Uploaded ${newImages.length} image${newImages.length > 1 ? 's' : ''}`);
+			toast.success(i18n.tn(newImages.length, 'Uploaded {count} image', 'Uploaded {count} images'));
 		}
 
 		isMultiUploading = false;
@@ -518,7 +519,7 @@
 	}
 
 	function getItemTitle(item: any): string {
-		if (!item._type) return 'Unknown Item';
+		if (!item._type) return i18n.t('Unknown Item');
 		const schema = getSchemaForType(item._type);
 		return resolvePreviewTitle(item, schema, item._type);
 	}
@@ -593,7 +594,7 @@
 											<button
 												{...props}
 												class="text-muted-foreground hover:text-foreground flex h-9 w-7 shrink-0 items-center justify-center rounded transition-colors"
-												aria-label="Row options"
+												aria-label={i18n.t('Row options')}
 											>
 												<Ellipsis class="h-4 w-4" />
 											</button>
@@ -605,7 +606,7 @@
 											onclick={() => handleRemoveItem(index)}
 										>
 											<Trash2 class="mr-2 h-4 w-4" />
-											Remove
+											{i18n.t('Remove')}
 										</DropdownMenu.Item>
 									</DropdownMenu.Content>
 								</DropdownMenu.Root>
@@ -622,7 +623,7 @@
 			onclick={handleAddReference}
 		>
 			<Plus class="h-4 w-4" />
-			Add reference...
+			{i18n.t('Add reference...')}
 		</button>
 	{/if}
 {:else if isPrimitiveArray}
@@ -631,7 +632,7 @@
 		<div
 			class="border-border/50 bg-muted/30 flex items-center justify-center rounded border border-dashed p-6"
 		>
-			<p class="text-muted-foreground text-sm">No items added yet</p>
+			<p class="text-muted-foreground text-sm">{i18n.t('No items added yet')}</p>
 		</div>
 	{:else if primitiveType === 'image'}
 		{#key dndKey}
@@ -644,7 +645,7 @@
 						>
 							<div class="text-center">
 								<ImageIcon class="text-muted-foreground mx-auto h-8 w-8" />
-								<p class="text-muted-foreground mt-1 text-xs">No images yet</p>
+								<p class="text-muted-foreground mt-1 text-xs">{i18n.t('No images yet')}</p>
 							</div>
 						</div>
 					{/if}
@@ -673,7 +674,7 @@
 											{#if result.success && result.data?.url}
 												<AssetImage
 													src={result.data.url}
-													alt={item?.alt || `Image ${index + 1}`}
+													alt={item?.alt || i18n.t('Image {value}', { value: index + 1 })}
 													mimeType={result.data.mimeType}
 													class="h-full w-full object-cover"
 													loading="lazy"
@@ -720,14 +721,16 @@
 											</DropdownMenu.Trigger>
 											<DropdownMenu.Content align="end">
 												<DropdownMenu.Item onclick={() => handleOpenImageModal(index)}>
-													<Pencil class="mr-2 h-4 w-4" /> Edit
+													<Pencil class="mr-2 h-4 w-4" />
+													{i18n.t('Edit')}
 												</DropdownMenu.Item>
 												<DropdownMenu.Separator />
 												<DropdownMenu.Item
 													class="text-destructive focus:text-destructive"
 													onclick={() => handleRemoveItem(index)}
 												>
-													<Trash2 class="mr-2 h-4 w-4" /> Remove
+													<Trash2 class="mr-2 h-4 w-4" />
+													{i18n.t('Remove')}
 												</DropdownMenu.Item>
 											</DropdownMenu.Content>
 										</DropdownMenu.Root>
@@ -766,7 +769,7 @@
 											...field.of?.[0],
 											name: `image-${index}`,
 											type: 'image',
-											title: `Image ${index + 1}`
+											title: i18n.t('Image {value}', { value: index + 1 })
 										}}
 										value={item}
 										onUpdate={() => {}}
@@ -791,7 +794,7 @@
 										<DropdownMenu.Content align="end">
 											<DropdownMenu.Item onclick={() => handleOpenImageModal(index)}>
 												<Pencil class="mr-2 h-4 w-4" />
-												Edit
+												{i18n.t('Edit')}
 											</DropdownMenu.Item>
 											<DropdownMenu.Separator />
 											<DropdownMenu.Item
@@ -799,7 +802,7 @@
 												onclick={() => handleRemoveItem(index)}
 											>
 												<Trash2 class="mr-2 h-4 w-4" />
-												Remove
+												{i18n.t('Remove')}
 											</DropdownMenu.Item>
 										</DropdownMenu.Content>
 									</DropdownMenu.Root>
@@ -845,7 +848,7 @@
 											onCheckedChange={(checked) => handleUpdatePrimitive(index, checked)}
 											disabled={readonly}
 										/>
-										<span class="text-sm">{item ? 'True' : 'False'}</span>
+										<span class="text-sm">{item ? i18n.t('True') : i18n.t('False')}</span>
 									</div>
 								{:else if primitiveType === 'number'}
 									<Input
@@ -855,7 +858,7 @@
 											handleUpdatePrimitive(index, parseFloat(e.currentTarget.value) || 0)}
 										{readonly}
 										class="h-8 w-full border-none bg-transparent shadow-none focus-visible:ring-0"
-										placeholder="Enter number..."
+										placeholder={i18n.t('Enter number...')}
 									/>
 								{:else}
 									<Input
@@ -863,7 +866,7 @@
 										oninput={(e) => handleUpdatePrimitive(index, e.currentTarget.value)}
 										{readonly}
 										class="h-8 w-full border-none bg-transparent shadow-none focus-visible:ring-0"
-										placeholder="Enter value..."
+										placeholder={i18n.t('Enter value...')}
 									/>
 								{/if}
 							</div>
@@ -884,7 +887,7 @@
 										{#if primitiveType === 'text'}
 											<DropdownMenu.Item onclick={() => handleOpenTextModal(index)}>
 												<Pencil class="mr-2 h-4 w-4" />
-												Edit
+												{i18n.t('Edit')}
 											</DropdownMenu.Item>
 											<DropdownMenu.Separator />
 										{/if}
@@ -893,7 +896,7 @@
 											onclick={() => handleRemoveItem(index)}
 										>
 											<Trash2 class="mr-2 h-4 w-4" />
-											Remove
+											{i18n.t('Remove')}
 										</DropdownMenu.Item>
 									</DropdownMenu.Content>
 								</DropdownMenu.Root>
@@ -924,7 +927,10 @@
 						class="border-primary h-4 w-4 animate-spin rounded-full border-2 border-t-transparent"
 					></div>
 					<span class="text-muted-foreground"
-						>Uploading {uploadProgress.current} of {uploadProgress.total}...</span
+						>{i18n.t('Uploading {current} of {total}...', {
+							current: uploadProgress.current,
+							total: uploadProgress.total
+						})}</span
 					>
 				</div>
 			{:else}
@@ -934,7 +940,7 @@
 						onclick={openMultiFileDialog}
 					>
 						<Upload class="h-4 w-4" />
-						Upload images...
+						{i18n.t('Upload images...')}
 					</button>
 					<button
 						class="border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted/50 flex h-10 flex-1 items-center justify-center gap-2 rounded border border-dashed text-sm transition-colors"
@@ -943,7 +949,7 @@
 						}}
 					>
 						<ImageIcon class="h-4 w-4" />
-						Browse media...
+						{i18n.t('Browse media...')}
 					</button>
 				</div>
 			{/if}
@@ -953,7 +959,7 @@
 				onclick={handleAddPrimitive}
 			>
 				<Plus class="h-4 w-4" />
-				Add item...
+				{i18n.t('Add item...')}
 			</button>
 		{/if}
 	{/if}
@@ -963,7 +969,7 @@
 		<div
 			class="border-border/50 bg-muted/30 flex items-center justify-center rounded border border-dashed p-6"
 		>
-			<p class="text-muted-foreground text-sm">No items added yet</p>
+			<p class="text-muted-foreground text-sm">{i18n.t('No items added yet')}</p>
 		</div>
 	{:else}
 		{#key dndKey}
@@ -1031,7 +1037,7 @@
 								<DropdownMenu.Content align="end">
 									<DropdownMenu.Item onclick={() => handleEditItem(index)}>
 										<Pencil class="mr-2 h-4 w-4" />
-										{readonly ? 'View' : 'Edit'}
+										{readonly ? i18n.t('View') : i18n.t('Edit')}
 									</DropdownMenu.Item>
 									{#if !readonly}
 										<DropdownMenu.Separator />
@@ -1040,7 +1046,7 @@
 											onclick={() => handleRemoveItem(index)}
 										>
 											<Trash2 class="mr-2 h-4 w-4" />
-											Remove
+											{i18n.t('Remove')}
 										</DropdownMenu.Item>
 									{/if}
 								</DropdownMenu.Content>
@@ -1060,7 +1066,7 @@
 				onclick={() => handleTypeSelected(availableTypes[0]!.name)}
 			>
 				<Plus class="h-4 w-4" />
-				Add item...
+				{i18n.t('Add item...')}
 			</button>
 		{:else}
 			<DropdownMenu.Root>
@@ -1071,7 +1077,7 @@
 							class="border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted/50 flex h-10 w-full cursor-pointer items-center justify-center gap-2 rounded border border-dashed text-sm transition-colors"
 						>
 							<Plus class="h-4 w-4" />
-							Add item...
+							{i18n.t('Add item...')}
 						</button>
 					{/snippet}
 				</DropdownMenu.Trigger>
@@ -1126,12 +1132,14 @@
 				<div class="flex items-center justify-between">
 					<div>
 						<Card.Title
-							>{imageModalIndex !== null ? 'Edit Image' : `${field.title} - Add Image`}</Card.Title
+							>{imageModalIndex !== null
+								? i18n.t('Edit Image')
+								: i18n.t('{title} - Add Image', { title: field.title })}</Card.Title
 						>
 						<Card.Description
 							>{imageModalIndex !== null
-								? 'Replace or remove this image'
-								: 'Upload a new image to add to the array'}</Card.Description
+								? i18n.t('Replace or remove this image')
+								: i18n.t('Upload a new image to add to the array')}</Card.Description
 						>
 					</div>
 					<Button variant="ghost" size="icon" onclick={handleImageModalClose}>
@@ -1153,7 +1161,7 @@
 						...field.of?.[0],
 						name: 'image',
 						type: 'image',
-						title: 'Image'
+						title: i18n.t('Image')
 					}}
 					value={imageModalValue}
 					onUpdate={handleImageUpload}
@@ -1180,7 +1188,7 @@
 		<Card.Root class="flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden shadow-lg">
 			<Card.Header class="border-b">
 				<div class="flex items-center justify-between">
-					<Card.Title>Edit Text</Card.Title>
+					<Card.Title>{i18n.t('Edit Text')}</Card.Title>
 					<Button variant="ghost" size="icon" onclick={handleTextModalClose}>
 						<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
 							<path
@@ -1200,13 +1208,13 @@
 					oninput={(e) => (textModalValue = e.currentTarget.value)}
 					class="w-full"
 					rows={6}
-					placeholder="Enter text..."
+					placeholder={i18n.t('Enter text...')}
 				/>
 			</Card.Content>
 
 			<Card.Footer class="flex justify-end gap-2 border-t">
-				<Button variant="outline" onclick={handleTextModalClose}>Cancel</Button>
-				<Button onclick={handleTextModalSave}>Save</Button>
+				<Button variant="outline" onclick={handleTextModalClose}>{i18n.t('Cancel')}</Button>
+				<Button onclick={handleTextModalSave}>{i18n.t('Save')}</Button>
 			</Card.Footer>
 		</Card.Root>
 	</div>

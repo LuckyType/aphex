@@ -190,7 +190,7 @@
 						<Tooltip.Root>
 							<Tooltip.Trigger
 								class="text-muted-foreground/60 hover:text-foreground focus-visible:text-foreground -my-1 hidden cursor-help rounded p-1 transition-colors outline-none lg:inline-flex"
-								aria-label="More info about {field.title}"
+								aria-label={i18n.t('More info about {title}', { title: field.title })}
 							>
 								<Info class="size-3.5" />
 							</Tooltip.Trigger>
@@ -297,12 +297,17 @@
 			{#snippet failed(error, reset)}
 				<div class="border-destructive/30 bg-destructive/5 rounded-md border p-3">
 					<p class="text-destructive text-sm font-medium">
-						Failed to render field "{field.name}" ({field.type})
+						{i18n.t('Failed to render field "{name}" ({type})', {
+							name: field.name,
+							type: field.type
+						})}
 					</p>
 					<p class="text-muted-foreground mt-1 text-xs">
-						{error instanceof Error ? error.message : 'Unknown error'}
+						{error instanceof Error ? error.message : i18n.t('Unknown error')}
 					</p>
-					<button class="text-primary mt-2 text-xs underline" onclick={reset}> Try again </button>
+					<button class="text-primary mt-2 text-xs underline" onclick={reset}>
+						{i18n.t('Try again')}
+					</button>
 				</div>
 			{/snippet}
 		</svelte:boundary>

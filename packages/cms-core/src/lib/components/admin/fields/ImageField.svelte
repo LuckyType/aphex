@@ -1,4 +1,5 @@
 <script lang="ts">
+	import * as i18n from '../../../i18n/index';
 	import { onDestroy } from 'svelte';
 	import { Button } from '@aphexcms/ui/shadcn/button';
 	import { Upload, Image as ImageIcon, FileImage, Download, Copy, CircleX } from '@lucide/svelte';
@@ -95,7 +96,7 @@
 			const result = await assets.upload(formData);
 
 			if (!result.success) {
-				throw new Error(result.error || 'Upload failed');
+				throw new Error(result.error || i18n.t('Upload failed'));
 			}
 
 			// Extract asset from response
@@ -110,7 +111,7 @@
 				}
 			};
 		} catch (error) {
-			uploadError = error instanceof Error ? error.message : 'Upload failed';
+			uploadError = error instanceof Error ? error.message : i18n.t('Upload failed');
 			return null;
 		} finally {
 			isUploading = false;
@@ -125,7 +126,7 @@
 		// Browsers that can't decode HEIC report an empty `type`; see `effectiveFileType`.
 		const mimeType = effectiveFileType(file.name, file.type);
 		if (!isAcceptedFileType(file.name, mimeType, acceptedFileTypes)) {
-			uploadError = `File type "${mimeType || file.name}" is not allowed`;
+			uploadError = i18n.t('File type "{value}" is not allowed', { value: mimeType || file.name });
 			return;
 		}
 
@@ -203,7 +204,7 @@
 						if (result.success) {
 							assetData = result.data;
 						} else {
-							toast.error('Failed to fetch asset details');
+							toast.error(i18n.t('Failed to fetch asset details'));
 							assetData = null;
 						}
 					} catch (error) {
@@ -212,7 +213,7 @@
 						// boundary, not a failure — the field falls back to rendering
 						// the reference id, and an error toast would just be wrong.
 						if (!(error instanceof ApiError && error.status === 403)) {
-							toast.error('Failed to load image asset');
+							toast.error(i18n.t('Failed to load image asset'));
 						}
 						assetData = null;
 					} finally {
@@ -232,7 +233,7 @@
 
 	// Get display name for the image
 	const displayName = $derived(
-		assetData?.originalFilename || assetData?.filename || value?.asset?._ref || 'Image'
+		assetData?.originalFilename || assetData?.filename || value?.asset?._ref || i18n.t('Image')
 	);
 
 	// Two layers of alt text:
@@ -258,7 +259,7 @@
 			// text would silently do nothing.
 			await assets.update(assetId, { alt: alt || null });
 		} catch {
-			toast.error('Failed to save alt text');
+			toast.error(i18n.t('Failed to save alt text'));
 		}
 	}
 
@@ -350,7 +351,7 @@
 			<span class="truncate text-sm">{displayName}</span>
 		</div>
 	{:else}
-		<span class="text-muted-foreground text-sm">No image</span>
+		<span class="text-muted-foreground text-sm">{i18n.t('No image')}</span>
 	{/if}
 {:else if compact}
 	<!-- Compact mode for arrays -->
@@ -381,7 +382,10 @@
 				<p class="truncate text-sm font-medium">{displayName}</p>
 				{#if assetData?.size}
 					<p class="text-muted-foreground text-xs">
-						{(assetData.size / 1024).toFixed(1)} KB
+						{(assetData.size / 1024).toLocaleString(i18n.locale(), {
+							minimumFractionDigits: 1,
+							maximumFractionDigits: 1
+						})} KB
 					</p>
 				{/if}
 			</div>
@@ -398,7 +402,7 @@
 						<DropdownMenuGroup>
 							<DropdownMenuItem onclick={openFileDialog} disabled={isUploading}>
 								<Upload size={16} />
-								Replace
+								{i18n.t('Replace')}
 							</DropdownMenuItem>
 							<DropdownMenuItem
 								onclick={() => {
@@ -407,7 +411,7 @@
 								disabled={isUploading}
 							>
 								<ImageIcon size={16} />
-								Browse media
+								{i18n.t('Browse media')}
 							</DropdownMenuItem>
 						</DropdownMenuGroup>
 						<DropdownMenuSeparator />
@@ -417,7 +421,7 @@
 							class="text-destructive focus:text-destructive"
 						>
 							<CircleX size={16} />
-							Clear field
+							{i18n.t('Clear field')}
 						</DropdownMenuItem>
 					</DropdownMenuContent>
 				</DropdownMenu>
@@ -434,10 +438,10 @@
 		>
 			{#if isUploading}
 				<div class="border-primary mr-2 h-4 w-4 animate-spin rounded-full border-b-2"></div>
-				Uploading...
+				{i18n.t('Uploading...')}
 			{:else}
 				<Upload size={16} class="mr-2" />
-				Upload Image
+				{i18n.t('Upload Image')}
 			{/if}
 		</Button>
 	{/if}
@@ -452,12 +456,12 @@
 					{#if loadingAsset}
 						<div class="text-muted-foreground flex flex-col items-center gap-2">
 							<div class="border-primary h-8 w-8 animate-spin rounded-full border-b-2"></div>
-							<span class="text-sm">Loading image...</span>
+							<span class="text-sm">{i18n.t('Loading image...')}</span>
 						</div>
 					{:else if previewUrl}
 						<AssetImage
 							src={previewUrl}
-							alt={value?.alt || assetData?.alt || 'Uploaded image'}
+							alt={value?.alt || assetData?.alt || i18n.t('Uploaded image')}
 							mimeType={assetData?.mimeType}
 							class="h-full w-full object-contain"
 							loading="lazy"
@@ -465,8 +469,8 @@
 					{:else}
 						<div class="text-muted-foreground flex flex-col items-center gap-2">
 							<ImageIcon size={32} />
-							<span class="text-sm">Image: {value.asset._ref}</span>
-							<span class="text-xs">Failed to load preview</span>
+							<span class="text-sm">{i18n.t('Image: {ref}', { ref: value.asset._ref })}</span>
+							<span class="text-xs">{i18n.t('Failed to load preview')}</span>
 						</div>
 					{/if}
 				</div>
@@ -484,7 +488,7 @@
 								<DropdownMenuGroup>
 									<DropdownMenuItem onclick={openFileDialog} disabled={isUploading}>
 										<Upload size={16} />
-										Upload
+										{i18n.t('Upload')}
 									</DropdownMenuItem>
 									<DropdownMenuItem
 										onclick={() => {
@@ -493,18 +497,18 @@
 										disabled={isUploading}
 									>
 										<ImageIcon size={16} />
-										Browse media
+										{i18n.t('Browse media')}
 									</DropdownMenuItem>
 								</DropdownMenuGroup>
 								<DropdownMenuSeparator />
 								<DropdownMenuGroup>
 									<DropdownMenuItem onclick={downloadImage} disabled={!previewUrl}>
 										<Download size={16} />
-										Download
+										{i18n.t('Download')}
 									</DropdownMenuItem>
 									<DropdownMenuItem onclick={copyUrl} disabled={!previewUrl}>
 										<Copy size={16} />
-										Copy URL
+										{i18n.t('Copy URL')}
 									</DropdownMenuItem>
 								</DropdownMenuGroup>
 								<DropdownMenuSeparator />
@@ -514,7 +518,7 @@
 									class="text-destructive focus:text-destructive"
 								>
 									<CircleX size={16} />
-									Clear field
+									{i18n.t('Clear field')}
 								</DropdownMenuItem>
 							</DropdownMenuContent>
 						</DropdownMenu>
@@ -525,14 +529,14 @@
 			<!-- Alt text — asset-level default + optional per-placement override -->
 			<div class="border-border space-y-2 border-t p-3">
 				<div class="space-y-1.5">
-					<label class="text-sm font-medium" for="alt-{field.name}">Alt text</label>
+					<label class="text-sm font-medium" for="alt-{field.name}">{i18n.t('Alt text')}</label>
 					<p class="text-muted-foreground text-xs">
-						Describes the image everywhere it's used (accessibility &amp; SEO).
+						{i18n.t("Describes the image everywhere it's used (accessibility & SEO).")}
 					</p>
 					<Input
 						id="alt-{field.name}"
 						type="text"
-						placeholder="Describe this image..."
+						placeholder={i18n.t('Describe this image...')}
 						value={assetAltText}
 						oninput={(e) => updateAssetAlt(e.currentTarget.value)}
 						disabled={isReadOnly}
@@ -544,7 +548,7 @@
 						<div class="flex items-center justify-between">
 							<label
 								class="text-muted-foreground text-xs font-medium"
-								for="alt-override-{field.name}">Override for this placement</label
+								for="alt-override-{field.name}">{i18n.t('Override for this placement')}</label
 							>
 							{#if !isReadOnly}
 								<button
@@ -555,14 +559,14 @@
 										showOverride = false;
 									}}
 								>
-									Hide
+									{i18n.t('Hide')}
 								</button>
 							{/if}
 						</div>
 						<Input
 							id="alt-override-{field.name}"
 							type="text"
-							placeholder={assetAltText || 'Describe this image...'}
+							placeholder={assetAltText || i18n.t('Describe this image...')}
 							value={value?.alt ?? ''}
 							oninput={(e) => updateOverrideAlt(e.currentTarget.value)}
 							disabled={isReadOnly}
@@ -574,7 +578,7 @@
 						class="text-muted-foreground hover:text-foreground text-xs underline-offset-2 hover:underline"
 						onclick={() => (showOverride = true)}
 					>
-						+ Override for this placement
+						{i18n.t('+ Override for this placement')}
 					</button>
 				{/if}
 			</div>
@@ -602,11 +606,15 @@
 					<div
 						class="border-primary h-4 w-4 animate-spin rounded-full border-2 border-t-transparent"
 					></div>
-					<span class="text-muted-foreground text-sm">Uploading...</span>
+					<span class="text-muted-foreground text-sm">{i18n.t('Uploading...')}</span>
 				{:else}
 					<FileImage size={16} class="text-muted-foreground" />
 					<span class="text-muted-foreground text-sm">
-						{isReadOnly ? 'No image' : isDragging ? 'Drop image here' : 'Drag or paste image here'}
+						{isReadOnly
+							? i18n.t('No image')
+							: isDragging
+								? i18n.t('Drop image here')
+								: i18n.t('Drag or paste image here')}
 					</span>
 				{/if}
 			</div>
@@ -620,7 +628,7 @@
 					class="text-muted-foreground hover:text-foreground flex items-center gap-1 px-2 py-1 text-sm transition-colors disabled:opacity-50"
 				>
 					<Upload size={14} />
-					Upload
+					{i18n.t('Upload')}
 				</button>
 				<button
 					disabled={isUploading || isReadOnly}
@@ -631,7 +639,7 @@
 					class="text-muted-foreground hover:text-foreground flex items-center gap-1 px-2 py-1 text-sm transition-colors disabled:opacity-50"
 				>
 					<ImageIcon size={14} />
-					Select
+					{i18n.t('Select')}
 				</button>
 			</div>
 		</div>

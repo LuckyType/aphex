@@ -1,4 +1,5 @@
 <script lang="ts">
+	import * as i18n from '../../../i18n/index';
 	import { Button } from '@aphexcms/ui/shadcn/button';
 	import { Upload, File as FileIcon, Download, Copy, CircleX } from '@lucide/svelte';
 	import type { FileValue } from '../../../types/asset';
@@ -94,7 +95,7 @@
 			const result = await assets.upload(formData);
 
 			if (!result.success) {
-				throw new Error(result.error || 'Upload failed');
+				throw new Error(result.error || i18n.t('Upload failed'));
 			}
 
 			const asset = result.data;
@@ -126,7 +127,7 @@
 				}
 			};
 		} catch (error) {
-			uploadError = error instanceof Error ? error.message : 'Upload failed';
+			uploadError = error instanceof Error ? error.message : i18n.t('Upload failed');
 			return null;
 		} finally {
 			isUploading = false;
@@ -140,14 +141,17 @@
 		// Browsers that can't decode HEIC report an empty `type`; see `effectiveFileType`.
 		const mimeType = effectiveFileType(file.name, file.type);
 		if (!isAcceptedFileType(file.name, mimeType, acceptedFileTypes)) {
-			uploadError = `File type "${mimeType || file.name}" is not allowed`;
+			uploadError = i18n.t('File type "{value}" is not allowed', { value: mimeType || file.name });
 			return;
 		}
 
 		// Client-side size check
 		if (field.maxSize && file.size > field.maxSize) {
-			const maxMB = (field.maxSize / (1024 * 1024)).toFixed(1);
-			uploadError = `File exceeds maximum size of ${maxMB} MB`;
+			const maxMB = (field.maxSize / (1024 * 1024)).toLocaleString(i18n.locale(), {
+				minimumFractionDigits: 1,
+				maximumFractionDigits: 1
+			});
+			uploadError = i18n.t('File exceeds maximum size of {maxMB} MB', { maxMB });
 			return;
 		}
 
@@ -220,7 +224,7 @@
 						if (result.success) {
 							assetData = result.data;
 						} else {
-							toast.error('Failed to fetch asset details');
+							toast.error(i18n.t('Failed to fetch asset details'));
 							assetData = null;
 						}
 					} catch (error) {
@@ -229,7 +233,7 @@
 						// boundary, not a failure — the field falls back to rendering
 						// the reference id, and an error toast would just be wrong.
 						if (!(error instanceof ApiError && error.status === 403)) {
-							toast.error('Failed to load file asset');
+							toast.error(i18n.t('Failed to load file asset'));
 						}
 						assetData = null;
 					} finally {
@@ -247,14 +251,14 @@
 	const fileUrl = $derived(assetData?.url || null);
 
 	const displayName = $derived(
-		assetData?.originalFilename || assetData?.filename || value?.asset?._ref || 'File'
+		assetData?.originalFilename || assetData?.filename || value?.asset?._ref || i18n.t('File')
 	);
 
 	const fileSize = $derived(
 		assetData?.size
 			? assetData.size > 1024 * 1024
-				? `${(assetData.size / (1024 * 1024)).toFixed(1)} MB`
-				: `${(assetData.size / 1024).toFixed(1)} KB`
+				? `${(assetData.size / (1024 * 1024)).toLocaleString(i18n.locale(), { minimumFractionDigits: 1, maximumFractionDigits: 1 })} MB`
+				: `${(assetData.size / 1024).toLocaleString(i18n.locale(), { minimumFractionDigits: 1, maximumFractionDigits: 1 })} KB`
 			: null
 	);
 
@@ -303,7 +307,7 @@
 			</div>
 		</div>
 	{:else}
-		<span class="text-muted-foreground text-sm">No file</span>
+		<span class="text-muted-foreground text-sm">{i18n.t('No file')}</span>
 	{/if}
 {:else if compact}
 	<!-- Compact mode for arrays -->
@@ -339,7 +343,7 @@
 						<DropdownMenuGroup>
 							<DropdownMenuItem onclick={openFileDialog} disabled={isUploading}>
 								<Upload size={16} />
-								Replace
+								{i18n.t('Replace')}
 							</DropdownMenuItem>
 							<DropdownMenuItem
 								onclick={() => {
@@ -348,7 +352,7 @@
 								disabled={isUploading}
 							>
 								<FileIcon size={16} />
-								Browse media
+								{i18n.t('Browse media')}
 							</DropdownMenuItem>
 						</DropdownMenuGroup>
 						<DropdownMenuSeparator />
@@ -358,7 +362,7 @@
 							class="text-destructive focus:text-destructive"
 						>
 							<CircleX size={16} />
-							Clear field
+							{i18n.t('Clear field')}
 						</DropdownMenuItem>
 					</DropdownMenuContent>
 				</DropdownMenu>
@@ -374,10 +378,10 @@
 		>
 			{#if isUploading}
 				<div class="border-primary mr-2 h-4 w-4 animate-spin rounded-full border-b-2"></div>
-				Uploading...
+				{i18n.t('Uploading...')}
 			{:else}
 				<Upload size={16} class="mr-2" />
-				Upload File
+				{i18n.t('Upload File')}
 			{/if}
 		</Button>
 	{/if}
@@ -419,7 +423,7 @@
 							<DropdownMenuGroup>
 								<DropdownMenuItem onclick={openFileDialog} disabled={isUploading}>
 									<Upload size={16} />
-									Replace
+									{i18n.t('Replace')}
 								</DropdownMenuItem>
 								<DropdownMenuItem
 									onclick={() => {
@@ -428,18 +432,18 @@
 									disabled={isUploading}
 								>
 									<FileIcon size={16} />
-									Browse media
+									{i18n.t('Browse media')}
 								</DropdownMenuItem>
 							</DropdownMenuGroup>
 							<DropdownMenuSeparator />
 							<DropdownMenuGroup>
 								<DropdownMenuItem onclick={downloadAsset} disabled={!fileUrl}>
 									<Download size={16} />
-									Download
+									{i18n.t('Download')}
 								</DropdownMenuItem>
 								<DropdownMenuItem onclick={copyUrl} disabled={!fileUrl}>
 									<Copy size={16} />
-									Copy URL
+									{i18n.t('Copy URL')}
 								</DropdownMenuItem>
 							</DropdownMenuGroup>
 							<DropdownMenuSeparator />
@@ -449,7 +453,7 @@
 								class="text-destructive focus:text-destructive"
 							>
 								<CircleX size={16} />
-								Clear field
+								{i18n.t('Clear field')}
 							</DropdownMenuItem>
 						</DropdownMenuContent>
 					</DropdownMenu>
@@ -478,11 +482,15 @@
 					<div
 						class="border-primary h-4 w-4 animate-spin rounded-full border-2 border-t-transparent"
 					></div>
-					<span class="text-muted-foreground text-sm">Uploading...</span>
+					<span class="text-muted-foreground text-sm">{i18n.t('Uploading...')}</span>
 				{:else}
 					<FileIcon size={16} class="text-muted-foreground" />
 					<span class="text-muted-foreground text-sm">
-						{isReadOnly ? 'No file' : isDragging ? 'Drop file here' : 'Drag or select a file'}
+						{isReadOnly
+							? i18n.t('No file')
+							: isDragging
+								? i18n.t('Drop file here')
+								: i18n.t('Drag or select a file')}
 					</span>
 				{/if}
 			</div>
@@ -495,7 +503,7 @@
 					class="text-muted-foreground hover:text-foreground flex items-center gap-1 px-2 py-1 text-sm transition-colors disabled:opacity-50"
 				>
 					<Upload size={14} />
-					Upload
+					{i18n.t('Upload')}
 				</button>
 				<button
 					disabled={isUploading || isReadOnly}
@@ -506,7 +514,7 @@
 					class="text-muted-foreground hover:text-foreground flex items-center gap-1 px-2 py-1 text-sm transition-colors disabled:opacity-50"
 				>
 					<FileIcon size={14} />
-					Select
+					{i18n.t('Select')}
 				</button>
 			</div>
 		</div>
@@ -519,7 +527,7 @@
 
 {#if field.accept}
 	<p class="text-muted-foreground mt-1 text-xs">
-		Accepted: {acceptedFileTypes.join(', ')}
+		{i18n.t('Accepted: {types}', { types: acceptedFileTypes.join(', ') })}
 	</p>
 {/if}
 

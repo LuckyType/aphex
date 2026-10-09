@@ -1,4 +1,5 @@
 <script lang="ts">
+	import * as i18n from '../../../i18n/index';
 	// The shared input resolver: given a field, pick the right control — a plugin
 	// widget (field.input → aphex/field/component) first, else the built-in renderer
 	// for the field type. Used by SchemaField (for leaf/reference fields) AND by
@@ -123,7 +124,11 @@
 	<ReferenceField {field} {value} {onUpdate} {onOpenReference} {readonly} />
 {:else}
 	<div class="border-muted-foreground/30 rounded-md border border-dashed p-4 text-center">
-		<p class="text-muted-foreground text-sm">Field type "{field.type}" not yet supported</p>
-		<p class="text-muted-foreground mt-1 text-xs">Raw value: {JSON.stringify(value)}</p>
+		<p class="text-muted-foreground text-sm">
+			{i18n.t('Field type "{type}" not yet supported', { type: field.type })}
+		</p>
+		<p class="text-muted-foreground mt-1 text-xs">
+			{i18n.t('Raw value: {value}', { value: JSON.stringify(value) })}
+		</p>
 	</div>
 {/if}

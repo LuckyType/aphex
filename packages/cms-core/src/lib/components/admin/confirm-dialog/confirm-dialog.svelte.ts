@@ -1,3 +1,4 @@
+import * as i18n from '../../../i18n/index';
 export interface ConfirmDialogOptions {
 	title: string;
 	description?: string;
@@ -15,8 +16,8 @@ export const confirmDialogState = $state<ConfirmDialogState>({
 	open: false,
 	title: '',
 	description: undefined,
-	confirmText: 'Confirm',
-	cancelText: 'Cancel',
+	confirmText: i18n.t('Confirm'),
+	cancelText: i18n.t('Cancel'),
 	variant: 'default',
 	resolve: null
 });
@@ -28,8 +29,8 @@ export function confirmDialog(options: ConfirmDialogOptions): Promise<boolean> {
 		}
 		confirmDialogState.title = options.title;
 		confirmDialogState.description = options.description;
-		confirmDialogState.confirmText = options.confirmText ?? 'Confirm';
-		confirmDialogState.cancelText = options.cancelText ?? 'Cancel';
+		confirmDialogState.confirmText = options.confirmText ?? i18n.t('Confirm');
+		confirmDialogState.cancelText = options.cancelText ?? i18n.t('Cancel');
 		confirmDialogState.variant = options.variant ?? 'default';
 		confirmDialogState.resolve = resolve;
 		confirmDialogState.open = true;
