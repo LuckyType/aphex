@@ -36,7 +36,9 @@ export const DOCUMENT_REFERENCES_BACKFILL_JOB = 'references.backfill';
  * which the incremental path also satisfies, so the rebuild it was gating never
  * ran a second time and never could.
  */
-export const REFERENCE_BACKFILL_VERSION = 4;
+// v5 rebuilds the rows a publish, unpublish or restore left
+// stale, and drops the published plane of unpublished documents.
+export const REFERENCE_BACKFILL_VERSION = 5;
 
 export const assetReferencesBackfillKey = (organizationId: string) =>
 	`asset-references:backfill:v${REFERENCE_BACKFILL_VERSION}:${organizationId}`;
