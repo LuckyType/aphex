@@ -1,4 +1,5 @@
 <script lang="ts">
+	import * as i18n from '../../../i18n/index';
 	import {
 		Sidebar,
 		SidebarContent,
@@ -80,12 +81,14 @@
 		const groups: SidebarNavGroup[] = [
 			{
 				id: 'content',
-				label: 'Content',
-				items: data?.navItems?.length ? data.navItems : [{ href: '/admin', label: 'Content' }]
+				label: i18n.t('Content'),
+				items: data?.navItems?.length
+					? data.navItems
+					: [{ href: '/admin', label: i18n.t('Content') }]
 			}
 		];
 		if (data?.systemNavItems?.length)
-			groups.push({ id: 'system', label: 'System', items: data.systemNavItems });
+			groups.push({ id: 'system', label: i18n.t('System'), items: data.systemNavItems });
 		if (data?.secondaryNavItems?.length)
 			groups.push({ id: 'secondary', placement: 'bottom', items: data.secondaryNavItems });
 		return groups;
@@ -170,7 +173,7 @@
 			<NavGroup
 				items={[]}
 				tools={orphanTools}
-				label="Tools"
+				label={i18n.t('Tools')}
 				isActive={isNavActive}
 				{isToolActive}
 				{onSelectTool}

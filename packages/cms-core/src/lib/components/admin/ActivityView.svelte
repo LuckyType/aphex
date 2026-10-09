@@ -1,4 +1,5 @@
 <script lang="ts">
+	import * as i18n from '../../i18n/index';
 	// Read-only operational history for the durable spine — the queryability Sanity's old
 	// out-of-dataset scheduling lacked. Jobs tab = scheduled/queued work and its outcome;
 	// Events tab = the append-only domain-event log; Agent Changes tab = the AI assistant's
@@ -104,7 +105,7 @@
 	// falls back to its truncated first message, since there's no action to name.
 	function changeSetHeadline(changeSet: AgentChangeSetWithOperations): string {
 		if (changeSet.operations.length === 0) {
-			return changeSet.summary ?? 'No document changes';
+			return changeSet.summary ?? i18n.t('No document changes');
 		}
 		const seen = new Set<string>();
 		const names: string[] = [];
@@ -119,16 +120,16 @@
 	function fmt(d: string | Date | null | undefined): string {
 		if (!d) return '—';
 		const date = typeof d === 'string' ? new Date(d) : d;
-		return Number.isNaN(date.getTime()) ? '—' : date.toLocaleString();
+		return Number.isNaN(date.getTime()) ? '—' : date.toLocaleString(i18n.locale());
 	}
 
 	/** "3m", "2h", "4d" — coarse on purpose; this is a staleness signal, not a stopwatch. */
 	function age(d: string | Date): string {
 		const ms = Date.now() - new Date(d).getTime();
-		if (ms < 60_000) return `${Math.max(0, Math.round(ms / 1000))}s`;
-		if (ms < 3_600_000) return `${Math.round(ms / 60_000)}m`;
-		if (ms < 86_400_000) return `${Math.round(ms / 3_600_000)}h`;
-		return `${Math.round(ms / 86_400_000)}d`;
+		if (ms < 60_000) return i18n.t('{value}s', { value: Math.max(0, Math.round(ms / 1000)) });
+		if (ms < 3_600_000) return i18n.t('{value}m', { value: Math.round(ms / 60_000) });
+		if (ms < 86_400_000) return i18n.t('{value}h', { value: Math.round(ms / 3_600_000) });
+		return i18n.tn(Math.round(ms / 86_400_000), '{count}d', '{count}d');
 	}
 
 	// A backlog older than this means the relay has stopped, not that it's busy. The
@@ -158,6 +159,8 @@
 	 * it died mid-run. It isn't lost (the next `claimDueJobs` reclaims expired leases), but
 	 * it looks identical to healthy in-flight work without this.
 	 */
+	const jobStatusLabel = (s: string) => i18n.t(s, undefined, 'job status');
+
 	function leaseExpired(job: Job): boolean {
 		return (
 			job.status === 'leased' && !!job.leaseExpiresAt && new Date(job.leaseExpiresAt) < new Date()
@@ -190,7 +193,7 @@
 					jobs = res.data ?? [];
 					total = res.pagination?.total ?? jobs.length;
 				} else {
-					error = res.error ?? 'Failed to load jobs';
+					error = res.error ?? i18n.t('Failed to load jobs');
 				}
 				// A failed health read shouldn't blank the page — the list is still useful.
 				health = healthRes.success ? (healthRes.data ?? null) : null;
@@ -206,7 +209,7 @@
 					events = res.data ?? [];
 					total = res.pagination?.total ?? events.length;
 				} else {
-					error = res.error ?? 'Failed to load events';
+					error = res.error ?? i18n.t('Failed to load events');
 				}
 			} else {
 				const res = await apiClient.get<WithCreatedByName<AgentChangeSetWithOperations>[]>(
@@ -217,11 +220,11 @@
 					changeSets = res.data ?? [];
 					total = res.pagination?.total ?? changeSets.length;
 				} else {
-					error = res.error ?? 'Failed to load agent changes';
+					error = res.error ?? i18n.t('Failed to load agent changes');
 				}
 			}
 		} catch (err) {
-			error = err instanceof Error ? err.message : 'Failed to load';
+			error = err instanceof Error ? err.message : i18n.t('Failed to load');
 		} finally {
 			loading = false;
 		}
@@ -247,15 +250,28 @@
 				organizationId: job.organizationId
 			});
 			if (!res.success) {
-				toast.error(res.error ?? `Could not ${action} this job`);
+				toast.error(
+					res.error ??
+						(action === 'retry'
+							? i18n.t('Could not retry this job')
+							: i18n.t('Could not cancel this job'))
+				);
 				return;
 			}
 			toast.success(
-				action === 'retry' ? 'Job requeued — it runs on the next tick.' : 'Job cancelled.'
+				action === 'retry'
+					? i18n.t('Job requeued — it runs on the next tick.')
+					: i18n.t('Job cancelled.')
 			);
 			await load();
 		} catch (err) {
-			toast.error(err instanceof Error ? err.message : `Could not ${action} this job`);
+			toast.error(
+				err instanceof Error
+					? err.message
+					: action === 'retry'
+						? i18n.t('Could not retry this job')
+						: i18n.t('Could not cancel this job')
+			);
 		} finally {
 			actingJobId = null;
 		}
@@ -288,14 +304,16 @@
 				}>;
 			}>(`/agent/change-sets/${changeSet.id}/undo`);
 			if (!res.success || !res.data) {
-				toast.error(res.error ?? 'Undo failed');
+				toast.error(res.error ?? i18n.t('Undo failed'));
 				return;
 			}
 			const failed = res.data.results.filter((r) => !r.success);
 			if (failed.length === 0) {
-				toast.success('Undone — reverted document(s) to their prior version.');
+				toast.success(i18n.t('Undone — reverted document(s) to their prior version.'));
 			} else {
-				toast.error(`${failed.length} operation(s) couldn't be undone (see console).`);
+				toast.error(
+					i18n.t("{count} operation(s) couldn't be undone (see console).", { count: failed.length })
+				);
 				// eslint-disable-next-line no-console -- surfaced only when an undo partially fails
 				console.warn('[agent-changes] undo results:', failed);
 			}
@@ -332,9 +350,9 @@
 <div class="mx-auto w-full max-w-5xl p-4 sm:p-6">
 	<div class="mb-4 flex items-center justify-between gap-3">
 		<div>
-			<h1 class="text-lg font-semibold">Activity</h1>
+			<h1 class="text-lg font-semibold">{i18n.t('Activity')}</h1>
 			<p class="text-muted-foreground text-sm">
-				Scheduled jobs, the domain-event log, and the AI assistant's audit trail.
+				{i18n.t("Scheduled jobs, the domain-event log, and the AI assistant's audit trail.")}
 			</p>
 		</div>
 		<div class="flex items-center gap-2">
@@ -347,7 +365,7 @@
 							: 'text-muted-foreground hover:text-foreground'}"
 						onclick={() => (scope = 'organization')}
 					>
-						This workspace
+						{i18n.t('This workspace')}
 					</button>
 					<button
 						class="rounded px-2 py-1 transition-colors {scope === 'all'
@@ -355,12 +373,13 @@
 							: 'text-muted-foreground hover:text-foreground'}"
 						onclick={() => (scope = 'all')}
 					>
-						All workspaces
+						{i18n.t('All workspaces')}
 					</button>
 				</div>
 			{/if}
 			<Button variant="outline" size="sm" onclick={load} disabled={loading} class="gap-1.5">
-				<RefreshCw class="h-3.5 w-3.5 {loading ? 'animate-spin' : ''}" /> Refresh
+				<RefreshCw class="h-3.5 w-3.5 {loading ? 'animate-spin' : ''}" />
+				{i18n.t('Refresh')}
 			</Button>
 		</div>
 	</div>
@@ -374,7 +393,8 @@
 				: 'text-muted-foreground hover:text-foreground border-transparent'}"
 			onclick={() => switchTab('jobs')}
 		>
-			<CalendarClock class="h-3.5 w-3.5" /> Jobs
+			<CalendarClock class="h-3.5 w-3.5" />
+			{i18n.t('Jobs')}
 		</button>
 		<button
 			class="flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm transition-colors {tab ===
@@ -383,7 +403,8 @@
 				: 'text-muted-foreground hover:text-foreground border-transparent'}"
 			onclick={() => switchTab('events')}
 		>
-			<Radio class="h-3.5 w-3.5" /> Events
+			<Radio class="h-3.5 w-3.5" />
+			{i18n.t('Events')}
 		</button>
 		<button
 			class="flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm transition-colors {tab ===
@@ -392,7 +413,8 @@
 				: 'text-muted-foreground hover:text-foreground border-transparent'}"
 			onclick={() => switchTab('agent')}
 		>
-			<Sparkles class="h-3.5 w-3.5" /> Agent Changes
+			<Sparkles class="h-3.5 w-3.5" />
+			{i18n.t('Agent Changes')}
 		</button>
 	</div>
 
@@ -416,18 +438,28 @@
 				<div>
 					{#if relayBacklog.stalled}
 						<p class="font-medium">
-							The relay looks stopped — {relayBacklog.pending} event{relayBacklog.pending === 1
-								? ''
-								: 's'} waiting, oldest {relayBacklog.oldestAge} old.
+							{i18n.tn(
+								relayBacklog.pending,
+								'The relay looks stopped — {count} event waiting, oldest {age} old.',
+								'The relay looks stopped — {count} events waiting, oldest {age} old.',
+								{ age: relayBacklog.oldestAge }
+							)}
 						</p>
 						<p class="mt-0.5 text-xs">
-							Nothing is reacting to events: scheduled publishes, erasure and plugin consumers are
-							all paused until a worker calls <code>POST /api/internal/workers/run</code> again.
+							{i18n.t(
+								'Nothing is reacting to events: scheduled publishes, erasure and plugin consumers are all paused until a worker calls'
+							)}
+							<code>POST /api/internal/workers/run</code>
+							{i18n.t('again.')}
 						</p>
 					{:else}
 						<p>
-							{relayBacklog.pending} event{relayBacklog.pending === 1 ? '' : 's'} waiting to fan out,
-							oldest {relayBacklog.oldestAge} old — the relay is keeping up.
+							{i18n.tn(
+								relayBacklog.pending,
+								'{count} event waiting to fan out, oldest {age} old — the relay is keeping up.',
+								'{count} events waiting to fan out, oldest {age} old — the relay is keeping up.',
+								{ age: relayBacklog.oldestAge }
+							)}
 						</p>
 					{/if}
 				</div>
@@ -443,7 +475,7 @@
 						: 'text-muted-foreground hover:bg-muted'}"
 					onclick={() => (statusFilter = s)}
 				>
-					{s}
+					{jobStatusLabel(s)}
 				</button>
 			{/each}
 		</div>
@@ -456,26 +488,26 @@
 			{error}
 		</div>
 	{:else if loading && jobs.length === 0 && events.length === 0 && changeSets.length === 0}
-		<div class="text-muted-foreground p-8 text-center text-sm">Loading…</div>
+		<div class="text-muted-foreground p-8 text-center text-sm">{i18n.t('Loading…')}</div>
 	{:else if tab === 'jobs'}
 		{#if jobs.length === 0}
-			<div class="text-muted-foreground p-8 text-center text-sm">No jobs.</div>
+			<div class="text-muted-foreground p-8 text-center text-sm">{i18n.t('No jobs.')}</div>
 		{:else}
 			<div class="border-rule overflow-x-auto rounded-md border">
 				<table class="w-full text-sm">
 					<thead class="bg-muted/50 text-muted-foreground text-xs">
 						<tr>
-							<th class="px-3 py-2 text-left font-medium">Type</th>
+							<th class="px-3 py-2 text-left font-medium">{i18n.t('Type')}</th>
 							{#if scope === 'all'}
-								<th class="px-3 py-2 text-left font-medium">Workspace</th>
+								<th class="px-3 py-2 text-left font-medium">{i18n.t('Workspace')}</th>
 							{/if}
 							<th class="px-3 py-2 text-left font-medium">Status</th>
-							<th class="px-3 py-2 text-left font-medium">Run at</th>
-							<th class="px-3 py-2 text-left font-medium">Attempts</th>
-							<th class="px-3 py-2 text-left font-medium">Last error</th>
-							<th class="px-3 py-2 text-left font-medium">Created</th>
+							<th class="px-3 py-2 text-left font-medium">{i18n.t('Run at')}</th>
+							<th class="px-3 py-2 text-left font-medium">{i18n.t('Attempts')}</th>
+							<th class="px-3 py-2 text-left font-medium">{i18n.t('Last error')}</th>
+							<th class="px-3 py-2 text-left font-medium">{i18n.t('Created')}</th>
 							{#if canControlJobs}
-								<th class="px-3 py-2 text-right font-medium">Actions</th>
+								<th class="px-3 py-2 text-right font-medium">{i18n.t('Actions')}</th>
 							{/if}
 						</tr>
 					</thead>
@@ -489,17 +521,20 @@
 									</td>
 								{/if}
 								<td class="px-3 py-2 whitespace-nowrap">
-									<Badge variant={statusVariant[job.status]} class="capitalize">{job.status}</Badge>
+									<Badge variant={statusVariant[job.status]} class="capitalize"
+										>{jobStatusLabel(job.status)}</Badge
+									>
 									{#if leaseExpired(job)}
 										<!-- Still `leased` past its expiry: the worker that held it died. The next
 										     claim reclaims it, so this is a diagnosis, not an action item. -->
 										<span
 											class="text-destructive ml-1.5 text-xs"
-											title="Lease expired {age(
-												job.leaseExpiresAt ?? new Date()
-											)} ago — the worker holding this job stopped. It will be reclaimed on the next tick."
+											title={i18n.t(
+												'Lease expired {age} ago — the worker holding this job stopped. It will be reclaimed on the next tick.',
+												{ age: age(job.leaseExpiresAt ?? new Date()) }
+											)}
 										>
-											stalled
+											{i18n.t('stalled')}
 										</span>
 									{/if}
 								</td>
@@ -524,7 +559,8 @@
 												disabled={actingJobId !== null}
 												onclick={() => actOnJob(job, 'retry')}
 											>
-												<RotateCcw class="h-3 w-3" /> Retry
+												<RotateCcw class="h-3 w-3" />
+												{i18n.t('Retry')}
 											</Button>
 										{/if}
 										{#if canCancel(job)}
@@ -535,7 +571,8 @@
 												disabled={actingJobId !== null}
 												onclick={() => actOnJob(job, 'cancel')}
 											>
-												<Ban class="h-3 w-3" /> Cancel
+												<Ban class="h-3 w-3" />
+												{i18n.t('Cancel')}
 											</Button>
 										{/if}
 										{#if !canRetry(job) && !canCancel(job)}
@@ -548,23 +585,25 @@
 					</tbody>
 				</table>
 			</div>
-			<p class="text-muted-foreground mt-2 text-xs">Showing {jobs.length} of {total}.</p>
+			<p class="text-muted-foreground mt-2 text-xs">
+				{i18n.t('Showing {shown} of {total}.', { shown: jobs.length, total })}
+			</p>
 		{/if}
 	{:else if tab === 'events'}
 		{#if events.length === 0}
-			<div class="text-muted-foreground p-8 text-center text-sm">No events.</div>
+			<div class="text-muted-foreground p-8 text-center text-sm">{i18n.t('No events.')}</div>
 		{:else}
 			<div class="border-rule overflow-x-auto rounded-md border">
 				<table class="w-full text-sm">
 					<thead class="bg-muted/50 text-muted-foreground text-xs">
 						<tr>
-							<th class="px-3 py-2 text-left font-medium">Type</th>
+							<th class="px-3 py-2 text-left font-medium">{i18n.t('Type')}</th>
 							{#if scope === 'all'}
-								<th class="px-3 py-2 text-left font-medium">Workspace</th>
+								<th class="px-3 py-2 text-left font-medium">{i18n.t('Workspace')}</th>
 							{/if}
-							<th class="px-3 py-2 text-left font-medium">Payload</th>
-							<th class="px-3 py-2 text-left font-medium">By</th>
-							<th class="px-3 py-2 text-left font-medium">When</th>
+							<th class="px-3 py-2 text-left font-medium">{i18n.t('Payload')}</th>
+							<th class="px-3 py-2 text-left font-medium">{i18n.t('By')}</th>
+							<th class="px-3 py-2 text-left font-medium">{i18n.t('When')}</th>
 						</tr>
 					</thead>
 					<tbody>
@@ -593,10 +632,14 @@
 					</tbody>
 				</table>
 			</div>
-			<p class="text-muted-foreground mt-2 text-xs">Showing {events.length} of {total}.</p>
+			<p class="text-muted-foreground mt-2 text-xs">
+				{i18n.t('Showing {shown} of {total}.', { shown: events.length, total })}
+			</p>
 		{/if}
 	{:else if changeSets.length === 0}
-		<div class="text-muted-foreground p-8 text-center text-sm">No agent activity yet.</div>
+		<div class="text-muted-foreground p-8 text-center text-sm">
+			{i18n.t('No agent activity yet.')}
+		</div>
 	{:else}
 		<div class="flex flex-col gap-2">
 			{#each changeSets as changeSet (changeSet.id)}
@@ -614,19 +657,24 @@
 						/>
 						<span class="min-w-0 flex-1 truncate font-mono">{changeSetHeadline(changeSet)}</span>
 						<Badge variant={changeSetStatusVariant[changeSet.status]} class="capitalize"
-							>{changeSet.status.replace('_', ' ')}</Badge
+							>{jobStatusLabel(changeSet.status.replace('_', ' '))}</Badge
 						>
 						<span class="text-muted-foreground hidden shrink-0 text-xs sm:inline"
-							>{changeSet.createdByName ?? changeSet.createdBy ?? 'Unknown'}</span
+							>{changeSet.createdByName ?? changeSet.createdBy ?? i18n.t('Unknown')}</span
 						>
 						<span class="text-muted-foreground hidden shrink-0 font-mono text-xs sm:inline"
 							>{changeSet.provider}/{changeSet.model}</span
 						>
 						<span
 							class="text-muted-foreground hidden shrink-0 font-mono text-xs sm:inline"
-							title="{changeSet.promptTokens} input tokens, {changeSet.completionTokens} output tokens"
-							>{changeSet.promptTokens.toLocaleString()} in / {changeSet.completionTokens.toLocaleString()}
-							out</span
+							title={i18n.t('{promptTokens} input tokens, {completionTokens} output tokens', {
+								promptTokens: changeSet.promptTokens,
+								completionTokens: changeSet.completionTokens
+							})}
+							>{i18n.t('{promptTokens} in / {completionTokens} out', {
+								promptTokens: changeSet.promptTokens.toLocaleString(i18n.locale()),
+								completionTokens: changeSet.completionTokens.toLocaleString(i18n.locale())
+							})}</span
 						>
 						<span class="text-muted-foreground shrink-0 text-xs whitespace-nowrap"
 							>{fmt(changeSet.createdAt)}</span
@@ -636,7 +684,7 @@
 					{#if expandedChangeSetId === changeSet.id}
 						<div class="border-rule border-t p-3">
 							{#if !expandedDetail}
-								<p class="text-muted-foreground text-xs">Loading…</p>
+								<p class="text-muted-foreground text-xs">{i18n.t('Loading…')}</p>
 							{:else}
 								{#if expandedDetail.summary}
 									<p class="text-muted-foreground mb-3 border-l-2 pl-2 text-xs italic">
@@ -645,7 +693,7 @@
 								{/if}
 								{#if expandedDetail.operations.length === 0}
 									<p class="text-muted-foreground text-xs">
-										No document changes — a read-only conversation.
+										{i18n.t('No document changes — a read-only conversation.')}
 									</p>
 								{:else}
 									<div class="flex flex-col gap-1.5">
@@ -671,7 +719,7 @@
 											onclick={() => undoChangeSet(changeSet)}
 										>
 											<Undo2 class="h-3.5 w-3.5" />
-											{undoingId === changeSet.id ? 'Undoing…' : 'Undo this turn'}
+											{undoingId === changeSet.id ? i18n.t('Undoing…') : i18n.t('Undo this turn')}
 										</Button>
 									{/if}
 								{/if}
@@ -681,6 +729,8 @@
 				</div>
 			{/each}
 		</div>
-		<p class="text-muted-foreground mt-2 text-xs">Showing {changeSets.length} of {total}.</p>
+		<p class="text-muted-foreground mt-2 text-xs">
+			{i18n.t('Showing {shown} of {total}.', { shown: changeSets.length, total })}
+		</p>
 	{/if}
 </div>

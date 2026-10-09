@@ -196,6 +196,7 @@
 					value={dateValue}
 					onValueChange={handleDateChange}
 					captionLayout="dropdown"
+					locale={i18n.locale()}
 				/>
 
 				<!-- Time Picker Section -->
@@ -217,7 +218,7 @@
 							disabled={readonly}
 							type="button"
 						>
-							Set to now
+							{i18n.t('Set to now')}
 						</Button>
 					</div>
 				</div>

@@ -540,7 +540,7 @@
 				accessDenied = true;
 				assetList = [];
 			} else {
-				toast.error('Failed to fetch assets');
+				toast.error(i18n.t('Failed to fetch assets'));
 			}
 		} finally {
 			// Only the newest request owns the spinner. A superseded one clearing it
@@ -566,7 +566,7 @@
 			// A 403 here is already reported by the asset fetch that triggered it;
 			// a second toast would just be noise.
 			if (!(error instanceof ApiError && error.status === 403)) {
-				toast.error('Failed to fetch reference counts');
+				toast.error(i18n.t('Failed to fetch reference counts'));
 			}
 		}
 	}
@@ -581,7 +581,7 @@
 				selectedRefCount = result.data.total;
 			}
 		} catch {
-			toast.error('Failed to fetch asset references');
+			toast.error(i18n.t('Failed to fetch asset references'));
 			selectedAssetRefs = [];
 			selectedRefCount = 0;
 		} finally {
@@ -778,9 +778,9 @@
 		// only sensible authority. Attempt the delete and handle its refusal.
 		const count = selectedIds.size;
 		const confirmed = await confirmDialog({
-			title: `Delete ${count} asset${count > 1 ? 's' : ''}?`,
-			description: 'This cannot be undone.',
-			confirmText: 'Delete',
+			title: i18n.tn(count, 'Delete {count} asset?', 'Delete {count} assets?'),
+			description: i18n.t('This cannot be undone.'),
+			confirmText: i18n.t('Delete'),
 			variant: 'destructive'
 		});
 		if (!confirmed) return;
@@ -804,7 +804,7 @@
 				await handleBulkDeleteConflict(ids, err.response as BulkAssetDeleteConflict);
 				return;
 			}
-			toast.error('Failed to delete assets');
+			toast.error(i18n.t('Failed to delete assets'));
 		} finally {
 			isBulkDeleting = false;
 		}
@@ -831,14 +831,25 @@
 		}
 
 		const forced = await confirmDialog({
-			title: 'Referenced by documents you cannot open',
+			title: i18n.t('Referenced by documents you cannot open'),
 			// Two sentences: what's blocking, and what the button does. The rest —
 			// which plane gets cleaned, when a published page catches up — is true
 			// but belongs in the docs, not in front of someone mid-cleanup.
 			description:
-				`${blocked.length} asset${blocked.length > 1 ? 's are' : ' is'} used by documents of type ${unregisteredTypes.join(', ')}, which no longer ${unregisteredTypes.length > 1 ? 'exist' : 'exists'} in your schema. ` +
-				`Force delete removes the references for you.`,
-			confirmText: 'Force delete',
+				(unregisteredTypes.length > 1
+					? i18n.tn(
+							blocked.length,
+							'{count} asset is used by documents of type {types}, which no longer exist in your schema. ',
+							'{count} assets are used by documents of type {types}, which no longer exist in your schema. ',
+							{ types: unregisteredTypes.join(', ') }
+						)
+					: i18n.tn(
+							blocked.length,
+							'{count} asset is used by documents of type {types}, which no longer exists in your schema. ',
+							'{count} assets are used by documents of type {types}, which no longer exists in your schema. ',
+							{ types: unregisteredTypes.join(', ') }
+						)) + i18n.t('Force delete removes the references for you.'),
+			confirmText: i18n.t('Force delete'),
 			variant: 'destructive'
 		});
 		if (forced) {
@@ -862,11 +873,14 @@
 	 */
 	function uploadRejection(file: File): string | undefined {
 		if (!acceptsUpload(file)) {
-			return `File type ${file.type || file.name} is not accepted here`;
+			return i18n.t('File type {value} is not accepted here', { value: file.type || file.name });
 		}
 		const fileLimit = maxUploadFileBytes(maxUploadBytes);
 		if (file.size > fileLimit) {
-			return `Too large — ${formatSize(file.size)}, limit is ${formatSize(fileLimit)}`;
+			return i18n.t('Too large — {value}, limit is {value2}', {
+				value: formatSize(file.size),
+				value2: formatSize(fileLimit)
+			});
 		}
 		return undefined;
 	}
@@ -1168,9 +1182,9 @@
 	async function confirmDiscardEdits(): Promise<boolean> {
 		if (!metadataDirty) return true;
 		return confirmDialog({
-			title: 'Discard unsaved changes?',
-			description: 'The metadata you edited on this asset has not been saved.',
-			confirmText: 'Discard',
+			title: i18n.t('Discard unsaved changes?'),
+			description: i18n.t('The metadata you edited on this asset has not been saved.'),
+			confirmText: i18n.t('Discard'),
 			variant: 'destructive'
 		});
 	}
@@ -1228,11 +1242,11 @@
 			try {
 				const result = await assets.getById(wanted);
 				if (result.success && result.data) await openAssetDetail(result.data);
-				else toast.error('That asset could not be found');
+				else toast.error(i18n.t('That asset could not be found'));
 			} catch {
 				// A bad id in a URL is a dead link, not a broken media browser —
 				// the library behind it still loaded and is perfectly usable.
-				toast.error('That asset could not be found');
+				toast.error(i18n.t('That asset could not be found'));
 			}
 		})();
 	});
@@ -1263,7 +1277,7 @@
 				selectedAsset = result.data;
 			}
 		} catch {
-			toast.error('Failed to save metadata');
+			toast.error(i18n.t('Failed to save metadata'));
 		} finally {
 			isSaving = false;
 		}
@@ -1277,9 +1291,12 @@
 	// blocking deletes that should succeed and permitting ones that shouldn't.
 	async function deleteAsset(asset: Asset) {
 		const confirmed = await confirmDialog({
-			title: 'Delete asset?',
-			description: `"${asset.originalFilename}" will be permanently deleted. This cannot be undone.`,
-			confirmText: 'Delete',
+			title: i18n.t('Delete asset?'),
+			description: i18n.t(
+				'"{originalFilename}" will be permanently deleted. This cannot be undone.',
+				{ originalFilename: asset.originalFilename }
+			),
+			confirmText: i18n.t('Delete'),
 			variant: 'destructive'
 		});
 		if (!confirmed) return;
@@ -1305,7 +1322,7 @@
 				await handleDeleteConflict(asset, error.response as AssetDeleteConflict);
 				return;
 			}
-			toast.error('Failed to delete asset');
+			toast.error(i18n.t('Failed to delete asset'));
 		}
 	}
 
@@ -1329,12 +1346,28 @@
 
 		const blocking = references.filter((ref) => unregisteredTypes.includes(ref.type));
 		const forced = await confirmDialog({
-			title: 'Referenced by a document you cannot open',
+			title: i18n.t('Referenced by a document you cannot open'),
 			// See the bulk dialog: what's blocking, then what the button does.
 			description:
-				`"${asset.originalFilename}" is used by ${blocking.length} document${blocking.length > 1 ? 's' : ''} of type ${unregisteredTypes.join(', ')}, which no longer ${unregisteredTypes.length > 1 ? 'exist' : 'exists'} in your schema. ` +
-				`Force delete removes the reference${blocking.length > 1 ? 's' : ''} for you.`,
-			confirmText: 'Force delete',
+				(unregisteredTypes.length > 1
+					? i18n.tn(
+							blocking.length,
+							'"{filename}" is used by {count} document of type {types}, which no longer exist in your schema. ',
+							'"{filename}" is used by {count} documents of type {types}, which no longer exist in your schema. ',
+							{ filename: asset.originalFilename, types: unregisteredTypes.join(', ') }
+						)
+					: i18n.tn(
+							blocking.length,
+							'"{filename}" is used by {count} document of type {types}, which no longer exists in your schema. ',
+							'"{filename}" is used by {count} documents of type {types}, which no longer exists in your schema. ',
+							{ filename: asset.originalFilename, types: unregisteredTypes.join(', ') }
+						)) +
+				i18n.tn(
+					blocking.length,
+					'Force delete removes the reference for you.',
+					'Force delete removes the references for you.'
+				),
+			confirmText: i18n.t('Force delete'),
 			variant: 'destructive'
 		});
 		if (forced) {
@@ -1358,10 +1391,10 @@
 		try {
 			await navigator.clipboard.writeText(asset.id);
 			copiedId = true;
-			toast.success('Asset ID copied');
+			toast.success(i18n.t('Asset ID copied'));
 			setTimeout(() => (copiedId = false), 2000);
 		} catch {
-			toast.error('Failed to copy asset ID');
+			toast.error(i18n.t('Failed to copy asset ID'));
 		}
 	}
 
@@ -1393,14 +1426,18 @@
 	function formatSize(bytes: number): string {
 		if (bytes < 1024) return `${bytes} B`;
 		if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} kB`;
-		return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+		return `${(bytes / (1024 * 1024)).toLocaleString(i18n.locale(), { minimumFractionDigits: 1, maximumFractionDigits: 1 })} MB`;
 	}
 
 	// Format date
 	function formatDate(date: Date | string | null): string {
 		if (!date) return '';
 		const d = new Date(date);
-		return d.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
+		return d.toLocaleDateString(i18n.locale(), {
+			month: '2-digit',
+			day: '2-digit',
+			year: 'numeric'
+		});
 	}
 
 	/**
@@ -1496,7 +1533,7 @@
 		try {
 			const info = await extractVideoInfoFromUrl(getOriginalUrl(asset));
 			if (!info.poster) {
-				toast.error('Could not read a frame — this browser may not decode that codec');
+				toast.error(i18n.t('Could not read a frame — this browser may not decode that codec'));
 				return;
 			}
 			await assets.uploadPoster(asset.id, info.poster, {
@@ -1504,14 +1541,14 @@
 				width: info.width,
 				height: info.height
 			});
-			toast.success('Poster generated');
+			toast.success(i18n.t('Poster generated'));
 			await fetchAssets(currentPage);
 			// Re-read so the inspector's own copy carries metadata.poster.
 			const refreshed = await assets.getById(asset.id);
 			if (refreshed.success && refreshed.data) selectedAsset = refreshed.data;
 		} catch (err) {
 			cmsLogger.error('[Media]', 'Poster generation failed:', err);
-			toast.error('Failed to save poster');
+			toast.error(i18n.t('Failed to save poster'));
 		} finally {
 			generatingPoster = false;
 		}
@@ -1689,9 +1726,9 @@
 	// Sort label
 	const sortLabel = $derived(
 		sortOrder === 'newest'
-			? 'Last created: Newest first'
+			? i18n.t('Last created: Newest first')
 			: sortOrder === 'oldest'
-				? 'Last created: Oldest first'
+				? i18n.t('Last created: Oldest first')
 				: sortOrder === 'name-asc'
 					? 'Name: A-Z'
 					: 'Name: Z-A'
@@ -1843,14 +1880,14 @@
 		>
 			<div class="text-center">
 				<Upload class="text-primary mx-auto mb-2 h-12 w-12" />
-				<p class="text-primary text-lg font-medium">Drop files to upload</p>
+				<p class="text-primary text-lg font-medium">{i18n.t('Drop files to upload')}</p>
 			</div>
 		</div>
 	{/if}
 
 	<!-- Header -->
 	<div class="border-border flex items-center justify-between border-b px-4 py-3 sm:px-6 sm:py-4">
-		<h2 class="text-base font-semibold sm:text-lg">Browse Assets</h2>
+		<h2 class="text-base font-semibold sm:text-lg">{i18n.t('Browse Assets')}</h2>
 		{#if canUpload}
 			<Button
 				size="sm"
@@ -1864,7 +1901,7 @@
 				}}
 			>
 				<Upload size={16} class="sm:mr-2" />
-				<span class="hidden sm:inline">Upload assets</span>
+				<span class="hidden sm:inline">{i18n.t('Upload assets')}</span>
 			</Button>
 		{/if}
 	</div>
@@ -1876,7 +1913,7 @@
 		<div class="relative min-w-0 flex-1 sm:w-48 sm:flex-none">
 			<Search size={14} class="text-muted-foreground absolute top-1/2 left-2.5 -translate-y-1/2" />
 			<Input
-				placeholder="Search"
+				placeholder={i18n.t('Search')}
 				class="h-8 pl-8 text-sm"
 				value={searchQuery}
 				oninput={(e) => handleSearchInput((e.target as HTMLInputElement).value)}
@@ -1885,7 +1922,11 @@
 
 		{#if totalAssets > 0}
 			<span class="text-muted-foreground hidden text-xs sm:inline">
-				{(currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, totalAssets)} of {totalAssets}
+				{i18n.t('{from}–{to} of {total}', {
+					from: (currentPage - 1) * pageSize + 1,
+					to: Math.min(currentPage * pageSize, totalAssets),
+					total: totalAssets
+				})}
 			</span>
 		{/if}
 		<div class="hidden flex-1 sm:block"></div>
@@ -1899,26 +1940,28 @@
 				currentPage = 1;
 				fetchAssets(1);
 			}}
-			aria-label="Filter by media type"
+			aria-label={i18n.t('Filter by media type')}
 			class="border-input bg-background text-foreground hidden h-7 rounded-md border px-1.5 text-xs sm:block"
 		>
-			<option value="all">All types</option>
-			<option value="image">Images</option>
+			<option value="all">{i18n.t('All types')}</option>
+			<option value="image">{i18n.t('Images')}</option>
 			<option value="svg">SVG</option>
 			<option value="video">Video</option>
 			<option value="audio">Audio</option>
-			<option value="document">Documents</option>
+			<option value="document">{i18n.t('Documents')}</option>
 		</select>
 
 		{#if usageIndexing}
 			<span
 				class="text-muted-foreground hidden items-center gap-1.5 text-xs sm:inline-flex"
-				title="Building the reference index. Usage results are incomplete until it finishes."
+				title={i18n.t(
+					'Building the reference index. Usage results are incomplete until it finishes.'
+				)}
 			>
 				<span
 					class="border-muted-foreground/40 h-3 w-3 animate-spin rounded-full border-2 border-t-transparent"
 				></span>
-				Indexing usage…
+				{i18n.t('Indexing usage…')}
 			</span>
 		{/if}
 
@@ -1931,12 +1974,12 @@
 				currentPage = 1;
 				fetchAssets(1);
 			}}
-			aria-label="Filter by usage"
+			aria-label={i18n.t('Filter by usage')}
 			class="border-input bg-background text-foreground hidden h-7 rounded-md border px-1.5 text-xs sm:block"
 		>
-			<option value="all">All assets</option>
-			<option value="in-use">In use</option>
-			<option value="unused">Unused</option>
+			<option value="all">{i18n.t('All assets')}</option>
+			<option value="in-use">{i18n.t('In use')}</option>
+			<option value="unused">{i18n.t('Unused')}</option>
 		</select>
 
 		<!-- Grid density. Replaces the page-size select, which cost permanent
@@ -1967,7 +2010,7 @@
 				class="rounded p-1.5 {viewMode === 'grid'
 					? 'bg-background shadow'
 					: 'text-muted-foreground'}"
-				title="Grid view"
+				title={i18n.t('Grid view')}
 			>
 				<Grid3x3 size={14} />
 			</button>
@@ -1976,7 +2019,7 @@
 				class="rounded p-1.5 {viewMode === 'list'
 					? 'bg-background shadow'
 					: 'text-muted-foreground'}"
-				title="List view"
+				title={i18n.t('List view')}
 			>
 				<List size={14} />
 			</button>
@@ -1990,7 +2033,7 @@
 				class="rounded p-1.5 transition-colors {isSelectMode
 					? 'bg-primary text-primary-foreground'
 					: 'text-muted-foreground hover:text-foreground'}"
-				title={isSelectMode ? 'Exit select mode' : 'Select multiple'}
+				title={isSelectMode ? i18n.t('Exit select mode') : i18n.t('Select multiple')}
 			>
 				<SquareCheckBig size={14} />
 			</button>
@@ -2019,15 +2062,15 @@
 							<Lock class="text-muted-foreground h-8 w-8" />
 						</div>
 						<div class="text-center">
-							<h3 class="mb-1 font-medium">No access to media</h3>
+							<h3 class="mb-1 font-medium">{i18n.t('No access to media')}</h3>
 							<p class="text-muted-foreground text-sm">
-								Your role doesn't include permission to view assets.
+								{i18n.t("Your role doesn't include permission to view assets.")}
 							</p>
 						</div>
 					</div>
 				{:else if loading && assetList.length === 0}
 					<div class="flex h-full items-center justify-center">
-						<p class="text-muted-foreground">Loading assets...</p>
+						<p class="text-muted-foreground">{i18n.t('Loading assets...')}</p>
 					</div>
 					<!-- `orderedAssets`, not `sortedAssets`: on a page where every asset is
 				     already selected, `sortedAssets` is empty and the pinned list holds
@@ -2039,11 +2082,11 @@
 							<ImageIcon class="text-muted-foreground h-8 w-8" />
 						</div>
 						<div class="text-center">
-							<h3 class="mb-1 font-medium">No assets found</h3>
+							<h3 class="mb-1 font-medium">{i18n.t('No assets found')}</h3>
 							<p class="text-muted-foreground text-sm">
 								{searchQuery
-									? 'Try a different search term'
-									: 'Upload your first asset to get started'}
+									? i18n.t('Try a different search term')
+									: i18n.t('Upload your first asset to get started')}
 							</p>
 						</div>
 					</div>
@@ -2064,32 +2107,34 @@
 							class="bg-muted border-border sticky top-0 z-20 flex items-center gap-3 border-b px-4 py-2"
 						>
 							<span class="text-sm font-medium">
-								{selectedIds.size} selected
+								{i18n.t('{count} selected', { count: selectedIds.size })}
 							</span>
 							<button
 								onclick={toggleSelectAll}
 								class="text-muted-foreground hover:text-foreground text-sm transition-colors"
 							>
-								{allSelected ? 'Deselect page' : 'Select page'}
+								{allSelected ? i18n.t('Deselect page') : i18n.t('Select page')}
 							</button>
 							<span class="text-muted-foreground hidden text-xs lg:inline">
-								Shift-click to extend a range
+								{i18n.t('Shift-click to extend a range')}
 							</span>
 							<div class="flex-1"></div>
-							<Button variant="default" size="sm" onclick={confirmMultiSelect}>Done</Button>
+							<Button variant="default" size="sm" onclick={confirmMultiSelect}
+								>{i18n.t('Done')}</Button
+							>
 						</div>
 					{:else if isSelectMode}
 						<div
 							class="bg-muted border-border sticky top-0 z-20 flex items-center gap-3 border-b px-4 py-2"
 						>
 							<span class="text-sm font-medium">
-								{selectedIds.size} selected
+								{i18n.t('{count} selected', { count: selectedIds.size })}
 							</span>
 							<button
 								onclick={toggleSelectAll}
 								class="text-muted-foreground hover:text-foreground text-sm transition-colors"
 							>
-								{allSelected ? 'Deselect page' : 'Select page'}
+								{allSelected ? i18n.t('Deselect page') : i18n.t('Select page')}
 							</button>
 							{#if selectedIds.size > 0}
 								{#if canDeleteAssets}
@@ -2100,19 +2145,19 @@
 										disabled={isBulkDeleting}
 									>
 										<Trash2 size={14} class="mr-1.5" />
-										{isBulkDeleting ? 'Deleting...' : 'Delete'}
+										{isBulkDeleting ? i18n.t('Deleting...') : i18n.t('Delete')}
 									</Button>
 								{/if}
 								<button
 									onclick={clearSelection}
 									class="text-muted-foreground hover:text-foreground text-sm transition-colors"
 								>
-									Clear selection
+									{i18n.t('Clear selection')}
 								</button>
 							{/if}
 							<div class="flex-1"></div>
 							<span class="text-muted-foreground hidden text-xs lg:inline">
-								Shift-click to extend a range
+								{i18n.t('Shift-click to extend a range')}
 							</span>
 						</div>
 					{/if}
@@ -2155,7 +2200,7 @@
 										{#if asset.isPrivate}
 											<span
 												class="pointer-events-none absolute top-1.5 left-1.5 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-black/70"
-												title="Private — needs a session or a signed URL"
+												title={i18n.t('Private — needs a session or a signed URL')}
 											>
 												<Lock class="h-3 w-3 text-white" />
 											</span>
@@ -2261,7 +2306,7 @@
 										{#if asset.isPrivate}
 											<span
 												class="pointer-events-none absolute top-1.5 left-1.5 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-black/70"
-												title="Private — needs a session or a signed URL"
+												title={i18n.t('Private — needs a session or a signed URL')}
 											>
 												<Lock class="h-3 w-3 text-white" />
 											</span>
@@ -2339,7 +2384,7 @@
 													}
 												}}
 												class="bg-background/80 absolute top-1.5 right-1.5 rounded p-1 opacity-0 transition-opacity group-hover:opacity-100"
-												title="View details"
+												title={i18n.t('View details')}
 											>
 												<svg
 													class="h-3.5 w-3.5"
@@ -2436,12 +2481,12 @@
 									<Checkbox checked={allSelected} onCheckedChange={toggleSelectAll} />
 								</div>
 								<div></div>
-								<div>Filename</div>
-								<div>Resolution</div>
-								<div>Mime type</div>
-								<div>Size</div>
-								<div>Refs</div>
-								<div>Last updated</div>
+								<div>{i18n.t('Filename')}</div>
+								<div>{i18n.t('Resolution')}</div>
+								<div>{i18n.t('Mime type')}</div>
+								<div>{i18n.t('Size')}</div>
+								<div>{i18n.t('Refs')}</div>
+								<div>{i18n.t('Last updated')}</div>
 							</div>
 							<!-- Mobile header -->
 							<div
@@ -2450,7 +2495,7 @@
 								<div class="w-4">
 									<Checkbox checked={allSelected} onCheckedChange={toggleSelectAll} />
 								</div>
-								<div>Assets</div>
+								<div>{i18n.t('Assets')}</div>
 							</div>
 							<!-- `orderedAssets`, not `sortedAssets`: in multi-select picker mode
 							     the already-selected assets are filtered out of `sortedAssets`
@@ -2618,15 +2663,17 @@
 
 				{#snippet failed(error, reset)}
 					<div class="border-destructive/30 bg-destructive/5 rounded-md border p-4 text-center">
-						<p class="text-destructive font-medium">Media browser encountered an error</p>
+						<p class="text-destructive font-medium">
+							{i18n.t('Media browser encountered an error')}
+						</p>
 						<p class="text-muted-foreground mt-1 text-sm">
-							{error instanceof Error ? error.message : 'Unknown error'}
+							{error instanceof Error ? error.message : i18n.t('Unknown error')}
 						</p>
 						<button
 							class="bg-primary text-primary-foreground mt-3 rounded px-4 py-2 text-sm"
 							onclick={reset}
 						>
-							Retry
+							{i18n.t('Retry')}
 						</button>
 					</div>
 				{/snippet}
@@ -2657,7 +2704,7 @@
 						class="text-muted-foreground hover:text-foreground flex items-center gap-1 text-sm transition-colors md:hidden"
 					>
 						<ChevronLeft size={16} />
-						Back
+						{i18n.t('Back')}
 					</button>
 					<!-- Filename -->
 					<p
@@ -2673,7 +2720,7 @@
 								size="sm"
 								class="h-7 w-7 p-0"
 								onclick={() => deleteAsset(selectedAsset!)}
-								title="Delete asset"
+								title={i18n.t('Delete asset')}
 							>
 								<Trash2 size={14} class="text-destructive" />
 							</Button>
@@ -2683,7 +2730,7 @@
 							size="sm"
 							class="hidden h-7 w-7 p-0 md:flex"
 							onclick={closeAssetDetail}
-							title="Close"
+							title={i18n.t('Close')}
 						>
 							<X size={14} />
 						</Button>
@@ -2699,7 +2746,7 @@
 								if (selectedAsset && onSelect) onSelect(selectedAsset);
 							}}
 						>
-							Select
+							{i18n.t('Select')}
 						</Button>
 					</div>
 				{/if}
@@ -2710,7 +2757,7 @@
 						<button
 							onclick={() => (lightboxOpen = true)}
 							class="bg-muted/30 mb-3 w-full cursor-zoom-in overflow-hidden rounded-lg"
-							title="Click to enlarge"
+							title={i18n.t('Click to enlarge')}
 						>
 							<AssetImage
 								src={getPreviewUrl(selectedAsset)}
@@ -2749,7 +2796,7 @@
 								disabled={generatingPoster}
 								onclick={() => generatePoster(selectedAsset!)}
 							>
-								{generatingPoster ? 'Reading a frame…' : 'Generate poster'}
+								{generatingPoster ? i18n.t('Reading a frame…') : i18n.t('Generate poster')}
 							</Button>
 						{/if}
 					{:else if isAudio(selectedAsset)}
@@ -2790,7 +2837,7 @@
 							? 'border-foreground text-foreground border-b-2'
 							: 'text-muted-foreground hover:text-foreground'}"
 					>
-						References ({selectedRefCount})
+						{i18n.t('References ({count})', { count: selectedRefCount })}
 					</button>
 				</div>
 
@@ -2821,8 +2868,9 @@
 								<p class="text-muted-foreground mt-1.5 flex items-start gap-1.5 text-xs">
 									<Lock class="mt-[1px] h-3 w-3 shrink-0" />
 									<span>
-										Private — needs a signed URL or a session in this organization. Set by the
-										schema field this asset was uploaded into.
+										{i18n.t(
+											'Private — needs a signed URL or a session in this organization. Set by the\n										schema field this asset was uploaded into.'
+										)}
 									</span>
 								</p>
 							{/if}
@@ -2837,7 +2885,7 @@
 								onclick={() => downloadAsset(selectedAsset!)}
 							>
 								<Download size={14} class="mr-1.5" />
-								Download
+								{i18n.t('Download')}
 							</Button>
 							<Button
 								variant="outline"
@@ -2846,7 +2894,7 @@
 								onclick={() => copyAssetUrl(selectedAsset!)}
 							>
 								<Link size={14} class="mr-1.5" />
-								{copiedUrl ? 'Copied!' : 'Copy URL'}
+								{copiedUrl ? i18n.t('Copied!') : i18n.t('Copy URL')}
 							</Button>
 						</div>
 
@@ -2859,7 +2907,7 @@
 						     generic 403 at the end. -->
 						<div class="space-y-3">
 							<div>
-								<Label for="asset-filename" class="text-xs">Filename</Label>
+								<Label for="asset-filename" class="text-xs">{i18n.t('Filename')}</Label>
 								<Input
 									id="asset-filename"
 									bind:value={editFilename}
@@ -2870,18 +2918,18 @@
 								/>
 							</div>
 							<div>
-								<Label for="asset-title" class="text-xs">Title</Label>
+								<Label for="asset-title" class="text-xs">{i18n.t('Title')}</Label>
 								<Input
 									id="asset-title"
 									bind:value={editTitle}
 									readonly={!canUpload}
 									disabled={!canUpload}
 									class="mt-1 h-8 text-sm"
-									placeholder="Asset title"
+									placeholder={i18n.t('Asset title')}
 								/>
 							</div>
 							<div>
-								<Label for="asset-description" class="text-xs">Description</Label>
+								<Label for="asset-description" class="text-xs">{i18n.t('Description')}</Label>
 								<textarea
 									id="asset-description"
 									bind:value={editDescription}
@@ -2889,35 +2937,35 @@
 									disabled={!canUpload}
 									class="border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring mt-1 flex w-full rounded-md border px-3 py-2 text-sm focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
 									rows="2"
-									placeholder="Description"
+									placeholder={i18n.t('Description')}
 								></textarea>
 							</div>
 							<div>
-								<Label for="asset-alt" class="text-xs">Alt text</Label>
+								<Label for="asset-alt" class="text-xs">{i18n.t('Alt text')}</Label>
 								<Input
 									id="asset-alt"
 									bind:value={editAlt}
 									readonly={!canUpload}
 									disabled={!canUpload}
 									class="mt-1 h-8 text-sm"
-									placeholder="Alternative text"
+									placeholder={i18n.t('Alternative text')}
 								/>
 							</div>
 							<div>
-								<Label for="asset-credit" class="text-xs">Credit line</Label>
+								<Label for="asset-credit" class="text-xs">{i18n.t('Credit line')}</Label>
 								<Input
 									id="asset-credit"
 									bind:value={editCreditLine}
 									readonly={!canUpload}
 									disabled={!canUpload}
 									class="mt-1 h-8 text-sm"
-									placeholder="Credit / attribution"
+									placeholder={i18n.t('Credit / attribution')}
 								/>
 							</div>
 
 							{#if !canUpload}
 								<p class="text-muted-foreground text-xs">
-									You don't have permission to edit asset metadata.
+									{i18n.t("You don't have permission to edit asset metadata.")}
 								</p>
 							{/if}
 
@@ -2935,31 +2983,31 @@
 									     webkit rule alone leaves nothing to indicate the row opens.
 									     Both, plus a chevron that turns with the group's open state. -->
 									<ChevronRight size={12} class="transition-transform group-open:rotate-90" />
-									File information
+									{i18n.t('File information')}
 								</summary>
 								<div class="mt-2 space-y-2 text-xs">
 									<div class="flex justify-between gap-2">
-										<span class="text-muted-foreground">Type</span>
+										<span class="text-muted-foreground">{i18n.t('Type')}</span>
 										<span class="font-mono">{selectedAsset.mimeType}</span>
 									</div>
 									<div class="flex justify-between gap-2">
-										<span class="text-muted-foreground">Size</span>
+										<span class="text-muted-foreground">{i18n.t('Size')}</span>
 										<span>{formatSize(selectedAsset.size)}</span>
 									</div>
 									{#if selectedAsset.width && selectedAsset.height}
 										<div class="flex justify-between gap-2">
-											<span class="text-muted-foreground">Dimensions</span>
+											<span class="text-muted-foreground">{i18n.t('Dimensions')}</span>
 											<span>{selectedAsset.width} × {selectedAsset.height}</span>
 										</div>
 									{/if}
 									{#if formatDuration(selectedAsset)}
 										<div class="flex justify-between gap-2">
-											<span class="text-muted-foreground">Duration</span>
+											<span class="text-muted-foreground">{i18n.t('Duration')}</span>
 											<span class="tabular-nums">{formatDuration(selectedAsset)}</span>
 										</div>
 									{/if}
 									<div class="flex justify-between gap-2">
-										<span class="text-muted-foreground">Uploaded</span>
+										<span class="text-muted-foreground">{i18n.t('Uploaded')}</span>
 										<span>{formatDate(selectedAsset.createdAt)}</span>
 									</div>
 									<!-- The id is the asset's real identity: what a document stores
@@ -2967,13 +3015,13 @@
 									     from, and the only stable handle once the filename is
 									     editable. Demoted, not dropped. -->
 									<div class="flex items-center justify-between gap-2">
-										<span class="text-muted-foreground">Asset ID</span>
+										<span class="text-muted-foreground">{i18n.t('Asset ID')}</span>
 										<button
 											onclick={() => copyAssetId(selectedAsset!)}
-											title="{selectedAsset.id} — click to copy"
+											title={i18n.t('{id} — click to copy', { id: selectedAsset.id })}
 											class="hover:text-foreground max-w-[180px] cursor-pointer truncate font-mono"
 										>
-											{copiedId ? 'Copied!' : selectedAsset.id}
+											{copiedId ? i18n.t('Copied!') : selectedAsset.id}
 										</button>
 									</div>
 								</div>
@@ -2982,9 +3030,9 @@
 					{:else}
 						<!-- References tab -->
 						{#if loadingRefs}
-							<p class="text-muted-foreground text-sm">Loading references...</p>
+							<p class="text-muted-foreground text-sm">{i18n.t('Loading references...')}</p>
 						{:else if selectedAssetRefs.length === 0}
-							<p class="text-muted-foreground text-sm">Not used in any documents</p>
+							<p class="text-muted-foreground text-sm">{i18n.t('Not used in any documents')}</p>
 						{:else}
 							<div class="space-y-1">
 								{#each selectedAssetRefs as ref (ref.documentId)}
@@ -3005,7 +3053,9 @@
 										<div class="min-w-0">
 											<p class="truncate text-sm font-medium">{ref.title}</p>
 											<p class="text-muted-foreground truncate text-xs">
-												{ref.type}{ref.status ? ` · ${ref.status}` : ''}{ref.fieldPaths?.length
+												{ref.type}{ref.status
+													? ` · ${ref.status === 'published' ? i18n.t('published') : ref.status === 'draft' ? i18n.t('draft') : ref.status}`
+													: ''}{ref.fieldPaths?.length
 													? ` · ${ref.fieldPaths.map(humanizeFieldPath).join(', ')}`
 													: ''}
 											</p>
@@ -3037,7 +3087,11 @@
 							size="sm"
 							class="w-full"
 						>
-							{isSaving ? 'Saving...' : metadataDirty ? 'Save changes' : 'Saved'}
+							{isSaving
+								? i18n.t('Saving...')
+								: metadataDirty
+									? i18n.t('Save changes')
+									: i18n.t('Saved')}
 						</Button>
 					</div>
 				{/if}
@@ -3071,14 +3125,16 @@
 				<div class="flex items-center gap-2">
 					<Button variant="outline" size="sm" onclick={() => downloadAsset(selectedAsset!)}>
 						<Download size={14} class="mr-1.5" />
-						Download
+						{i18n.t('Download')}
 					</Button>
 					<Button variant="outline" size="sm" onclick={() => copyAssetUrl(selectedAsset!)}>
 						<Link size={14} class="mr-1.5" />
-						{copiedUrl ? 'Copied!' : 'Copy URL'}
+						{copiedUrl ? i18n.t('Copied!') : i18n.t('Copy URL')}
 					</Button>
 				</div>
-				<Button variant="outline" size="sm" onclick={() => (lightboxOpen = false)}>Close</Button>
+				<Button variant="outline" size="sm" onclick={() => (lightboxOpen = false)}
+					>{i18n.t('Close')}</Button
+				>
 			</div>
 		</Dialog.Content>
 	</Dialog.Root>
@@ -3095,7 +3151,7 @@
 >
 	<Dialog.Content class="!z-[10000] max-w-lg" overlayClass="!z-[9999]">
 		<Dialog.Header>
-			<Dialog.Title>Upload Assets</Dialog.Title>
+			<Dialog.Title>{i18n.t('Upload Assets')}</Dialog.Title>
 		</Dialog.Header>
 
 		<!-- Drop zone -->
@@ -3134,9 +3190,9 @@
 		>
 			<FileImage size={32} class="text-muted-foreground mb-3" />
 			<p class="text-sm font-medium">
-				{modalIsDragging ? 'Drop files here' : 'Drag and drop files here'}
+				{modalIsDragging ? i18n.t('Drop files here') : i18n.t('Drag and drop files here')}
 			</p>
-			<p class="text-muted-foreground mt-1 text-xs">or click to browse</p>
+			<p class="text-muted-foreground mt-1 text-xs">{i18n.t('or click to browse')}</p>
 		</div>
 
 		<input
@@ -3160,7 +3216,7 @@
 		{#if rejectedCount > 0}
 			<p class="text-destructive mt-4 text-xs">
 				{rejectedCount}
-				{rejectedCount === 1 ? 'file can’t' : 'files can’t'} be uploaded
+				{i18n.tn(rejectedCount, 'file can’t be uploaded', 'files can’t be uploaded')}
 			</p>
 		{/if}
 
@@ -3168,12 +3224,12 @@
 			<div class="mt-4 flex items-center justify-between gap-3">
 				<p class="text-destructive text-xs">
 					{failedCount}
-					{failedCount === 1 ? 'upload' : 'uploads'} failed
+					{i18n.tn(failedCount, 'upload failed', 'uploads failed')}
 				</p>
 				<!-- Kept mounted mid-flight rather than hidden: the row disappearing and
 				     coming back as other files settle makes the dialog jump. -->
 				<Button variant="outline" size="sm" disabled={isUploading} onclick={retryAllFailed}>
-					Retry all
+					{i18n.t('Retry all')}
 				</Button>
 			</div>
 		{/if}
@@ -3183,7 +3239,7 @@
 				<div class="text-muted-foreground mt-4 flex items-baseline justify-between text-xs">
 					<span>
 						{queuedItems.length}
-						{queuedItems.length === 1 ? 'file' : 'files'} selected
+						{i18n.tn(queuedItems.length, 'file selected', 'files selected')}
 					</span>
 					<span class="tabular-nums">{formatSize(queuedBytes)}</span>
 				</div>
@@ -3210,7 +3266,7 @@
 							{#if (item.status === 'failed' || item.status === 'rejected') && item.error}
 								<p class="text-destructive text-xs">{item.error}</p>
 							{:else if item.status === 'pending' && isUploading}
-								<p class="text-muted-foreground text-xs">Waiting…</p>
+								<p class="text-muted-foreground text-xs">{i18n.t('Waiting…')}</p>
 							{:else if item.status === 'uploading'}
 								<div class="mt-1 flex items-center gap-2">
 									<div class="bg-muted h-1 flex-1 overflow-hidden rounded-full">
@@ -3242,7 +3298,7 @@
 									class="h-6 px-2 text-xs"
 									onclick={() => retryUpload(index)}
 								>
-									Retry
+									{i18n.t('Retry')}
 								</Button>
 							</div>
 						{:else if item.status === 'rejected'}
@@ -3255,7 +3311,7 @@
 									variant="ghost"
 									size="sm"
 									class="h-6 w-6 p-0"
-									aria-label="Remove {item.file.name}"
+									aria-label={i18n.t('Remove {name}', { name: item.file.name })}
 									onclick={() => removeQueueItem(index)}
 								>
 									<X class="h-3.5 w-3.5" />
@@ -3273,7 +3329,7 @@
 			     that are still running. -->
 			<div class="mt-4 flex items-center justify-between gap-3">
 				<Button variant="ghost" size="sm" disabled={isUploading} onclick={clearUploadQueue}>
-					Clear list
+					{i18n.t('Clear list')}
 				</Button>
 				<Button
 					size="sm"
@@ -3283,7 +3339,7 @@
 						clearUploadQueue();
 					}}
 				>
-					Done
+					{i18n.t('Done')}
 				</Button>
 			</div>
 		{/if}

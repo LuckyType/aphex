@@ -8,6 +8,7 @@
 </script>
 
 <script lang="ts">
+	import * as i18n from '../../i18n/index';
 	import { Button } from '@aphexcms/ui/shadcn/button';
 	import type { SchemaType } from '../../types/schemas.js';
 	import SchemaField from './SchemaField.svelte';
@@ -115,7 +116,9 @@
 				class="border-border bg-background sticky top-0 z-10 flex items-center justify-between gap-3 border-b px-4 py-2"
 			>
 				<span class="text-sm font-medium"
-					>Edit {schema.title ?? schema.name.charAt(0).toUpperCase() + schema.name.slice(1)}</span
+					>{i18n.t('Edit {title}', {
+						title: schema.title ?? schema.name.charAt(0).toUpperCase() + schema.name.slice(1)
+					})}</span
 				>
 				<div class="flex items-center gap-2">
 					{#if saveState}
@@ -124,21 +127,21 @@
 								class="text-muted-foreground inline-flex items-center gap-1.5 text-[10px] font-medium tracking-wider whitespace-nowrap uppercase"
 							>
 								<span class="bg-muted-foreground/60 h-1.5 w-1.5 animate-pulse rounded-full"></span>
-								Saving
+								{i18n.t('Saving')}
 							</span>
 						{:else if saveState.hasUnsavedChanges}
 							<span
 								class="text-muted-foreground inline-flex items-center gap-1.5 text-[10px] font-medium tracking-wider whitespace-nowrap uppercase"
 							>
 								<span class="bg-muted-foreground/60 h-1.5 w-1.5 rounded-full"></span>
-								Unsaved
+								{i18n.t('Unsaved')}
 							</span>
 						{:else if saveState.savedAgoText}
 							<span
 								class="text-muted-foreground inline-flex items-center gap-1.5 text-[10px] font-medium tracking-wider whitespace-nowrap uppercase"
 							>
 								<span class="bg-muted-foreground/60 h-1.5 w-1.5 rounded-full"></span>
-								Auto-saved
+								{i18n.t('Auto-saved')}
 							</span>
 						{/if}
 					{/if}

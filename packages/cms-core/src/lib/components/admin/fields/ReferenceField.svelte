@@ -1,4 +1,5 @@
 <script lang="ts">
+	import * as i18n from '../../../i18n/index';
 	import CheckIcon from '@lucide/svelte/icons/check';
 	import PlusIcon from '@lucide/svelte/icons/plus';
 	import * as Command from '@aphexcms/ui/shadcn/command';
@@ -12,7 +13,12 @@
 	import { getSchemaContext } from '../../../schema-context.svelte';
 	import { getSchemaByName } from '../../../schema-utils/utils';
 	import { toast } from 'svelte-sonner';
-	import { pluralize } from '../../../utils/pluralize';
+	import { pluralize as __cmsPluralize } from '../../../utils/pluralize';
+	// An app's plural hook works on titles; cms-core's own pluralizes the type name.
+	const pluralize = (type: string) =>
+		i18n.studioI18n().plural
+			? i18n.plural(getSchemaByName(schemas, type)?.title ?? type, __cmsPluralize)
+			: __cmsPluralize(type);
 	import { resolvePreviewTitle, resolvePreviewSubtitle } from '../../../utils/preview';
 	import { getDocumentVersion } from '../../../document-refresh.svelte';
 
@@ -92,7 +98,9 @@
 	let query = $state('');
 
 	/** "pages", or "pages or posts" for a multi-type reference. */
-	const targetLabel = $derived(targetTypes.map((t) => pluralize(t)).join(' or ') || 'documents');
+	const targetLabel = $derived(
+		targetTypes.map((t) => pluralize(t)).join(i18n.t(' or ')) || i18n.t('documents')
+	);
 
 	const selectedSchema = $derived(selectedDocument ? schemaFor(selectedDocument) : null);
 	const TargetIcon = $derived(selectedSchema?.icon ?? null);
@@ -119,7 +127,7 @@
 						selectedDocument = doc.data;
 					}
 				} catch {
-					toast.error('Failed to load referenced document');
+					toast.error(i18n.t('Failed to load referenced document'));
 					selectedDocument = null;
 				}
 			} else {
@@ -166,7 +174,7 @@
 				result.success && result.data ? (result.data as any[]) : []
 			);
 		} catch {
-			toast.error('Failed to load documents');
+			toast.error(i18n.t('Failed to load documents'));
 		} finally {
 			allDocsFetched = true;
 			loading = false;
@@ -267,7 +275,7 @@
 				closeAndFocusTrigger();
 			}
 		} catch {
-			toast.error('Failed to create document');
+			toast.error(i18n.t('Failed to create document'));
 		} finally {
 			creating = false;
 		}
@@ -304,7 +312,7 @@
 		<button
 			class="flex min-w-0 flex-1 cursor-pointer items-center gap-2 py-1 text-left"
 			onclick={openReference}
-			title="Open referenced document"
+			title={i18n.t('Open referenced document')}
 		>
 			<span class="flex min-w-0 flex-1 flex-col">
 				<span class="truncate text-sm">{getDocumentTitle(selectedDocument)}</span>
@@ -315,12 +323,15 @@
 				{/if}
 			</span>
 			{#if selectedDocument._meta?.status === 'published'}
-				<span class="h-1.5 w-1.5 shrink-0 rounded-full bg-green-500" title="Published"></span>
+				<span class="h-1.5 w-1.5 shrink-0 rounded-full bg-green-500" title={i18n.t('Published')}
+				></span>
 			{:else if selectedDocument._meta?.status === 'unpublished'}
-				<span class="bg-muted-foreground/60 h-1.5 w-1.5 shrink-0 rounded-full" title="Unpublished"
+				<span
+					class="bg-muted-foreground/60 h-1.5 w-1.5 shrink-0 rounded-full"
+					title={i18n.t('Unpublished')}
 				></span>
 			{:else}
-				<span class="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" title="Draft"></span>
+				<span class="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" title={i18n.t('Draft')}></span>
 			{/if}
 		</button>
 
@@ -339,7 +350,7 @@
 			<DropdownMenu.Content align="end">
 				<DropdownMenu.Item onclick={openReference}>
 					<ExternalLink class="mr-2 h-4 w-4" />
-					Open
+					{i18n.t('Open')}
 				</DropdownMenu.Item>
 				{#if !readonly}
 					<DropdownMenu.Separator />
@@ -348,7 +359,7 @@
 						onclick={() => (onRemove ? onRemove() : clearSelection())}
 					>
 						<Trash2 class="mr-2 h-4 w-4" />
-						Remove
+						{i18n.t('Remove')}
 					</DropdownMenu.Item>
 				{/if}
 			</DropdownMenu.Content>
@@ -359,7 +370,7 @@
 	<div
 		class="border-border/50 bg-muted/30 flex items-center justify-center rounded border border-dashed p-6"
 	>
-		<p class="text-muted-foreground text-sm">No reference selected</p>
+		<p class="text-muted-foreground text-sm">{i18n.t('No reference selected')}</p>
 	</div>
 {:else}
 	<!-- Inline empty state: search input + chevron + Create button. The input
@@ -378,7 +389,7 @@
 			>
 				<Input
 					bind:value={query}
-					placeholder="Type to search..."
+					placeholder={i18n.t('Type to search...')}
 					onfocus={() => {
 						updateDropdownPos();
 						open = true;
@@ -392,7 +403,7 @@
 						open = !open;
 					}}
 					class="text-muted-foreground hover:text-foreground flex h-8 w-8 shrink-0 items-center justify-center"
-					aria-label="Toggle results"
+					aria-label={i18n.t('Toggle results')}
 				>
 					<ChevronDown class="h-4 w-4" />
 				</button>
@@ -408,13 +419,13 @@
 					<Command.Root shouldFilter={false}>
 						<Command.List class="max-h-[300px] overflow-y-auto">
 							{#if loading}
-								<Command.Loading>Loading...</Command.Loading>
+								<Command.Loading>{i18n.t('Loading...')}</Command.Loading>
 							{:else if searchResults.length === 0}
 								<Command.Empty>
 									<div class="text-muted-foreground py-4 text-center text-sm">
 										{query.trim()
-											? `No ${targetLabel} match "${query}"`
-											: `No ${targetLabel} found`}
+											? i18n.t('No {targetLabel} match "{query}"', { targetLabel, query })
+											: i18n.t('No {targetLabel} found', { targetLabel })}
 									</div>
 								</Command.Empty>
 							{:else}
@@ -441,15 +452,17 @@
 											{#if doc._meta?.status === 'published'}
 												<span
 													class="h-1.5 w-1.5 shrink-0 rounded-full bg-green-500"
-													title="Published"
+													title={i18n.t('Published')}
 												></span>
 											{:else if doc._meta?.status === 'unpublished'}
 												<span
 													class="bg-muted-foreground/60 h-1.5 w-1.5 shrink-0 rounded-full"
-													title="Unpublished"
+													title={i18n.t('Unpublished')}
 												></span>
 											{:else}
-												<span class="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" title="Draft"
+												<span
+													class="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500"
+													title={i18n.t('Draft')}
 												></span>
 											{/if}
 										</Command.Item>
@@ -469,7 +482,7 @@
 					{#snippet child({ props })}
 						<Button {...props} variant="outline" size="sm" class="h-9 shrink-0 gap-1">
 							<PlusIcon class="h-4 w-4" />
-							{creating ? 'Creating...' : 'Create...'}
+							{creating ? i18n.t('Creating...') : i18n.t('Create...')}
 						</Button>
 					{/snippet}
 				</DropdownMenu.Trigger>
@@ -490,7 +503,7 @@
 				class="h-9 shrink-0 gap-1"
 			>
 				<PlusIcon class="h-4 w-4" />
-				{creating ? 'Creating...' : 'Create...'}
+				{creating ? i18n.t('Creating...') : i18n.t('Create...')}
 			</Button>
 		{/if}
 	</div>
