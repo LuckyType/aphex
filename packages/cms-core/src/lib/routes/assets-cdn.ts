@@ -335,22 +335,30 @@ export const GET: RequestHandler = async ({ params, locals, setHeaders, request 
 				// browser writes to disk is this route's business.
 				const downloadName = `${stripExtension(asset.originalFilename || asset.filename)}.${VARIANT_FORMAT}`;
 
-				setHeaders({
-					'Content-Type': `image/${VARIANT_FORMAT}`,
-					// Every variant URL embeds the config hash, so a change of ladder
-					// or quality produces a different URL rather than new bytes at the
-					// same one. That is what makes a year-long immutable cache safe.
-					'Cache-Control': isPrivate ? 'private, no-store' : 'public, max-age=31536000, immutable',
-					'Content-Disposition': `inline; filename="${asciiFilename(downloadName)}"; filename*=UTF-8''${encodeURIComponent(downloadName)}`,
-					'X-Content-Type-Options': 'nosniff'
-				});
+				// Headers go out only once the variant's bytes are in hand. Setting
+				// them first would make the fall-through below set Content-Type a
+				// second time, which SvelteKit refuses: the "serve the original"
+				// fallback would become a 500 and the image would render broken.
+				const serveVariant = (buffer: Buffer) => {
+					setHeaders({
+						'Content-Type': `image/${VARIANT_FORMAT}`,
+						// Every variant URL embeds the config hash, so a change of ladder
+						// or quality produces a different URL rather than new bytes at the
+						// same one. That is what makes a year-long immutable cache safe.
+						'Cache-Control': isPrivate
+							? 'private, no-store'
+							: 'public, max-age=31536000, immutable',
+						'Content-Disposition': `inline; filename="${asciiFilename(downloadName)}"; filename*=UTF-8''${encodeURIComponent(downloadName)}`,
+						'X-Content-Type-Options': 'nosniff'
+					});
+					return new Response(toArrayBuffer(buffer), {
+						headers: { 'Content-Length': String(buffer.length) }
+					});
+				};
 
 				if (existing) {
 					try {
-						const buffer = await storageAdapter.getObject(existing.path);
-						return new Response(toArrayBuffer(buffer), {
-							headers: { 'Content-Length': String(buffer.length) }
-						});
+						return serveVariant(await storageAdapter.getObject(existing.path));
 					} catch (err) {
 						// Recorded but unreadable — the object was pruned, or the
 						// record outlived it. Fall through and regenerate rather
@@ -368,9 +376,7 @@ export const GET: RequestHandler = async ({ params, locals, setHeaders, request 
 						storage: storageAdapter,
 						database: databaseAdapter
 					});
-					return new Response(toArrayBuffer(buffer), {
-						headers: { 'Content-Length': String(buffer.length) }
-					});
+					return serveVariant(buffer);
 				} catch (err) {
 					// A derivative that can't be produced must not break the page.
 					// Serving the original is heavier but correct, and the next

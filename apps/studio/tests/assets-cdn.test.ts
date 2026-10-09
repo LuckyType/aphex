@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import { serveAssetCDN } from '@aphexcms/cms-core/server';
+import sharp from 'sharp';
+import { configHashFor, resolveImageConfig, serveAssetCDN } from '@aphexcms/cms-core/server';
 
 /**
  * `/media/:id/:filename` — the asset delivery route.
@@ -404,6 +405,66 @@ describe('GET /media/:id/:filename — variants', () => {
 
 		expect(res.status).toBe(200);
 		expect(storageAdapter.getObject).toHaveBeenCalledWith(IMAGE_ASSET.path);
+	});
+
+	/**
+	 * SvelteKit refuses to set a header twice. The default fake merges
+	 * silently, which is exactly how a variant branch that set its headers
+	 * before generating could fall through to the original and still pass.
+	 */
+	function strictHeaders(event: any) {
+		const headers: Record<string, string> = {};
+		event.setHeaders = (h: Record<string, string>) => {
+			for (const [name, value] of Object.entries(h)) {
+				const lower = name.toLowerCase();
+				if (lower in headers) throw new Error(`"${name}" header is already set`);
+				headers[lower] = value;
+			}
+		};
+		return headers;
+	}
+
+	const LADDER_HASH = configHashFor(resolveImageConfig({ widths: [320, 640], quality: 80 })!);
+
+	it('serves the original, with its own type, when the variant cannot be generated', async () => {
+		// FILE_BYTES is only a PNG signature, so the resize fails. The page must
+		// get the heavier original, never a 500 that renders as a broken image.
+		const { event, storageAdapter } = variantEvent(`w320-${LADDER_HASH}.webp`);
+		const headers = strictHeaders(event);
+		const res = await serveAssetCDN(event);
+
+		expect(res.status).toBe(200);
+		expect(headers['content-type']).toBe('image/png');
+		expect(storageAdapter.getObject).toHaveBeenCalledWith(IMAGE_ASSET.path);
+	});
+
+	it('serves a generated variant as WebP, setting each header once', async () => {
+		const png = await sharp({
+			create: { width: 800, height: 400, channels: 3, background: '#336699' }
+		})
+			.png()
+			.toBuffer();
+		const asset = { ...IMAGE_ASSET, size: png.length, width: 800, height: 400 } as FakeAsset;
+		const { event, storageAdapter } = variantEvent(`w320-${LADDER_HASH}.webp`, { asset });
+		storageAdapter.getObject.mockImplementation(async () => png);
+		storageAdapter.store = vi.fn(async (input: { key: string }) => ({
+			key: input.key,
+			path: `variants/${input.key}`,
+			url: '/unused',
+			size: 0
+		}));
+		event.locals.aphexCMS.databaseAdapter = {
+			findAssetById: vi.fn(async () => asset),
+			updateAsset: vi.fn(async () => asset)
+		};
+		const headers = strictHeaders(event);
+		const res = await serveAssetCDN(event);
+
+		expect(res.status).toBe(200);
+		expect(headers['content-type']).toBe('image/webp');
+		const meta = await sharp(Buffer.from(await res.arrayBuffer())).metadata();
+		expect(meta.format).toBe('webp');
+		expect(meta.width).toBe(320);
 	});
 
 	it('refuses a variant of a private asset to an anonymous caller', async () => {
