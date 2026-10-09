@@ -3016,6 +3016,7 @@
 			bind:open={showScheduleDialog}
 			{documentId}
 			action={scheduleAction}
+			initialRunAt={nextSchedule?.runAt}
 			onScheduled={onScheduleCreated}
 		/>
 	{/if}
