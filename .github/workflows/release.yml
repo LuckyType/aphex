@@ -20,7 +20,8 @@ concurrency: ${{ github.workflow }}-${{ github.ref }}
 jobs:
   release:
     name: Version & Publish
-    if: github.event_name == 'push'
+    # Publishes to npm under upstream's names with upstream's credentials. A fork releases through fork-release.yml instead.
+    if: github.repository == 'IcelandicIcecream/aphex' && github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -89,7 +90,8 @@ jobs:
   # for the real release, and `latest` stays where it is.
   snapshot:
     name: Publish snapshot
-    if: github.event_name == 'workflow_dispatch'
+    # Same npm names and credentials as the release job: upstream only.
+    if: github.repository == 'IcelandicIcecream/aphex' && github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
       contents: read
