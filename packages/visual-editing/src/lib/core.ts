@@ -196,14 +196,28 @@ export function enableAphexPreview(options: AphexPreviewOptions = {}): () => voi
 		// Show the row number for a list entry — several rows of one list otherwise all
 		// hover as the same bare field name, with nothing to say which slot is which.
 		const idx = el.dataset.aphexArrayIndex;
-		label.textContent = (el.dataset.aphexField ?? '') + (idx != null ? `[${idx}]` : '');
+		// Inside an element marked as a block, the label names the block, and the
+		// CMS is told its path so it can light the block's row in the editor.
+		const block = el.closest<HTMLElement>('[data-aphex-block-label]');
+		label.textContent = block
+			? (block.dataset.aphexBlockLabel ?? '')
+			: (el.dataset.aphexField ?? '') + (idx != null ? `[${idx}]` : '');
+		postBlockHover(block?.dataset.aphexBlockPath ?? null);
 		positionOn(el);
 		overlay.style.display = 'block';
+	}
+
+	let hoveredBlockPath: string | null = null;
+	function postBlockHover(path: string | null) {
+		if (path === hoveredBlockPath) return;
+		hoveredBlockPath = path;
+		window.parent.postMessage({ type: 'aphex:block-hover', path }, '*');
 	}
 
 	function hide() {
 		activeEl = null;
 		overlay.style.display = 'none';
+		postBlockHover(null);
 	}
 
 	const onMouseOver = (e: MouseEvent) => {
@@ -220,6 +234,8 @@ export function enableAphexPreview(options: AphexPreviewOptions = {}): () => voi
 		// (a collapsed toggle can't be read if it can never open).
 		const target = e.target as Element;
 		if (navigatesAway(target)) e.preventDefault();
+		// A click inside `data-aphex-no-edit` (a drag handle, say) opens no field.
+		if (target.closest('[data-aphex-no-edit]')) return;
 
 		if (!editMode) return;
 		const el = target.closest<HTMLElement>('[data-aphex-field]');
