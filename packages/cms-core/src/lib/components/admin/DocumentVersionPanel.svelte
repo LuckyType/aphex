@@ -123,15 +123,21 @@
 			</div>
 		{:else}
 			{#each filteredVersions as version, i}
-				<!-- svelte-ignore a11y_click_events_have_key_events -->
-				<!-- svelte-ignore a11y_no_static_element_interactions -->
 				<div
+					role="button"
+					tabindex="0"
+					aria-pressed={previewVersion?.versionNumber === version.versionNumber}
 					data-version-id={i}
 					class="hover:bg-muted w-full cursor-pointer border-b px-3 py-2.5 text-left transition-colors {previewVersion?.versionNumber ===
 					version.versionNumber
 						? 'bg-muted border-l-primary border-l-2'
 						: ''}"
 					onclick={() => previewVersionData(version)}
+					onkeydown={(event) => {
+						if (event.key !== 'Enter' && event.key !== ' ') return;
+						event.preventDefault();
+						previewVersionData(version);
+					}}
 				>
 					<div class="flex items-center justify-between">
 						<span class="text-muted-foreground text-[11px]">
