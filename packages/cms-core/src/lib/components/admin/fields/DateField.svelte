@@ -1,4 +1,5 @@
 <script lang="ts">
+	import * as i18n from '../../../i18n/index';
 	import CalendarIcon from '@lucide/svelte/icons/calendar';
 	import { type DateValue, parseDate } from '@internationalized/date';
 	import { Input } from '@aphexcms/ui/shadcn/input';
@@ -139,6 +140,7 @@
 					value={dateValue}
 					onValueChange={handleDateChange}
 					captionLayout="dropdown"
+					locale={i18n.locale()}
 				/>
 			</Popover.Content>
 		</Popover.Root>

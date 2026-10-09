@@ -1,4 +1,5 @@
 <script lang="ts">
+	import * as i18n from '../../i18n/index';
 	import * as Dialog from '@aphexcms/ui/shadcn/dialog';
 	import { Button } from '@aphexcms/ui/shadcn/button';
 	import type { Asset } from '../../types/asset';
@@ -41,7 +42,7 @@
 
 	function handleSelect(asset: Asset) {
 		if (!isAcceptedFileType(asset.originalFilename, asset.mimeType, accept)) {
-			toast.error(`This field does not accept ${asset.mimeType}`);
+			toast.error(i18n.t('This field does not accept {mimeType}', { mimeType: asset.mimeType }));
 			return;
 		}
 		onSelect?.(asset);
@@ -61,7 +62,7 @@
 		overlayClass="!z-[9998]"
 	>
 		<Dialog.Header class="sr-only">
-			<Dialog.Title>{multiSelect ? 'Select Assets' : 'Select Asset'}</Dialog.Title>
+			<Dialog.Title>{multiSelect ? i18n.t('Select Assets') : i18n.t('Select Asset')}</Dialog.Title>
 		</Dialog.Header>
 		{#if open}
 			<div class="flex-1 overflow-hidden">
@@ -89,7 +90,9 @@
 				{/if}
 			</div>
 			<div class="border-border flex justify-end border-t px-4 py-3">
-				<Button variant="outline" size="sm" onclick={() => onOpenChange(false)}>Close</Button>
+				<Button variant="outline" size="sm" onclick={() => onOpenChange(false)}
+					>{i18n.t('Close')}</Button
+				>
 			</div>
 		{/if}
 	</Dialog.Content>

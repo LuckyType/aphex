@@ -1,4 +1,5 @@
 <script lang="ts">
+	import * as i18n from '../../../../i18n/index';
 	import { onMount, onDestroy } from 'svelte';
 	import { Editor } from '@tiptap/core';
 	import { StarterKit } from '@tiptap/starter-kit';
@@ -147,14 +148,14 @@
 	let styleMenuOpen = $state(false);
 
 	const styleLabels: Record<string, string> = {
-		normal: 'Normal',
-		h1: 'Heading 1',
-		h2: 'Heading 2',
-		h3: 'Heading 3',
-		h4: 'Heading 4',
-		h5: 'Heading 5',
-		h6: 'Heading 6',
-		blockquote: 'Quote'
+		normal: i18n.t('Normal'),
+		h1: i18n.t('Heading 1'),
+		h2: i18n.t('Heading 2'),
+		h3: i18n.t('Heading 3'),
+		h4: i18n.t('Heading 4'),
+		h5: i18n.t('Heading 5'),
+		h6: i18n.t('Heading 6'),
+		blockquote: i18n.t('Quote')
 	};
 
 	const activeStyle = $derived.by(() => {
@@ -974,7 +975,7 @@
 							class="text-muted-foreground hover:bg-muted hover:text-foreground flex items-center gap-1 rounded px-2 py-1 text-xs font-medium transition-colors"
 							onclick={() => (styleMenuOpen = !styleMenuOpen)}
 						>
-							<span>{styleLabels[activeStyle] ?? 'Normal'}</span>
+							<span>{styleLabels[activeStyle] ?? i18n.t('Normal')}</span>
 							<ChevronDown class="h-3 w-3" />
 						</button>
 						{#if styleMenuOpen}
@@ -1005,7 +1006,7 @@
 				{#if hasDecorator('strong')}
 					{@render toolbarBtn(
 						() => editor?.chain().focus().toggleBold().run(),
-						'Bold',
+						i18n.t('Bold'),
 						() => editor?.isActive('bold') ?? false,
 						Bold
 					)}
@@ -1013,7 +1014,7 @@
 				{#if hasDecorator('em')}
 					{@render toolbarBtn(
 						() => editor?.chain().focus().toggleItalic().run(),
-						'Italic',
+						i18n.t('Italic'),
 						() => editor?.isActive('italic') ?? false,
 						Italic
 					)}
@@ -1021,7 +1022,7 @@
 				{#if hasDecorator('underline')}
 					{@render toolbarBtn(
 						() => editor?.chain().focus().toggleUnderline().run(),
-						'Underline',
+						i18n.t('Underline'),
 						() => editor?.isActive('underline') ?? false,
 						UnderlineIcon
 					)}
@@ -1029,14 +1030,14 @@
 				{#if hasDecorator('strike-through')}
 					{@render toolbarBtn(
 						() => editor?.chain().focus().toggleStrike().run(),
-						'Strikethrough',
+						i18n.t('Strikethrough'),
 						() => editor?.isActive('strike') ?? false,
 						Strikethrough
 					)}
 				{/if}
 				{@render toolbarBtn(
 					() => editor?.chain().focus().toggleCodeBlock().run(),
-					'Code block',
+					i18n.t('Code block'),
 					() => editor?.isActive('codeBlock') ?? false,
 					Code
 				)}
@@ -1048,7 +1049,7 @@
 				{#if hasList('bullet')}
 					{@render toolbarBtn(
 						() => editor?.chain().focus().toggleBulletList().run(),
-						'Bullet list',
+						i18n.t('Bullet list'),
 						() => editor?.isActive('bulletList') ?? false,
 						List
 					)}
@@ -1056,7 +1057,7 @@
 				{#if hasList('number')}
 					{@render toolbarBtn(
 						() => editor?.chain().focus().toggleOrderedList().run(),
-						'Numbered list',
+						i18n.t('Numbered list'),
 						() => editor?.isActive('orderedList') ?? false,
 						ListOrdered
 					)}
@@ -1068,7 +1069,7 @@
 					{/if}
 					{@render toolbarBtn(
 						openLinkEdit,
-						(editor?.isActive('link') ?? false) ? 'Edit link' : 'Add link',
+						(editor?.isActive('link') ?? false) ? i18n.t('Edit link') : i18n.t('Add link'),
 						() => (editor?.isActive('link') ?? false) || linkMode !== 'closed',
 						LinkIcon
 					)}
@@ -1076,7 +1077,12 @@
 
 				{#if hasImageBlock}
 					<div class="bg-border mx-1 h-4 w-px"></div>
-					{@render toolbarBtn(handleInsertImageBlock, 'Insert image', () => false, ImageIcon)}
+					{@render toolbarBtn(
+						handleInsertImageBlock,
+						i18n.t('Insert image'),
+						() => false,
+						ImageIcon
+					)}
 				{/if}
 
 				{#if hasCustomTypes || hasInlineTypes}
@@ -1093,7 +1099,9 @@
 							>
 								<Plus class="h-4 w-4" />
 							</Tooltip.Trigger>
-							<Tooltip.Content side="bottom" sideOffset={4}>Insert block</Tooltip.Content>
+							<Tooltip.Content side="bottom" sideOffset={4}
+								>{i18n.t('Insert block')}</Tooltip.Content
+							>
 						</Tooltip.Root>
 						{#if insertMenuOpen}
 							<div
@@ -1101,7 +1109,7 @@
 							>
 								{#if hasCustomTypes}
 									<div class="text-muted-foreground px-3 py-1 text-[10px] font-medium uppercase">
-										Blocks
+										{i18n.t('Blocks')}
 									</div>
 									{#each customTypes as ct}
 										<button
@@ -1122,7 +1130,7 @@
 										<div class="bg-border mx-2 my-1 h-px"></div>
 									{/if}
 									<div class="text-muted-foreground px-3 py-1 text-[10px] font-medium uppercase">
-										Inline
+										{i18n.t('Inline')}
 									</div>
 									{#each inlineTypes as it}
 										<button
@@ -1170,14 +1178,14 @@
 
 				{@render toolbarBtn(
 					() => editor?.chain().focus().undo().run(),
-					'Undo',
+					i18n.t('Undo'),
 					() => false,
 					Undo2,
 					() => !(editor?.can().undo() ?? false)
 				)}
 				{@render toolbarBtn(
 					() => editor?.chain().focus().redo().run(),
-					'Redo',
+					i18n.t('Redo'),
 					() => false,
 					Redo2,
 					() => !(editor?.can().redo() ?? false)
@@ -1186,7 +1194,7 @@
 				<div class="bg-border mx-1 h-4 w-px"></div>
 				{@render toolbarBtn(
 					() => (expanded = !expanded),
-					expanded ? 'Collapse' : 'Expand',
+					expanded ? i18n.t('Collapse') : i18n.t('Expand'),
 					() => expanded,
 					expanded ? Minimize2 : Maximize2
 				)}
@@ -1218,7 +1226,7 @@
 				onclick={() => {
 					navigator.clipboard.writeText(linkPreviewHref);
 				}}
-				title="Copy URL"
+				title={i18n.t('Copy URL')}
 			>
 				<Copy class="h-3.5 w-3.5" />
 			</button>
@@ -1226,7 +1234,7 @@
 				type="button"
 				class="text-muted-foreground hover:text-foreground rounded p-0.5 transition-colors"
 				onclick={openLinkEdit}
-				title="Edit link"
+				title={i18n.t('Edit link')}
 			>
 				<Pencil class="h-3.5 w-3.5" />
 			</button>
@@ -1234,7 +1242,7 @@
 				type="button"
 				class="text-muted-foreground hover:text-destructive rounded p-0.5 transition-colors"
 				onclick={removeLink}
-				title="Remove link"
+				title={i18n.t('Remove link')}
 			>
 				<Unlink class="h-3.5 w-3.5" />
 			</button>
@@ -1259,14 +1267,14 @@
 				class="bg-primary text-primary-foreground rounded px-2.5 py-1 text-xs font-medium whitespace-nowrap transition-colors"
 				onclick={applyLink}
 			>
-				{editor?.isActive('link') ? 'Update' : 'Apply'}
+				{editor?.isActive('link') ? i18n.t('Update') : i18n.t('Apply')}
 			</button>
 			{#if editor?.isActive('link')}
 				<button
 					type="button"
 					class="text-muted-foreground hover:text-destructive rounded p-1 transition-colors"
 					onclick={removeLink}
-					title="Remove link"
+					title={i18n.t('Remove link')}
 				>
 					<Unlink class="h-3.5 w-3.5" />
 				</button>
@@ -1275,7 +1283,7 @@
 				type="button"
 				class="text-muted-foreground hover:text-foreground rounded p-1 transition-colors"
 				onclick={closeLinkPopover}
-				title="Cancel"
+				title={i18n.t('Cancel')}
 			>
 				<X class="h-3.5 w-3.5" />
 			</button>

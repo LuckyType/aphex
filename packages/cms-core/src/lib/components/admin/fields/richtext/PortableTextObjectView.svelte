@@ -1,4 +1,5 @@
 <script lang="ts">
+	import * as i18n from '../../../../i18n/index';
 	import { Pencil, Trash2 } from '@lucide/svelte';
 	import { resolvePreviewTitle, resolvePreviewSubtitle } from '../../../../utils/preview';
 	import type { BlockPreviewProps } from '../../../../admin/block-previews.svelte';
@@ -55,7 +56,7 @@
 			type="button"
 			class="text-muted-foreground hover:text-foreground rounded p-1 transition-colors"
 			onclick={onEdit}
-			title="Edit"
+			title={i18n.t('Edit')}
 		>
 			<Pencil class="h-3.5 w-3.5" />
 		</button>
@@ -63,7 +64,7 @@
 			type="button"
 			class="text-muted-foreground hover:text-destructive rounded p-1 transition-colors"
 			onclick={onDelete}
-			title="Remove"
+			title={i18n.t('Remove')}
 		>
 			<Trash2 class="h-3.5 w-3.5" />
 		</button>

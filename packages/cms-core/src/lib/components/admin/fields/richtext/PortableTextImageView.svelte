@@ -1,4 +1,5 @@
 <script lang="ts">
+	import * as i18n from '../../../../i18n/index';
 	import { Trash2, Image as ImageIcon } from '@lucide/svelte';
 	import { assets } from '../../../../api/assets';
 	import type { BlockPreviewProps } from '../../../../admin/block-previews.svelte';
@@ -35,19 +36,19 @@
 			{:else}
 				<div class="image-block-placeholder">
 					<ImageIcon class="text-muted-foreground h-8 w-8" />
-					<span class="text-muted-foreground text-xs">Image not found</span>
+					<span class="text-muted-foreground text-xs">{i18n.t('Image not found')}</span>
 				</div>
 			{/if}
 		{:catch}
 			<div class="image-block-placeholder">
 				<ImageIcon class="text-muted-foreground h-8 w-8" />
-				<span class="text-muted-foreground text-xs">Failed to load</span>
+				<span class="text-muted-foreground text-xs">{i18n.t('Failed to load')}</span>
 			</div>
 		{/await}
 	{:else}
 		<div class="image-block-placeholder">
 			<ImageIcon class="text-muted-foreground h-8 w-8" />
-			<span class="text-muted-foreground text-xs">No image</span>
+			<span class="text-muted-foreground text-xs">{i18n.t('No image')}</span>
 		</div>
 	{/if}
 
@@ -59,7 +60,7 @@
 				e.stopPropagation();
 				onDelete();
 			}}
-			title="Remove"
+			title={i18n.t('Remove')}
 		>
 			<Trash2 class="h-3.5 w-3.5" />
 		</button>
