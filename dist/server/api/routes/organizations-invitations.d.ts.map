@@ -1,0 +1,1 @@
+{"version":3,"file":"organizations-invitations.d.ts","sourceRoot":"","sources":["../../../../src/lib/server/api/routes/organizations-invitations.ts"],"names":[],"mappings":"AAAA,OAAO,EAAE,IAAI,EAAE,MAAM,MAAM,CAAC;AAU5B,OAAO,KAAK,EAAE,QAAQ,EAAE,MAAM,UAAU,CAAC;AAEzC;;;;;GAKG;AACH,eAAO,MAAM,8BAA8B,EAAE,IAAI,CAAC,QAAQ,CA4OxD,CAAC"}

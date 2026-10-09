@@ -1,0 +1,1 @@
+{"version":3,"file":"schemas.d.ts","sourceRoot":"","sources":["../../../../src/lib/server/api/routes/schemas.ts"],"names":[],"mappings":"AAAA,OAAO,EAAE,IAAI,EAAE,MAAM,MAAM,CAAC;AAE5B,OAAO,KAAK,EAAE,QAAQ,EAAE,MAAM,UAAU,CAAC;AAKzC,eAAO,MAAM,aAAa,EAAE,IAAI,CAAC,QAAQ,CAwBtC,CAAC"}

@@ -1,0 +1,1 @@
+{"version":3,"file":"clear-asset-references.d.ts","sourceRoot":"","sources":["../../../../src/lib/server/api/routes/clear-asset-references.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,eAAe,EAAE,MAAM,mBAAmB,CAAC;AAGzD;;;;;;;;;;;;;;GAcG;AACH,wBAAsB,oBAAoB,CACzC,eAAe,EAAE,eAAe,EAChC,cAAc,EAAE,MAAM,EACtB,OAAO,EAAE,MAAM,GACb,OAAO,CAAC,IAAI,CAAC,CAcf"}

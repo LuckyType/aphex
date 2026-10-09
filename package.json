@@ -1,0 +1,167 @@
+{
+  "name": "@aphexcms/cms-core",
+  "version": "11.2.1",
+  "description": "Aphex CMS Core - A Sanity-style CMS with ports and adapters architecture",
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/IcelandicIcecream/aphex.git",
+    "directory": "packages/cms-core"
+  },
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "svelte": "./dist/index.js",
+  "bin": {
+    "aphex": "./dist/cli/index.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "svelte": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./server": {
+      "types": "./dist/server/index.d.ts",
+      "default": "./dist/server/index.js"
+    },
+    "./client": {
+      "types": "./dist/client/index.d.ts",
+      "default": "./dist/client/index.js"
+    },
+    "./image": {
+      "types": "./dist/image/index.d.ts",
+      "svelte": "./dist/image/index.js",
+      "default": "./dist/image/index.js"
+    },
+    "./schema": {
+      "types": "./dist/schema/index.d.ts",
+      "default": "./dist/schema/index.js"
+    },
+    "./vite": {
+      "types": "./dist/vite/index.d.ts",
+      "default": "./dist/vite/index.js"
+    },
+    "./app-augment": {
+      "types": "./dist/app-augment.d.ts",
+      "default": "./dist/app-augment.js"
+    },
+    "./routes/*": {
+      "types": "./dist/routes/*.d.ts",
+      "default": "./dist/routes/*.js"
+    },
+    "./*": {
+      "types": "./dist/*.d.ts",
+      "default": "./dist/*.js"
+    }
+  },
+  "files": [
+    "dist",
+    "dist/cli"
+  ],
+  "keywords": [
+    "cms",
+    "svelte",
+    "sveltekit",
+    "content-management",
+    "sanity-style",
+    "typescript",
+    "aphex"
+  ],
+  "author": "Benjamin Sinidol",
+  "license": "MIT",
+  "peerDependencies": {
+    "@envelop/graphql-jit": "^11.0.0",
+    "@graphql-yoga/render-graphiql": "^5.16.2",
+    "@internationalized/date": "^3.10.0",
+    "@lucide/svelte": "^0.554.0",
+    "@sveltejs/kit": "^2.49.0",
+    "bits-ui": "^2.14.4",
+    "clsx": "^2.1.1",
+    "graphql": "^16.12.0",
+    "graphql-yoga": "^5.16.2",
+    "mode-watcher": "^1.1.0",
+    "svelte": "^5.44.0",
+    "tailwind-merge": "^3.4.0",
+    "tailwind-variants": "^3.2.2",
+    "@aphexcms/ui": "^0.8.7"
+  },
+  "peerDependenciesMeta": {
+    "graphql": {
+      "optional": true
+    },
+    "graphql-yoga": {
+      "optional": true
+    },
+    "@envelop/graphql-jit": {
+      "optional": true
+    },
+    "@graphql-yoga/render-graphiql": {
+      "optional": true
+    }
+  },
+  "dependencies": {
+    "@clack/prompts": "^0.11.0",
+    "@dnd-kit/helpers": "^0.3.0",
+    "@dnd-kit/svelte": "^0.3.0",
+    "@hono/mcp": "^0.3.0",
+    "@hono/zod-validator": "^0.7.6",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@tiptap/core": "^3.23.4",
+    "@tiptap/extension-link": "^3.23.4",
+    "@tiptap/extension-underline": "^3.23.4",
+    "@tiptap/pm": "^3.23.4",
+    "@tiptap/starter-kit": "^3.23.4",
+    "@vercel/stega": "^1.1.0",
+    "cac": "^6.7.14",
+    "dayjs": "^1.11.19",
+    "dompurify": "^3.4.12",
+    "esbuild": "^0.27.0",
+    "hono": "^4.12.34",
+    "marked": "^18.0.7",
+    "picocolors": "^1.1.1",
+    "sharp": "^0.35.3",
+    "svelte-sonner": "^1.0.7",
+    "tsx": "^4.20.6",
+    "undici": "^8.9.0",
+    "zod": "^4.1.11"
+  },
+  "devDependencies": {
+    "@eslint/compat": "^2.0.0",
+    "@eslint/js": "^9.39.1",
+    "@internationalized/date": "^3.10.0",
+    "@sveltejs/adapter-auto": "^7.0.0",
+    "@sveltejs/kit": "^2.70.2",
+    "@sveltejs/package": "^2.5.6",
+    "@sveltejs/vite-plugin-svelte": "^7.0.0",
+    "@tailwindcss/vite": "^4.3.0",
+    "@types/node": "^22.0.0",
+    "eslint": "^9.39.1",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-svelte": "^3.13.0",
+    "globals": "^16.5.0",
+    "prettier": "^3.6.2",
+    "prettier-plugin-svelte": "^3.4.0",
+    "prettier-plugin-tailwindcss": "^0.7.1",
+    "svelte": "^5.55.5",
+    "svelte-check": "^4.3.4",
+    "tailwindcss": "^4.3.0",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.48.0",
+    "vite": "^8.1.5",
+    "vitest": "^4.1.10"
+  },
+  "scripts": {
+    "build": "svelte-package && tsc && node ../../scripts/fix-imports.js ./dist && node ../../scripts/prune-duplicate-dist.mjs .",
+    "dev": "tsc --watch --preserveWatchOutput",
+    "check": "svelte-check --tsconfig ./tsconfig.json",
+    "format": "prettier --write .",
+    "lint": "prettier --check . && eslint .",
+    "package": "pnpm build && pnpm pack",
+    "dev:local": "node ../../scripts/swap-package-paths.js ./package.json src lib",
+    "test": "vitest run"
+  }
+}

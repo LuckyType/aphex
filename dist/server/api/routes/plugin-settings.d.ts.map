@@ -1,0 +1,1 @@
+{"version":3,"file":"plugin-settings.d.ts","sourceRoot":"","sources":["../../../../src/lib/server/api/routes/plugin-settings.ts"],"names":[],"mappings":"AAAA,OAAO,EAAE,IAAI,EAAE,MAAM,MAAM,CAAC;AAM5B,OAAO,KAAK,EAAE,QAAQ,EAAE,MAAM,UAAU,CAAC;AA6DzC,eAAO,MAAM,oBAAoB,EAAE,IAAI,CAAC,QAAQ,CA2E7C,CAAC"}

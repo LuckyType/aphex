@@ -1,0 +1,394 @@
+// types/capabilities.ts
+//
+// Capability-based access control.
+//
+// Roles are per-organization rows in `cms_roles`, each mapping a role name to
+// a set of capability strings. Four built-in roles are seeded for every org
+// (owner/admin/editor/viewer); additional custom roles are purely additive.
+//
+// Authorization checks consult an auth-scoped capability set that is resolved
+// once per request (see RolesService + handleAuthHook) so `hasCapability` is
+// a synchronous set-membership check in request handlers and UI code.
+// Note: organization deletion is NOT a delegable capability — it's an
+// ownership-only action, enforced by a hardcoded `membership.role === 'owner'`
+// check in the DELETE /organizations/[id] handler. No `org.delete` cap exists
+// so it can't be granted to custom roles or picked in the role editor.
+/**
+ * Enumerate every capability. Useful for owner seeding and validation.
+ */
+export const ALL_CAPABILITIES = [
+    'document.read',
+    'document.create',
+    'document.update',
+    'document.delete',
+    'document.publish',
+    'document.unpublish',
+    'asset.read',
+    'asset.upload',
+    'asset.delete',
+    'member.invite',
+    'member.remove',
+    'member.changeRole',
+    'apiKey.manage',
+    'role.manage',
+    'org.settings',
+    'plugin.settings.manage'
+];
+/**
+ * Define a capability with metadata. Plugins pass these to the `aphex/capabilities`
+ * part so their permissions appear (and are assignable) in the roles UI.
+ *
+ * @example
+ * defineCapability('forms.export', { title: 'Export submissions', group: 'Forms' })
+ */
+export function defineCapability(id, meta = {}) {
+    return {
+        id,
+        title: meta.title || prettifyCapabilityId(id),
+        description: meta.description,
+        group: meta.group
+    };
+}
+/** Fallback label for a bare id: `document.publish` → `Publish` (last segment, title-cased). */
+export function prettifyCapabilityId(id) {
+    const last = id.split(/[.:]/).pop() ?? id;
+    const spaced = last.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/[-_]/g, ' ');
+    return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+}
+/** The built-in capability catalog — metadata for every core capability. */
+export const BUILTIN_CAPABILITY_DEFS = [
+    {
+        id: 'document.read',
+        title: 'Read documents',
+        group: 'Documents',
+        description: 'View documents and their content.'
+    },
+    {
+        id: 'document.create',
+        title: 'Create documents',
+        group: 'Documents',
+        description: 'Create new documents.'
+    },
+    {
+        id: 'document.update',
+        title: 'Edit documents',
+        group: 'Documents',
+        description: 'Edit existing documents.'
+    },
+    {
+        id: 'document.delete',
+        title: 'Delete documents',
+        group: 'Documents',
+        description: 'Delete documents.'
+    },
+    {
+        id: 'document.publish',
+        title: 'Publish documents',
+        group: 'Documents',
+        description: 'Publish drafts to the live site.'
+    },
+    {
+        id: 'document.unpublish',
+        title: 'Unpublish documents',
+        group: 'Documents',
+        description: 'Revert published documents to draft.'
+    },
+    {
+        id: 'asset.read',
+        title: 'View assets',
+        group: 'Assets',
+        description: 'Browse the media library.'
+    },
+    {
+        id: 'asset.upload',
+        title: 'Upload assets',
+        group: 'Assets',
+        description: 'Upload files to the media library.'
+    },
+    {
+        id: 'asset.delete',
+        title: 'Delete assets',
+        group: 'Assets',
+        description: 'Delete files from the media library.'
+    },
+    {
+        id: 'member.invite',
+        title: 'Invite members',
+        group: 'Organization',
+        description: 'Invite people to the organization.'
+    },
+    {
+        id: 'member.remove',
+        title: 'Remove members',
+        group: 'Organization',
+        description: 'Remove people from the organization.'
+    },
+    {
+        id: 'member.changeRole',
+        title: 'Change member roles',
+        group: 'Organization',
+        description: "Change a member's role."
+    },
+    {
+        id: 'apiKey.manage',
+        title: 'Manage API keys',
+        group: 'Organization',
+        description: 'Create and revoke API keys.'
+    },
+    {
+        id: 'role.manage',
+        title: 'Manage roles',
+        group: 'Organization',
+        description: 'Create and edit custom roles.'
+    },
+    {
+        id: 'org.settings',
+        title: 'Edit settings',
+        group: 'Organization',
+        description: 'Change organization settings.'
+    },
+    {
+        id: 'plugin.settings.manage',
+        title: 'Manage plugin settings',
+        group: 'Organization',
+        description: 'View and edit configuration and secrets for installed plugins.'
+    }
+];
+/**
+ * Merge the built-in catalog with extra (plugin) definitions, deduped by id — the
+ * first definition of an id wins, so plugins can't silently redefine a core cap.
+ */
+export function mergeCapabilityCatalog(extra = []) {
+    const byId = new Map();
+    for (const def of [...BUILTIN_CAPABILITY_DEFS, ...extra]) {
+        if (!byId.has(def.id))
+            byId.set(def.id, def);
+    }
+    return [...byId.values()];
+}
+/**
+ * Built-in role names. These are the guaranteed defaults every org receives.
+ * Custom role names are any other string.
+ */
+export const BUILTIN_ROLE_NAMES = [
+    'owner',
+    'admin',
+    'editor',
+    'viewer'
+];
+/**
+ * Seed data for the four built-in roles.
+ *
+ * For viewer/editor/admin this is the **default floor** — the set of capabilities
+ * a freshly-created org starts with. Once seeded, rows live in `cms_roles` and can
+ * be edited by admins via the Roles UI; they are never force-updated afterwards,
+ * so a capability added by a later core upgrade is not granted retroactively.
+ *
+ * `owner` is different: it is an **invariant**, not a floor. It is always the whole
+ * of ALL_CAPABILITIES, is rejected by the roles PATCH route, and is reconciled on
+ * every boot (see CMSEngine.reconcileBuiltinRoles) so new capabilities reach orgs
+ * that were seeded before those capabilities existed.
+ *
+ * Also acts as the defense-in-depth fallback: if a role lookup misses (e.g.
+ * a row got deleted out-of-band for a built-in name), the checker falls back
+ * to this map rather than locking the org out.
+ */
+export const BUILTIN_ROLE_SEED = {
+    viewer: {
+        description: 'Read-only access to documents and assets.',
+        capabilities: ['document.read', 'asset.read']
+    },
+    editor: {
+        description: 'Create, edit, and publish content.',
+        capabilities: [
+            'document.read',
+            'document.create',
+            'document.update',
+            'document.delete',
+            'document.publish',
+            'document.unpublish',
+            'asset.read',
+            'asset.upload',
+            'asset.delete'
+        ]
+    },
+    admin: {
+        description: 'All content permissions plus member and settings management.',
+        capabilities: [
+            'document.read',
+            'document.create',
+            'document.update',
+            'document.delete',
+            'document.publish',
+            'document.unpublish',
+            'asset.read',
+            'asset.upload',
+            'asset.delete',
+            'member.invite',
+            'member.remove',
+            'member.changeRole',
+            'apiKey.manage',
+            'role.manage',
+            'org.settings',
+            'plugin.settings.manage'
+        ]
+    },
+    owner: {
+        description: 'Full access including organization deletion.',
+        capabilities: ALL_CAPABILITIES
+    }
+};
+/**
+ * Write capabilities that imply a matching read. Keeps the UI/API from
+ * producing degenerate roles/keys that can mutate a resource but not see it.
+ */
+const DOCUMENT_WRITE_CAPS = [
+    'document.create',
+    'document.update',
+    'document.delete',
+    'document.publish',
+    'document.unpublish'
+];
+const ASSET_WRITE_CAPS = ['asset.upload', 'asset.delete'];
+/**
+ * Idempotently expand a capability list so that any write cap drags in the
+ * corresponding read. Used by both the role schema and the API-key schema.
+ * Accepts `string[]` since a granted list may include plugin capability ids; the
+ * built-in read/write implications only touch known core ids and pass others through.
+ */
+export function normalizeCapabilities(caps) {
+    const set = new Set(caps);
+    if (DOCUMENT_WRITE_CAPS.some((c) => set.has(c)))
+        set.add('document.read');
+    if (ASSET_WRITE_CAPS.some((c) => set.has(c)))
+        set.add('asset.read');
+    return Array.from(set);
+}
+/**
+ * Build the four built-in role rows for a newly-created organization.
+ * Used by migration, org-creation, and the runtime seeder.
+ */
+export function buildBuiltinRoleRows(organizationId) {
+    return BUILTIN_ROLE_NAMES.map((name) => ({
+        organizationId,
+        name,
+        description: BUILTIN_ROLE_SEED[name].description,
+        capabilities: [...BUILTIN_ROLE_SEED[name].capabilities],
+        isBuiltIn: true
+    }));
+}
+/**
+ * Instance roles that override everything else.
+ *
+ * `super_admin` and `admin` on the user profile receive the full capability
+ * set regardless of their per-org role. Keeps the "break glass" path usable
+ * even if an admin accidentally locks their own role down.
+ */
+const INSTANCE_ROLE_OVERRIDES = new Set(['super_admin', 'admin']);
+export function isInstanceRole(auth) {
+    return auth.type === 'session' && INSTANCE_ROLE_OVERRIDES.has(auth.user.role);
+}
+/**
+ * Check whether an Auth already has a capability.
+ *
+ * Expects `auth.capabilities` to have been populated by the auth hook via
+ * RolesService. If absent (e.g. legacy call site), falls back to the built-in
+ * seed for the org role so behavior remains safe.
+ */
+export function hasCapability(auth, capability) {
+    return resolveCapabilities(auth).has(capability);
+}
+/** What the coarse `read` scope buys a key. */
+const API_KEY_READ_CAPABILITIES = ['document.read', 'asset.read'];
+/** What the coarse `write` scope adds on top. */
+const API_KEY_WRITE_CAPABILITIES = [
+    'document.create',
+    'document.update',
+    'document.delete',
+    'document.publish',
+    'document.unpublish',
+    'asset.upload',
+    'asset.delete'
+];
+/**
+ * Expand an API key's coarse `read`/`write` scopes into capabilities.
+ *
+ * The compatibility path for keys issued before the capability model existed,
+ * and the default for keys created without an explicit allowlist.
+ *
+ * **This expansion is not itself a permission check.** It says what the scopes
+ * mean, not what the key's owner may actually do — the caller is responsible for
+ * intersecting the result with the owner's grantable set before trusting it, or
+ * a `write` key would confer `document.delete` to an owner whose role never had
+ * it. `AuthService.validateApiKey` does that clamp; anything else deriving
+ * capabilities from scopes must too.
+ */
+export function coarseApiKeyCapabilities(permissions) {
+    const caps = [...API_KEY_READ_CAPABILITIES];
+    if (permissions.includes('write'))
+        caps.push(...API_KEY_WRITE_CAPABILITIES);
+    return caps;
+}
+/**
+ * Resolve the effective capability set for an Auth.
+ *
+ * Precedence:
+ *   1. `auth.capabilities` (pre-resolved by the auth hook) — authoritative.
+ *   2. Instance-role override (super_admin/admin) → all capabilities.
+ *   3. API keys → derived from `read`/`write` scopes.
+ *   4. Session fallback → built-in seed for the org role.
+ *   5. Partial session → empty set.
+ *
+ * Every branch is passed through {@link normalizeCapabilities}, so the
+ * write-implies-read invariant holds at *resolve* time and not merely at write
+ * time. `normalizeCapabilities` is otherwise only applied by the role and
+ * API-key request schemas, which covers the admin UI but not seeds, migrations,
+ * plugins, or rows written directly — and the read routes now depend on
+ * `asset.read`/`document.read` actually being present. Without this, a role
+ * persisted with `asset.upload` alone would be able to upload an asset and then
+ * get a 403 listing it. It can only ever add a read cap alongside a write cap
+ * that already survived whatever clamp produced the set, so it never widens
+ * access beyond what the principal was already granted.
+ */
+export function resolveCapabilities(auth) {
+    return new Set(normalizeCapabilities(rawCapabilities(auth)));
+}
+const EMPTY_CAPS = [];
+function rawCapabilities(auth) {
+    if (auth.type === 'partial_session')
+        return EMPTY_CAPS;
+    // Authoritative source once hydrated by the auth hook.
+    if ('capabilities' in auth && Array.isArray(auth.capabilities)) {
+        return auth.capabilities;
+    }
+    if (auth.type === 'session' && INSTANCE_ROLE_OVERRIDES.has(auth.user.role)) {
+        return ALL_CAPABILITIES;
+    }
+    // Reached only when the key carries no capability list at all — an explicit
+    // one, including an empty one, is authoritative and was returned above.
+    // "Empty" must mean *nothing*, never "fall back to the coarse set": an
+    // allowlist that a clamp stripped to nothing would otherwise resolve to more
+    // than it asked for.
+    if (auth.type === 'api_key') {
+        return coarseApiKeyCapabilities(auth.permissions);
+    }
+    // Session without pre-resolved capabilities → seed fallback.
+    const builtin = BUILTIN_ROLE_SEED[auth.organizationRole];
+    return builtin ? builtin.capabilities : EMPTY_CAPS;
+}
+/**
+ * Resolve the effective organization role name for an Auth, honoring
+ * instance-role overrides. Returns the role name as a string — built-in or
+ * custom — or `null` for partial sessions and API keys.
+ *
+ * Used by schema-level access lists: an allowlist like
+ * `['admin','owner','Testing']` is matched literally against this value, so
+ * custom role names participate just like built-ins do.
+ */
+export function effectiveOrganizationRole(auth) {
+    if (auth.type !== 'session')
+        return null;
+    if (INSTANCE_ROLE_OVERRIDES.has(auth.user.role))
+        return 'owner';
+    return auth.organizationRole ?? null;
+}

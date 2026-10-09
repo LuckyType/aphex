@@ -1,0 +1,122 @@
+#!/usr/bin/env tsx
+/**
+ * Aphex CMS CLI
+ * Uses cac for command parsing + clack for interactive prompts
+ */
+import { intro, outro, spinner, text, cancel, isCancel } from '@clack/prompts';
+import { cac } from 'cac';
+import pc from 'picocolors';
+import { createRequire } from 'node:module';
+import { generateTypesFromConfig } from '../type-gen.js';
+import { runMigrations } from './migrate.js';
+const cli = cac('aphex');
+/*
+ * Read the real version rather than restating it.
+ *
+ * This was a literal, and it had drifted four major versions behind the package
+ * it ships in — `aphex -v` answered `0.1.14` from `@aphexcms/cms-core@10.0.0`.
+ * A hand-maintained copy of a number that changesets bumps on every release is
+ * guaranteed to go stale, and it goes stale silently: nothing type-checks a
+ * string against a package.json, and the only person who finds out is a user
+ * pasting a wrong version into a bug report.
+ *
+ * Two levels up in both layouts — `src/cli/` when run through tsx, `dist/cli/`
+ * once packed — so one path works for both.
+ */
+const version = createRequire(import.meta.url)('../../package.json').version;
+// ASCII Art Banner
+function printBanner() {
+    console.log(pc.cyan(`${pc.bold('⚡ Aphex CMS')}\n${pc.dim('A modern headless CMS')}`));
+}
+/**
+ * aphex generate:types [schema-path] [output-path]
+ * Generate TypeScript types from schema
+ */
+cli
+    .command('generate:types [schema-path] [output-path] [plugins-path]', 'Generate TypeScript types from schema')
+    .action(async (schemaPath, outputPath, pluginsPath) => {
+    intro(pc.cyan('⚡ Aphex CMS - Type Generator'));
+    try {
+        // If paths not provided, prompt for them
+        if (!schemaPath) {
+            const result = await text({
+                message: 'Schema file path:',
+                placeholder: './src/lib/schemaTypes/index.ts',
+                defaultValue: './src/lib/schemaTypes/index.ts'
+            });
+            if (isCancel(result)) {
+                cancel('Operation cancelled.');
+                process.exit(0);
+            }
+            schemaPath = result;
+        }
+        if (!outputPath) {
+            const result = await text({
+                message: 'Output file path:',
+                placeholder: './src/lib/generated-types.ts',
+                defaultValue: './src/lib/generated-types.ts'
+            });
+            if (isCancel(result)) {
+                cancel('Operation cancelled.');
+                process.exit(0);
+            }
+            outputPath = result;
+        }
+        const s = spinner();
+        s.start('Generating types...');
+        await generateTypesFromConfig(schemaPath, outputPath, pluginsPath);
+        s.stop(pc.green('✅ Types generated successfully!'));
+        outro(pc.dim(`Output: ${pc.cyan(outputPath)}`));
+    }
+    catch (error) {
+        cancel(pc.red('Failed to generate types'));
+        console.error(error);
+        process.exit(1);
+    }
+});
+/**
+ * aphex migrate [folder]
+ * Apply committed Drizzle migrations (Postgres, SQLite, or pglite). Runtime-safe — no drizzle-kit needed.
+ */
+cli
+    .command('migrate [folder]', 'Apply database migrations (Postgres, SQLite, or pglite)')
+    .action(async (folder) => {
+    intro(pc.cyan('⚡ Aphex CMS - Migrate'));
+    const s = spinner();
+    s.start('Applying migrations...');
+    try {
+        const result = await runMigrations({ migrationsFolder: folder });
+        s.stop(pc.green(`✅ Migrations applied (${result.driver})`));
+        outro(pc.dim(`Target: ${pc.cyan(result.target)}`));
+    }
+    catch (error) {
+        s.stop(pc.red('Migration failed'));
+        console.error(error instanceof Error ? error.message : error);
+        process.exit(1);
+    }
+});
+/**
+ * aphex help
+ */
+cli.help();
+/**
+ * aphex --version
+ */
+cli.version(version);
+/**
+ * Default command - show banner and help
+ */
+cli.on('command:*', () => {
+    printBanner();
+    console.log(pc.red(`Unknown command: ${cli.args.join(' ')}\n`));
+    console.log(`Run ${pc.cyan('aphex --help')} to see available commands.`);
+    process.exit(1);
+});
+// Parse CLI args
+cli.parse();
+// If no command provided, show banner and help
+if (!process.argv.slice(2).length) {
+    printBanner();
+    cli.outputHelp();
+}
+//# sourceMappingURL=index.js.map

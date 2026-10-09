@@ -1,0 +1,1 @@
+{"version":3,"file":"apply-workspace-patch.d.ts","sourceRoot":"","sources":["../../src/lib/ai/apply-workspace-patch.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,iBAAiB,EAAE,MAAM,6BAA6B,CAAC;AACrE,OAAO,KAAK,EAAE,mBAAmB,EAAE,MAAM,2BAA2B,CAAC;AAErE,mFAAmF;AACnF,wBAAsB,mBAAmB,CACxC,MAAM,EAAE,MAAM,CAAC,MAAM,EAAE,OAAO,CAAC,EAC/B,SAAS,EAAE,iBAAiB,GAC1B,OAAO,CAAC,mBAAmB,CAAC,CAyB9B"}

@@ -1,0 +1,143 @@
+import { findFieldByPath } from './asset-privacy.js';
+const MIME_TYPE_PATTERN = /^[\w!#$&^_.+-]+\/(?:\*|[\w!#$&^_.+-]+)$/i;
+/** Conservative installation-wide policy used when an app does not provide one. */
+export const DEFAULT_ALLOWED_MIME_TYPES = [
+    'image/jpeg',
+    'image/png',
+    'image/gif',
+    // SVG is allowed because logos and icons are overwhelmingly SVG, and refusing
+    // them makes the media library useless for the most common brand asset. It is
+    // safe here only because serving is locked down: `routes/assets-cdn.ts` sends
+    // every `image/svg+xml` response with `Content-Disposition: attachment` and a
+    // `default-src 'none'; sandbox` CSP, so the browser will render it inside an
+    // `<img>` (where script never runs) but refuses to execute it as a document.
+    // Remove that hardening and this entry becomes stored XSS on your own origin.
+    'image/svg+xml',
+    'image/webp',
+    'image/avif',
+    'image/heic',
+    'image/heif',
+    'application/pdf',
+    'text/plain',
+    'text/csv',
+    'text/markdown',
+    'application/json',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/vnd.ms-powerpoint',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    'application/vnd.oasis.opendocument.text',
+    'application/vnd.oasis.opendocument.spreadsheet',
+    'application/vnd.oasis.opendocument.presentation',
+    'application/zip',
+    'audio/mpeg',
+    'audio/mp4',
+    'audio/wav',
+    'audio/ogg',
+    'audio/aac',
+    'audio/flac',
+    'video/mp4',
+    'video/webm',
+    'video/quicktime',
+    'video/ogg',
+    'font/woff',
+    'font/woff2',
+    'font/ttf',
+    'font/otf'
+];
+/** Normalize native input syntax and schema arrays to individual accept tokens. */
+export function normalizeAcceptedFileTypes(accept) {
+    if (!accept)
+        return [];
+    const values = typeof accept === 'string' ? [accept] : accept;
+    return [
+        ...new Set(values
+            .flatMap((value) => value.split(','))
+            .map((value) => value.trim().toLowerCase())
+            .filter(Boolean))
+    ];
+}
+export function acceptedFileTypesInputValue(accept) {
+    const accepted = normalizeAcceptedFileTypes(accept);
+    return accepted.length > 0 ? accepted.join(',') : undefined;
+}
+/**
+ * Extension → MIME fallback for files the browser hands over with an empty
+ * `File.type`. Chrome and Firefox report `''` for HEIC/HEIF because they have no
+ * decoder registered for the format — Safari, which does, reports `image/heic` —
+ * so an `image/*` field would turn away a photo straight off an iPhone while the
+ * server was perfectly willing to take it.
+ */
+const EXTENSION_MIME_FALLBACK = {
+    '.heic': 'image/heic',
+    '.heif': 'image/heif',
+    '.avif': 'image/avif'
+};
+/**
+ * The MIME type to match a file against in the browser: what it reported, or a
+ * guess from the extension when it reported nothing.
+ *
+ * Deliberately **not** used inside `isAcceptedFileType`, and never on the server.
+ * This is a picker hint, not a security rule: it can only ever get a file as far
+ * as the upload endpoint, which re-derives the type from magic bytes in
+ * `validateFile` and rejects it there if the extension was lying. Wiring it into
+ * the shared matcher would let a `.heic` full of garbage past a server-side
+ * allow-list, which is exactly the check that shouldn't trust a filename.
+ */
+export function effectiveFileType(filename, mimeType) {
+    if (mimeType)
+        return mimeType;
+    const name = filename.toLowerCase();
+    const match = Object.keys(EXTENSION_MIME_FALLBACK).find((ext) => name.endsWith(ext));
+    return match ? EXTENSION_MIME_FALLBACK[match] : '';
+}
+export function isAcceptedFileType(filename, mimeType, accept) {
+    const accepted = normalizeAcceptedFileTypes(accept);
+    if (accepted.length === 0)
+        return true;
+    const normalizedMimeType = mimeType.toLowerCase();
+    const normalizedFilename = filename.toLowerCase();
+    return accepted.some((value) => {
+        if (value.startsWith('.'))
+            return normalizedFilename.endsWith(value);
+        if (value.endsWith('/*'))
+            return normalizedMimeType.startsWith(`${value.slice(0, -1)}`);
+        return normalizedMimeType === value;
+    });
+}
+export function validateGlobalAllowedMimeTypes(allowedMimeTypes) {
+    if (allowedMimeTypes === undefined)
+        return;
+    const normalized = normalizeAcceptedFileTypes(allowedMimeTypes);
+    if (normalized.length === 0) {
+        throw new Error('upload.allowedMimeTypes must contain at least one MIME type');
+    }
+    const invalid = normalized.find((value) => !MIME_TYPE_PATTERN.test(value));
+    if (invalid) {
+        throw new Error(`upload.allowedMimeTypes contains invalid MIME type "${invalid}"; filename extensions are not security rules`);
+    }
+}
+export function resolveGlobalAllowedMimeTypes(instances) {
+    const configured = instances?.config?.upload?.allowedMimeTypes;
+    return configured === undefined
+        ? [...DEFAULT_ALLOWED_MIME_TYPES]
+        : normalizeAcceptedFileTypes(configured);
+}
+/** Resolve the effective rule for a schema field. Images default to image-only. */
+export function resolveFieldAcceptedFileTypes(schema, fieldPath) {
+    if (!schema?.fields || !fieldPath)
+        return undefined;
+    const field = findFieldByPath(schema.fields, fieldPath);
+    if (!field)
+        return undefined;
+    if (field.type === 'image') {
+        return normalizeAcceptedFileTypes(field.accept ?? 'image/*');
+    }
+    if (field.type === 'file') {
+        const accepted = normalizeAcceptedFileTypes(field.accept);
+        return accepted.length > 0 ? accepted : undefined;
+    }
+    return undefined;
+}

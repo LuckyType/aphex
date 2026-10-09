@@ -1,0 +1,271 @@
+import { isAcceptedFileType } from './file-accept.js';
+/**
+ * Detect MIME type from file magic bytes (file signatures).
+ * Returns the detected MIME type, or null if unknown.
+ */
+export function detectMimeType(buffer, filename) {
+    if (buffer.length < 4)
+        return null;
+    // PDF: %PDF
+    if (buffer[0] === 0x25 && buffer[1] === 0x50 && buffer[2] === 0x44 && buffer[3] === 0x46) {
+        return 'application/pdf';
+    }
+    // PNG: 89 50 4E 47
+    if (buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47) {
+        return 'image/png';
+    }
+    // JPEG: FF D8 FF
+    if (buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
+        return 'image/jpeg';
+    }
+    // GIF: GIF87a or GIF89a
+    if (buffer[0] === 0x47 &&
+        buffer[1] === 0x49 &&
+        buffer[2] === 0x46 &&
+        buffer[3] === 0x38 &&
+        (buffer[4] === 0x37 || buffer[4] === 0x39) &&
+        buffer[5] === 0x61) {
+        return 'image/gif';
+    }
+    // WebP: RIFF....WEBP
+    if (buffer.length >= 12 &&
+        buffer[0] === 0x52 &&
+        buffer[1] === 0x49 &&
+        buffer[2] === 0x46 &&
+        buffer[3] === 0x46 &&
+        buffer[8] === 0x57 &&
+        buffer[9] === 0x45 &&
+        buffer[10] === 0x42 &&
+        buffer[11] === 0x50) {
+        return 'image/webp';
+    }
+    // AVIF: ....ftypavif
+    if (buffer.length >= 12) {
+        const ftypStr = buffer.subarray(4, 8).toString('ascii');
+        if (ftypStr === 'ftyp') {
+            const brand = buffer.subarray(8, 12).toString('ascii');
+            if (brand === 'avif')
+                return 'image/avif';
+            if (brand === 'heic' || brand === 'heix')
+                return 'image/heic';
+            if (brand.startsWith('mp4') || brand === 'isom')
+                return 'video/mp4';
+        }
+    }
+    // WebM: an EBML header whose DocType is "webm". Without this an upload of
+    // `video/webm`, which the default allowed list admits, lands as
+    // octet-stream and is refused.
+    if (buffer[0] === 0x1a &&
+        buffer[1] === 0x45 &&
+        buffer[2] === 0xdf &&
+        buffer[3] === 0xa3 &&
+        buffer.subarray(4, 64).includes('webm', 0, 'ascii')) {
+        return 'video/webm';
+    }
+    // SVG: starts with < and contains <svg (check first 256 bytes)
+    const head = buffer.subarray(0, Math.min(buffer.length, 256)).toString('utf-8');
+    if (head.trimStart().startsWith('<') && head.includes('<svg')) {
+        return 'image/svg+xml';
+    }
+    const normalizedHead = head.trimStart().toLowerCase();
+    if (normalizedHead.startsWith('<!doctype html') ||
+        normalizedHead.startsWith('<html') ||
+        normalizedHead.startsWith('<script')) {
+        return 'text/html';
+    }
+    if (normalizedHead.startsWith('<?xml') || normalizedHead.startsWith('<!doctype xml')) {
+        return 'application/xml';
+    }
+    // ZIP-based formats: PK\x03\x04
+    if (buffer[0] === 0x50 && buffer[1] === 0x4b && buffer[2] === 0x03 && buffer[3] === 0x04) {
+        return detectZipFormat(buffer);
+    }
+    // Microsoft Compound Binary (old .doc, .xls, .ppt): D0 CF 11 E0
+    if (buffer[0] === 0xd0 && buffer[1] === 0xcf && buffer[2] === 0x11 && buffer[3] === 0xe0) {
+        return 'application/msword'; // Could also be .xls or .ppt
+    }
+    // WASM: \0asm
+    if (buffer[0] === 0x00 && buffer[1] === 0x61 && buffer[2] === 0x73 && buffer[3] === 0x6d) {
+        return 'application/wasm';
+    }
+    // ELF executable: \x7fELF
+    if (buffer[0] === 0x7f && buffer[1] === 0x45 && buffer[2] === 0x4c && buffer[3] === 0x46) {
+        return 'application/x-executable';
+    }
+    // Mach-O executable (macOS): CF FA ED FE or CE FA ED FE or FE ED FA CF/CE
+    if ((buffer[0] === 0xcf && buffer[1] === 0xfa && buffer[2] === 0xed && buffer[3] === 0xfe) ||
+        (buffer[0] === 0xce && buffer[1] === 0xfa && buffer[2] === 0xed && buffer[3] === 0xfe) ||
+        (buffer[0] === 0xfe && buffer[1] === 0xed && buffer[2] === 0xfa && buffer[3] === 0xcf) ||
+        (buffer[0] === 0xfe && buffer[1] === 0xed && buffer[2] === 0xfa && buffer[3] === 0xce)) {
+        return 'application/x-executable';
+    }
+    // PE executable (Windows .exe, .dll): MZ
+    if (buffer[0] === 0x4d && buffer[1] === 0x5a) {
+        return 'application/x-executable';
+    }
+    // Shell script: #!
+    if (buffer[0] === 0x23 && buffer[1] === 0x21) {
+        return 'application/x-shellscript';
+    }
+    // CSV has no magic signature. Only recognize it when the filename agrees and
+    // every byte is valid, non-binary UTF-8; dangerous HTML/XML signatures above
+    // still win before this fallback.
+    if (filename?.toLowerCase().endsWith('.csv') && isTextContent(buffer)) {
+        return 'text/csv';
+    }
+    return null;
+}
+function isTextContent(buffer) {
+    if (buffer.includes(0))
+        return false;
+    try {
+        new TextDecoder('utf-8', { fatal: true }).decode(buffer);
+    }
+    catch {
+        return false;
+    }
+    return !buffer.some((byte) => byte < 0x20 && byte !== 0x09 && byte !== 0x0a && byte !== 0x0d);
+}
+/**
+ * Detect specific format within a ZIP container.
+ */
+function detectZipFormat(buffer) {
+    const content = buffer.subarray(0, Math.min(buffer.length, 2000)).toString('binary');
+    if (content.includes('word/'))
+        return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    if (content.includes('xl/'))
+        return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    if (content.includes('ppt/'))
+        return 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+    return 'application/zip';
+}
+/**
+ * Blocked MIME types that should never be uploaded.
+ */
+const BLOCKED_MIME_TYPES = new Set([
+    'application/x-executable',
+    'application/x-shellscript',
+    'application/wasm',
+    'application/x-msdos-program',
+    'application/x-msdownload',
+    'text/html',
+    'application/xhtml+xml',
+    'text/xml',
+    'application/xml'
+]);
+/**
+ * Blocked file extensions (regardless of MIME type).
+ */
+const BLOCKED_EXTENSIONS = new Set([
+    '.exe',
+    '.dll',
+    '.bat',
+    '.cmd',
+    '.com',
+    '.msi',
+    '.scr',
+    '.pif',
+    '.sh',
+    '.bash',
+    '.zsh',
+    '.csh',
+    '.ksh',
+    '.app',
+    '.command',
+    '.action',
+    '.ps1',
+    '.psm1',
+    '.psd1',
+    '.vbs',
+    '.vbe',
+    '.js',
+    '.jse',
+    '.wsf',
+    '.wsh',
+    '.reg',
+    '.inf',
+    '.hta',
+    '.wasm',
+    '.html',
+    '.htm',
+    '.xhtml',
+    '.shtml',
+    '.xml',
+    '.xsl',
+    '.mhtml'
+]);
+/**
+ * Validate an uploaded file's actual content against allowed types.
+ * Checks magic bytes, not just the client-provided MIME type.
+ */
+export function validateFile(buffer, filename, clientMimeType, options = {}) {
+    const lowerName = filename.toLowerCase();
+    const detectedMimeType = detectMimeType(buffer, filename);
+    const normalizedClientMimeType = clientMimeType.toLowerCase().split(';', 1)[0]?.trim() ?? '';
+    // 1. Block dangerous extensions (check all extensions to prevent double-extension bypass)
+    const allExts = lowerName.match(/\.[^.]+/g) || [];
+    for (const e of allExts) {
+        if (BLOCKED_EXTENSIONS.has(e)) {
+            return { valid: false, error: `File type "${e}" is not allowed`, detectedMimeType };
+        }
+    }
+    // 2. Dangerous types are absolute: neither an explicit wildcard nor a file
+    // whose content has no recognizable signature may opt back into them.
+    if (BLOCKED_MIME_TYPES.has(normalizedClientMimeType)) {
+        return {
+            valid: false,
+            error: `File type "${normalizedClientMimeType}" is not allowed`,
+            detectedMimeType
+        };
+    }
+    // 3. Block dangerous MIME types detected from actual content.
+    if (detectedMimeType && BLOCKED_MIME_TYPES.has(detectedMimeType)) {
+        return {
+            valid: false,
+            error: `File content detected as "${detectedMimeType}" which is not allowed`,
+            detectedMimeType
+        };
+    }
+    // 4. Check for MIME type mismatch (potential spoofing)
+    if (detectedMimeType && clientMimeType) {
+        const detectedBase = detectedMimeType.split('/')[0];
+        const clientBase = clientMimeType.split('/')[0];
+        // If we detected an executable but client says it's something else, block it
+        if (detectedMimeType === 'application/x-executable' && clientBase !== 'application') {
+            return {
+                valid: false,
+                error: 'File content does not match the declared type',
+                detectedMimeType
+            };
+        }
+        // If client says image but we detect it's not an image
+        if (clientBase === 'image' && detectedBase !== 'image' && detectedMimeType !== null) {
+            return {
+                valid: false,
+                error: `File content is "${detectedMimeType}" but was uploaded as an image`,
+                detectedMimeType
+            };
+        }
+    }
+    // 5. Check against allowed MIME types (from schema field `accept`)
+    if (options.allowedMimeTypes && options.allowedMimeTypes.length > 0) {
+        const mimeToCheck = detectedMimeType || clientMimeType;
+        if (!isAcceptedFileType(filename, mimeToCheck, options.allowedMimeTypes)) {
+            return {
+                valid: false,
+                error: `File type "${mimeToCheck}" is not allowed`,
+                detectedMimeType
+            };
+        }
+    }
+    // 6. Check file size
+    if (options.maxSize && buffer.length > options.maxSize) {
+        const maxMB = (options.maxSize / (1024 * 1024)).toFixed(1);
+        return {
+            valid: false,
+            error: `File exceeds maximum size of ${maxMB} MB`,
+            detectedMimeType
+        };
+    }
+    return { valid: true, detectedMimeType };
+}

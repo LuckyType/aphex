@@ -1,0 +1,97 @@
+import { generateGraphQLSchema } from './schema.js';
+import { createResolvers } from './resolvers.js';
+import { depthLimit } from './depth-limit.js';
+import { cmsLogger } from '../utils/logger.js';
+import { aphexLocals } from '../auth/locals.js';
+const MAX_QUERY_DEPTH = 10;
+/**
+ * Creates a GraphQL handler for the CMS.
+ * Uses dynamic imports so graphql dependencies are only loaded when GraphQL is enabled.
+ */
+export async function createGraphQLHandler(cms, schemaTypes, options = {}) {
+    const rawPath = options.path ?? '/api/graphql';
+    const endpoint = rawPath.startsWith('/') ? rawPath : `/${rawPath}`;
+    const enableGraphiQL = options.enableGraphiQL ?? true;
+    const defaultPerspective = options.defaultPerspective ?? 'published';
+    // Lazy-load GraphQL dependencies
+    const [{ createYoga, createSchema }, { useGraphQlJit }, { renderGraphiQL }] = await Promise.all([
+        import('graphql-yoga'),
+        import('@envelop/graphql-jit'),
+        import('@graphql-yoga/render-graphiql')
+    ]);
+    // Generate GraphQL schema and resolvers from CMS schema types
+    const typeDefs = generateGraphQLSchema(schemaTypes);
+    const resolvers = createResolvers(cms, schemaTypes, defaultPerspective);
+    const isProd = process.env.NODE_ENV === 'production';
+    const yogaApp = createYoga({
+        logging: false,
+        maskedErrors: isProd,
+        schema: createSchema({
+            typeDefs,
+            resolvers
+        }),
+        plugins: [
+            useGraphQlJit(),
+            {
+                onValidate({ addValidationRule }) {
+                    addValidationRule(depthLimit(MAX_QUERY_DEPTH));
+                }
+            }
+        ],
+        graphqlEndpoint: endpoint,
+        renderGraphiQL,
+        fetchAPI: { Response },
+        context: async (event) => {
+            // Extract auth and localAPI from event.locals (set by auth hook)
+            const auth = aphexLocals(event.locals).auth;
+            const localAPI = event.locals.aphexCMS?.localAPI;
+            if (!auth || auth.type === 'partial_session') {
+                throw new Error('Unauthorized: Authentication required for GraphQL');
+            }
+            if (!localAPI) {
+                throw new Error('LocalAPI not initialized');
+            }
+            // Return context with organizationId, auth, and localAPI
+            return {
+                organizationId: auth.organizationId,
+                auth,
+                localAPI
+            };
+        },
+        graphiql: enableGraphiQL
+            ? {
+                defaultQuery: options.defaultQuery ||
+                    `# Welcome to Aphex GraphQL API
+# Try these example queries:
+
+# Get all documents of a type (replace 'page' with your document type)
+{
+  allPage(perspective: "draft") {
+    id
+    title
+    createdAt
+    updatedAt
+  }
+}
+
+# Get a single document by ID
+{
+  page(id: "your-page-id", perspective: "draft") {
+    id
+    title
+  }
+}`
+            }
+            : false
+    });
+    cmsLogger.info('[GraphQL]', `Initialized at ${endpoint}`);
+    return {
+        handler: async (event) => {
+            return yogaApp.fetch(event.request, event);
+        },
+        settings: {
+            endpoint,
+            enableGraphiQL
+        }
+    };
+}

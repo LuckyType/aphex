@@ -1,0 +1,1 @@
+{"version":3,"file":"fetch-remote-file.d.ts","sourceRoot":"","sources":["../../src/lib/utils/fetch-remote-file.ts"],"names":[],"mappings":"AA8CA,eAAO,MAAM,qBAAqB,QAAmB,CAAC;AA6EtD,MAAM,WAAW,UAAU;IAC1B,MAAM,EAAE,MAAM,CAAC;IACf,WAAW,EAAE,MAAM,GAAG,IAAI,CAAC;CAC3B;AAED;;;sBAGsB;AACtB,wBAAsB,eAAe,CAAC,GAAG,EAAE,MAAM,GAAG,OAAO,CAAC,UAAU,CAAC,CA0EtE"}

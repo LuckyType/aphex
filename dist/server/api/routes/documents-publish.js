@@ -1,0 +1,273 @@
+import { Hono } from 'hono';
+import { authToContext } from '../../../local-api/auth-helpers.js';
+import { PermissionError } from '../../../local-api/permissions.js';
+import { RevisionConflictError } from '../../../db/interfaces/index.js';
+import { DocumentValidationError } from '../../../local-api/collection-api.js';
+import { cmsLogger } from '../../../utils/logger.js';
+import { scheduleDocumentRequest, publishDocumentRequest, unpublishDocumentRequest } from '../../../api/schemas/documents.js';
+export const documentsPublishRouter = new Hono()
+    .post('/:id/schedule', async (c) => {
+    try {
+        const { localAPI } = c.var.aphexCMS;
+        const context = authToContext(c.var.auth);
+        const id = c.req.param('id');
+        if (!id) {
+            return c.json({ success: false, error: 'Missing document ID' }, 400);
+        }
+        const parsed = scheduleDocumentRequest.safeParse(await c.req.json().catch(() => null));
+        if (!parsed.success) {
+            return c.json({ success: false, error: 'Invalid request', issues: parsed.error.issues }, 400);
+        }
+        const { action, runAt } = parsed.data;
+        const found = await localAPI.findDocumentById(context, id);
+        if (!found) {
+            return c.json({ success: false, error: 'Document not found' }, 404);
+        }
+        const collection = localAPI.getCollection(found.type);
+        if (!collection) {
+            return c.json({
+                success: false,
+                error: 'Invalid document type',
+                message: `Collection '${found.type}' not found`
+            }, 400);
+        }
+        const when = new Date(runAt);
+        const job = action === 'publish'
+            ? await collection.schedulePublish(context, id, when)
+            : await collection.scheduleUnpublish(context, id, when);
+        return c.json({
+            success: true,
+            data: { jobId: job.id, type: job.type, runAt: job.runAt.toISOString(), status: job.status },
+            message: `Document ${action} scheduled for ${job.runAt.toISOString()}`
+        });
+    }
+    catch (error) {
+        cmsLogger.error('Failed to schedule document action:', error);
+        if (error instanceof PermissionError) {
+            return c.json({ success: false, error: 'Forbidden', message: error.message }, 403);
+        }
+        return c.json({
+            success: false,
+            error: 'Failed to schedule document action',
+            message: error instanceof Error ? error.message : 'Unknown error'
+        }, 500);
+    }
+})
+    .get('/:id/schedule', async (c) => {
+    // Pending scheduled publish/unpublish for this document — powers the editor's
+    // "scheduled for …" indicator. Read-gated inside the collection.
+    try {
+        const { localAPI } = c.var.aphexCMS;
+        const context = authToContext(c.var.auth);
+        const id = c.req.param('id');
+        if (!id)
+            return c.json({ success: false, error: 'Missing document ID' }, 400);
+        const found = await localAPI.findDocumentById(context, id);
+        if (!found)
+            return c.json({ success: false, error: 'Document not found' }, 404);
+        const collection = localAPI.getCollection(found.type);
+        if (!collection) {
+            return c.json({ success: false, error: 'Invalid document type' }, 400);
+        }
+        const jobs = await collection.getScheduled(context, id);
+        return c.json({
+            success: true,
+            data: jobs.map((j) => ({
+                jobId: j.id,
+                type: j.type,
+                runAt: j.runAt.toISOString(),
+                status: j.status,
+                createdAt: j.createdAt.toISOString()
+            }))
+        });
+    }
+    catch (error) {
+        cmsLogger.error('Failed to read document schedule:', error);
+        if (error instanceof PermissionError) {
+            return c.json({ success: false, error: 'Forbidden', message: error.message }, 403);
+        }
+        return c.json({ success: false, error: 'Failed to read document schedule' }, 500);
+    }
+})
+    .delete('/:id/schedule', async (c) => {
+    // Cancel the pending schedule for this document.
+    try {
+        const { localAPI } = c.var.aphexCMS;
+        const context = authToContext(c.var.auth);
+        const id = c.req.param('id');
+        if (!id)
+            return c.json({ success: false, error: 'Missing document ID' }, 400);
+        const found = await localAPI.findDocumentById(context, id);
+        if (!found)
+            return c.json({ success: false, error: 'Document not found' }, 404);
+        const collection = localAPI.getCollection(found.type);
+        if (!collection) {
+            return c.json({ success: false, error: 'Invalid document type' }, 400);
+        }
+        const cancelled = await collection.cancelScheduled(context, id);
+        return c.json({ success: true, data: { cancelled } });
+    }
+    catch (error) {
+        cmsLogger.error('Failed to cancel document schedule:', error);
+        if (error instanceof PermissionError) {
+            return c.json({ success: false, error: 'Forbidden', message: error.message }, 403);
+        }
+        return c.json({ success: false, error: 'Failed to cancel document schedule' }, 500);
+    }
+})
+    .post('/:id/publish', async (c) => {
+    try {
+        const { localAPI } = c.var.aphexCMS;
+        const context = authToContext(c.var.auth);
+        const id = c.req.param('id');
+        if (!id) {
+            return c.json({
+                success: false,
+                error: 'Missing document ID',
+                message: 'Document ID is required'
+            }, 400);
+        }
+        const found = await localAPI.findDocumentById(context, id);
+        if (!found) {
+            return c.json({
+                success: false,
+                error: 'Document not found',
+                message: 'Document may not exist'
+            }, 404);
+        }
+        const collection = localAPI.getCollection(found.type);
+        if (!collection) {
+            return c.json({
+                success: false,
+                error: 'Invalid document type',
+                message: `Collection '${found.type}' not found`
+            }, 400);
+        }
+        // Body is optional — a bare POST with no body is still valid, only
+        // carries the CAS guard when the caller has one to send.
+        const body = await c.req.json().catch(() => ({}));
+        const parsed = publishDocumentRequest.safeParse(body);
+        if (!parsed.success) {
+            return c.json({ success: false, error: 'Invalid request', issues: parsed.error.issues }, 400);
+        }
+        const publishedDocument = await collection.publish(context, id, {
+            expectedRevision: parsed.data.expectedRevision
+        });
+        if (!publishedDocument) {
+            return c.json({
+                success: false,
+                error: 'Document not found or cannot be published',
+                message: 'Document may not have draft content to publish'
+            }, 404);
+        }
+        return c.json({
+            success: true,
+            data: publishedDocument,
+            message: 'Document published successfully'
+        });
+    }
+    catch (error) {
+        cmsLogger.error('Failed to publish document:', error);
+        if (error instanceof PermissionError) {
+            return c.json({ success: false, error: 'Forbidden', message: error.message }, 403);
+        }
+        if (error instanceof RevisionConflictError) {
+            return c.json({
+                success: false,
+                error: 'Conflict',
+                message: error.message,
+                currentRevision: error.currentRevision
+            }, 409);
+        }
+        // A malformed payload is the caller's fault, not the server's.
+        if (error instanceof DocumentValidationError) {
+            return c.json({
+                success: false,
+                error: 'Validation failed',
+                message: error.message,
+                issues: error.errors
+            }, 400);
+        }
+        if (error instanceof Error && error.message.includes('validation errors')) {
+            return c.json({
+                success: false,
+                error: 'Cannot publish: validation errors',
+                message: error.message
+            }, 400);
+        }
+        return c.json({
+            success: false,
+            error: 'Failed to publish document',
+            message: error instanceof Error ? error.message : 'Unknown error'
+        }, 500);
+    }
+})
+    .delete('/:id/publish', async (c) => {
+    try {
+        const { localAPI } = c.var.aphexCMS;
+        const context = authToContext(c.var.auth);
+        const id = c.req.param('id');
+        if (!id) {
+            return c.json({
+                success: false,
+                error: 'Missing document ID',
+                message: 'Document ID is required'
+            }, 400);
+        }
+        const found = await localAPI.findDocumentById(context, id);
+        if (!found) {
+            return c.json({
+                success: false,
+                error: 'Document not found',
+                message: `No document found with ID: ${id}`
+            }, 404);
+        }
+        const collection = localAPI.getCollection(found.type);
+        if (!collection) {
+            return c.json({
+                success: false,
+                error: 'Invalid document type',
+                message: `Collection '${found.type}' not found`
+            }, 400);
+        }
+        const body = await c.req.json().catch(() => ({}));
+        const parsed = unpublishDocumentRequest.safeParse(body);
+        if (!parsed.success) {
+            return c.json({ success: false, error: 'Invalid request', issues: parsed.error.issues }, 400);
+        }
+        const unpublishedDocument = await collection.unpublish(context, id, {
+            expectedRevision: parsed.data.expectedRevision
+        });
+        if (!unpublishedDocument) {
+            return c.json({
+                success: false,
+                error: 'Document not found',
+                message: `No document found with ID: ${id}`
+            }, 404);
+        }
+        return c.json({
+            success: true,
+            data: unpublishedDocument,
+            message: 'Document unpublished successfully'
+        });
+    }
+    catch (error) {
+        cmsLogger.error('Failed to unpublish document:', error);
+        if (error instanceof PermissionError) {
+            return c.json({ success: false, error: 'Forbidden', message: error.message }, 403);
+        }
+        if (error instanceof RevisionConflictError) {
+            return c.json({
+                success: false,
+                error: 'Conflict',
+                message: error.message,
+                currentRevision: error.currentRevision
+            }, 409);
+        }
+        return c.json({
+            success: false,
+            error: 'Failed to unpublish document',
+            message: error instanceof Error ? error.message : 'Unknown error'
+        }, 500);
+    }
+});

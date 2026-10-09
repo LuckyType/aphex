@@ -1,0 +1,273 @@
+import { Hono } from 'hono';
+import { zValidator } from '@hono/zod-validator';
+import { authToContext } from '../../../local-api/auth-helpers.js';
+import { PermissionError } from '../../../local-api/permissions.js';
+import { SingletonOperationError, DocumentValidationError } from '../../../local-api/collection-api.js';
+import { RevisionConflictError } from '../../../db/interfaces/index.js';
+import { cmsLogger } from '../../../utils/logger.js';
+import { updateDocumentRequest, discardDraftRequest } from '../../../api/schemas/documents.js';
+export const documentsByIdRouter = new Hono()
+    .get('/:id', async (c) => {
+    try {
+        const { localAPI } = c.var.aphexCMS;
+        const context = authToContext(c.var.auth);
+        const id = c.req.param('id');
+        if (!id) {
+            return c.json({ success: false, error: 'Document ID is required' }, 400);
+        }
+        const depthParam = c.req.query('depth');
+        const depth = depthParam ? Math.max(0, Math.min(parseInt(depthParam), 5)) : 0;
+        const perspective = c.req.query('perspective') || 'draft';
+        const result = await localAPI.findDocumentById(context, id);
+        if (!result) {
+            return c.json({ success: false, error: 'Document not found' }, 404);
+        }
+        const collection = localAPI.getCollection(result.type);
+        if (!collection) {
+            return c.json({
+                success: false,
+                error: 'Invalid document type',
+                message: `Collection '${result.type}' not found`
+            }, 400);
+        }
+        const document = await collection.findByID(context, id, { depth, perspective });
+        if (!document) {
+            return c.json({ success: false, error: 'Document not found' }, 404);
+        }
+        return c.json({ success: true, data: document });
+    }
+    catch (error) {
+        cmsLogger.error('Failed to fetch document:', error);
+        if (error instanceof PermissionError) {
+            return c.json({ success: false, error: 'Forbidden', message: error.message }, 403);
+        }
+        return c.json({
+            success: false,
+            error: 'Failed to fetch document',
+            message: error instanceof Error ? error.message : 'Unknown error'
+        }, 500);
+    }
+})
+    .put('/:id', zValidator('json', updateDocumentRequest, (result, c) => {
+    if (!result.success) {
+        return c.json({
+            success: false,
+            error: 'Invalid request body',
+            issues: result.error.issues
+        }, 400);
+    }
+}), async (c) => {
+    try {
+        const { localAPI } = c.var.aphexCMS;
+        const context = authToContext(c.var.auth);
+        const id = c.req.param('id');
+        if (!id) {
+            return c.json({ success: false, error: 'Document ID is required' }, 400);
+        }
+        const parsed = c.req.valid('json');
+        const documentData = parsed.draftData ?? parsed.data;
+        if (!documentData) {
+            return c.json({ success: false, error: 'Document data is required' }, 400);
+        }
+        const shouldPublish = parsed.publish ?? false;
+        const found = await localAPI.findDocumentById(context, id);
+        if (!found) {
+            return c.json({ success: false, error: 'Document not found' }, 404);
+        }
+        const collection = localAPI.getCollection(found.type);
+        if (!collection) {
+            return c.json({
+                success: false,
+                error: 'Invalid document type',
+                message: `Collection '${found.type}' not found`
+            }, 400);
+        }
+        const result = await collection.update(context, id, documentData, {
+            publish: shouldPublish,
+            expectedRevision: parsed.expectedRevision
+        });
+        if (!result) {
+            return c.json({ success: false, error: 'Document not found' }, 404);
+        }
+        return c.json({
+            success: true,
+            data: result.document,
+            validation: result.validation
+        });
+    }
+    catch (error) {
+        cmsLogger.error('Failed to update document:', error);
+        if (error instanceof PermissionError) {
+            return c.json({ success: false, error: 'Forbidden', message: error.message }, 403);
+        }
+        if (error instanceof RevisionConflictError) {
+            return c.json({
+                success: false,
+                error: 'Conflict',
+                message: error.message,
+                currentRevision: error.currentRevision
+            }, 409);
+        }
+        // A malformed payload is the caller's fault, not the server's.
+        if (error instanceof DocumentValidationError) {
+            return c.json({
+                success: false,
+                error: 'Validation failed',
+                message: error.message,
+                issues: error.errors
+            }, 400);
+        }
+        if (error instanceof Error && error.message.includes('validation errors')) {
+            return c.json({ success: false, error: 'Validation failed', message: error.message }, 400);
+        }
+        return c.json({
+            success: false,
+            error: 'Failed to update document',
+            message: error instanceof Error ? error.message : 'Unknown error'
+        }, 500);
+    }
+})
+    // Discard the draft back to the published version.
+    .post('/:id/discard-draft', async (c) => {
+    try {
+        const { localAPI } = c.var.aphexCMS;
+        const context = authToContext(c.var.auth);
+        const id = c.req.param('id');
+        if (!id) {
+            return c.json({ success: false, error: 'Document ID is required' }, 400);
+        }
+        const body = await c.req.json().catch(() => ({}));
+        const parsed = discardDraftRequest.safeParse(body);
+        if (!parsed.success) {
+            return c.json({ success: false, error: 'Invalid request', issues: parsed.error.issues }, 400);
+        }
+        const found = await localAPI.findDocumentById(context, id);
+        if (!found) {
+            return c.json({ success: false, error: 'Document not found' }, 404);
+        }
+        const collection = localAPI.getCollection(found.type);
+        if (!collection) {
+            return c.json({
+                success: false,
+                error: 'Invalid document type',
+                message: `Collection '${found.type}' not found`
+            }, 400);
+        }
+        const raw = found.document;
+        if (raw.status !== 'published' || !raw.publishedData) {
+            return c.json({
+                success: false,
+                error: 'Nothing to discard',
+                message: 'Only a published document has a version to go back to'
+            }, 409);
+        }
+        // `update` merges onto the draft, so a field the draft has and the
+        // published version lacks would survive a plain write of it. Naming every
+        // schema field, `undefined` where the published version has none, makes
+        // the draft equal it. Going through `update` keeps hooks, validation,
+        // reference indexes, the version snapshot and the revision guard of any
+        // draft save.
+        const restored = {};
+        for (const field of collection.schema.fields) {
+            restored[field.name] = raw.publishedData[field.name];
+        }
+        const result = await collection.update(context, id, restored, {
+            expectedRevision: parsed.data.expectedRevision
+        });
+        if (!result) {
+            return c.json({ success: false, error: 'Document not found' }, 404);
+        }
+        return c.json({ success: true, data: result.document, validation: result.validation });
+    }
+    catch (error) {
+        cmsLogger.error('Failed to discard document draft:', error);
+        if (error instanceof PermissionError) {
+            return c.json({ success: false, error: 'Forbidden', message: error.message }, 403);
+        }
+        if (error instanceof RevisionConflictError) {
+            return c.json({
+                success: false,
+                error: 'Conflict',
+                message: error.message,
+                currentRevision: error.currentRevision
+            }, 409);
+        }
+        if (error instanceof DocumentValidationError) {
+            return c.json({
+                success: false,
+                error: 'Validation failed',
+                message: error.message,
+                issues: error.errors
+            }, 400);
+        }
+        return c.json({
+            success: false,
+            error: 'Failed to discard draft',
+            message: error instanceof Error ? error.message : 'Unknown error'
+        }, 500);
+    }
+})
+    .delete('/:id', async (c) => {
+    try {
+        const { localAPI } = c.var.aphexCMS;
+        const context = authToContext(c.var.auth);
+        const id = c.req.param('id');
+        if (!id) {
+            return c.json({ success: false, error: 'Document ID is required' }, 400);
+        }
+        const result = await localAPI.findDocumentById(context, id);
+        if (!result) {
+            return c.json({ success: false, error: 'Document not found' }, 404);
+        }
+        const collection = localAPI.getCollection(result.type);
+        if (!collection) {
+            return c.json({
+                success: false,
+                error: 'Invalid document type',
+                message: `Collection '${result.type}' not found`
+            }, 400);
+        }
+        const success = await collection.delete(context, id);
+        if (!success) {
+            return c.json({ success: false, error: 'Document not found' }, 404);
+        }
+        return c.json({ success: true, message: 'Document deleted successfully' });
+    }
+    catch (error) {
+        cmsLogger.error('Failed to delete document:', error);
+        if (error instanceof PermissionError) {
+            return c.json({ success: false, error: 'Forbidden', message: error.message }, 403);
+        }
+        if (error instanceof SingletonOperationError) {
+            return c.json({ success: false, error: 'Singleton document', message: error.message }, 400);
+        }
+        return c.json({
+            success: false,
+            error: 'Failed to delete document',
+            message: error instanceof Error ? error.message : 'Unknown error'
+        }, 500);
+    }
+})
+    .get('/:id/back-references', async (c) => {
+    try {
+        const { localAPI } = c.var.aphexCMS;
+        const context = authToContext(c.var.auth);
+        const id = c.req.param('id');
+        if (!id) {
+            return c.json({ success: false, error: 'Document ID is required' }, 400);
+        }
+        const refs = await localAPI.getBackReferences(context, id);
+        return c.json({ success: true, data: refs });
+    }
+    catch (error) {
+        cmsLogger.error('Failed to fetch back-references:', error);
+        if (error instanceof PermissionError) {
+            return c.json({ success: false, error: 'Forbidden', message: error.message }, 403);
+        }
+        return c.json({
+            success: false,
+            error: 'Failed to fetch back-references',
+            message: error instanceof Error ? error.message : 'Unknown error'
+        }, 500);
+    }
+});

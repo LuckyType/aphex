@@ -1,0 +1,1 @@
+{"version":3,"file":"instance-state.d.ts","sourceRoot":"","sources":["../../src/lib/auth/instance-state.ts"],"names":[],"mappings":"AAaA,OAAO,KAAK,EAAE,eAAe,EAAE,MAAM,wBAAwB,CAAC;AAE9D;;;;;;;GAOG;AACH,wBAAsB,eAAe,CAAC,EAAE,EAAE,eAAe,GAAG,OAAO,CAAC,OAAO,CAAC,CAI3E;AAED,uGAAuG;AACvG,wBAAgB,6BAA6B,CAAC,EAAE,EAAE,eAAe,GAAG,OAAO,CAE1E"}

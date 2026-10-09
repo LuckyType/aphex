@@ -1,0 +1,403 @@
+// Sanity-style validation Rule implementation
+import dayjs from 'dayjs';
+import customParseFormat from 'dayjs/plugin/customParseFormat.js';
+import { cmsLogger } from '../utils/logger.js';
+// Enable strict parsing
+dayjs.extend(customParseFormat);
+// A canonical ISO-8601 datetime (what `new Date().toISOString()` and most APIs produce) is a
+// valid datetime regardless of a field's display format. The strict format check below is meant
+// for admin-typed input (`YYYY-MM-DD HH:mm`); machine-stamped values — e.g. a `beforeValidate`
+// hook doing `toISOString()` — arrive as ISO-8601 and must also pass. Date + time, optional
+// seconds/fractional seconds, optional `Z` or numeric offset.
+const ISO_8601_DATETIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})?$/;
+function isIso8601DateTime(value) {
+    return ISO_8601_DATETIME.test(value) && !Number.isNaN(Date.parse(value));
+}
+export class Rule {
+    _required = false;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    _rules = [];
+    _level = 'error';
+    _message;
+    static FIELD_REF = Symbol('fieldReference');
+    static valueOfField(path) {
+        return {
+            __fieldReference: true,
+            path
+        };
+    }
+    valueOfField(path) {
+        return Rule.valueOfField(path);
+    }
+    required() {
+        const newRule = this.clone();
+        newRule._required = true;
+        return newRule;
+    }
+    optional() {
+        const newRule = this.clone();
+        newRule._required = false;
+        return newRule;
+    }
+    min(len) {
+        const newRule = this.clone();
+        newRule._rules.push({ type: 'min', constraint: len });
+        return newRule;
+    }
+    max(len) {
+        const newRule = this.clone();
+        newRule._rules.push({ type: 'max', constraint: len });
+        return newRule;
+    }
+    length(len) {
+        const newRule = this.clone();
+        newRule._rules.push({ type: 'length', constraint: len });
+        return newRule;
+    }
+    unique() {
+        const newRule = this.clone();
+        newRule._rules.push({ type: 'unique' });
+        return newRule;
+    }
+    email() {
+        const newRule = this.clone();
+        newRule._rules.push({ type: 'email' });
+        return newRule;
+    }
+    uri(options) {
+        const newRule = this.clone();
+        newRule._rules.push({ type: 'uri', constraint: options });
+        return newRule;
+    }
+    regex(pattern, name) {
+        const newRule = this.clone();
+        newRule._rules.push({ type: 'regex', constraint: { pattern, name } });
+        return newRule;
+    }
+    positive() {
+        const newRule = this.clone();
+        newRule._rules.push({ type: 'positive' });
+        return newRule;
+    }
+    negative() {
+        const newRule = this.clone();
+        newRule._rules.push({ type: 'negative' });
+        return newRule;
+    }
+    integer() {
+        const newRule = this.clone();
+        newRule._rules.push({ type: 'integer' });
+        return newRule;
+    }
+    greaterThan(num) {
+        const newRule = this.clone();
+        newRule._rules.push({ type: 'greaterThan', constraint: num });
+        return newRule;
+    }
+    lessThan(num) {
+        const newRule = this.clone();
+        newRule._rules.push({ type: 'lessThan', constraint: num });
+        return newRule;
+    }
+    date(format) {
+        const newRule = this.clone();
+        newRule._rules.push({ type: 'date', constraint: format || 'YYYY-MM-DD' });
+        return newRule;
+    }
+    datetime(dateFormat, timeFormat) {
+        const newRule = this.clone();
+        const fullFormat = `${dateFormat || 'YYYY-MM-DD'} ${timeFormat || 'HH:mm'}`;
+        newRule._rules.push({ type: 'datetime', constraint: fullFormat });
+        return newRule;
+    }
+    custom(fn) {
+        const newRule = this.clone();
+        newRule._rules.push({ type: 'custom', constraint: fn });
+        return newRule;
+    }
+    error(message) {
+        const newRule = this.clone();
+        newRule._level = 'error';
+        newRule._message = message;
+        return newRule;
+    }
+    warning(message) {
+        const newRule = this.clone();
+        newRule._level = 'warning';
+        newRule._message = message;
+        return newRule;
+    }
+    info(message) {
+        const newRule = this.clone();
+        newRule._level = 'info';
+        newRule._message = message;
+        return newRule;
+    }
+    clone() {
+        const newRule = new Rule();
+        newRule._required = this._required;
+        newRule._rules = [...this._rules];
+        newRule._level = this._level;
+        newRule._message = this._message;
+        return newRule;
+    }
+    async validate(value, context = {}) {
+        const markers = [];
+        // Check required
+        if (this._required && (value === undefined || value === null || value === '')) {
+            markers.push({
+                level: this._level,
+                message: this._message || 'Required',
+                path: context.path
+            });
+        }
+        // If value is empty and not required, skip other validations
+        if (!this._required && (value === undefined || value === null || value === '')) {
+            return markers;
+        }
+        // Run other validations
+        for (const rule of this._rules) {
+            try {
+                const result = await this.validateRule(rule, value, context);
+                if (result) {
+                    markers.push({
+                        level: this._level,
+                        message: this._message || result,
+                        path: context.path
+                    });
+                }
+            }
+            catch (error) {
+                markers.push({
+                    level: 'error',
+                    message: `Validation error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+                    path: context.path
+                });
+            }
+        }
+        return markers;
+    }
+    async validateRule(rule, value, context) {
+        switch (rule.type) {
+            case 'min':
+                if (typeof value === 'string' && value.length < rule.constraint) {
+                    return `Must be at least ${rule.constraint} characters`;
+                }
+                if (typeof value === 'number' && value < rule.constraint) {
+                    return `Must be at least ${rule.constraint}`;
+                }
+                if (Array.isArray(value) && value.length < rule.constraint) {
+                    return `Must have at least ${rule.constraint} item${rule.constraint === 1 ? '' : 's'}`;
+                }
+                break;
+            case 'max':
+                if (typeof value === 'string' && value.length > rule.constraint) {
+                    return `Must be at most ${rule.constraint} characters`;
+                }
+                if (typeof value === 'number' && value > rule.constraint) {
+                    return `Must be at most ${rule.constraint}`;
+                }
+                if (Array.isArray(value) && value.length > rule.constraint) {
+                    return `Must have at most ${rule.constraint} item${rule.constraint === 1 ? '' : 's'}`;
+                }
+                break;
+            case 'length':
+                if (Array.isArray(value) && value.length !== rule.constraint) {
+                    return `Must have exactly ${rule.constraint} item${rule.constraint === 1 ? '' : 's'}`;
+                }
+                if (typeof value === 'string' && value.length !== rule.constraint) {
+                    return `Must be exactly ${rule.constraint} characters`;
+                }
+                break;
+            case 'unique':
+                if (Array.isArray(value)) {
+                    const seen = new Set();
+                    for (const item of value) {
+                        // Deep comparison excluding _key property
+                        const normalized = this.normalizeForComparison(item);
+                        const serialized = JSON.stringify(normalized);
+                        if (seen.has(serialized)) {
+                            return 'All items must be unique';
+                        }
+                        seen.add(serialized);
+                    }
+                }
+                break;
+            case 'email':
+                if (typeof value === 'string' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+                    return 'Must be a valid email address';
+                }
+                break;
+            case 'uri':
+                if (typeof value === 'string') {
+                    const opts = rule.constraint || {};
+                    const schemes = opts.scheme || [/^https?$/];
+                    const allowRelative = opts.allowRelative || false;
+                    const relativeOnly = opts.relativeOnly || false;
+                    // Check if URL is relative (doesn't have a scheme)
+                    const hasScheme = /^[a-z][a-z0-9+.-]*:/i.test(value);
+                    const isProtocolRelative = value.startsWith('//');
+                    if (relativeOnly) {
+                        // Only allow relative URLs
+                        if (hasScheme || isProtocolRelative) {
+                            return 'Must be a relative URL';
+                        }
+                        // Validate it's a reasonable path
+                        if (!value.startsWith('/') &&
+                            !value.startsWith('.') &&
+                            !value.startsWith('#') &&
+                            !value.startsWith('?')) {
+                            return 'Must be a relative URL starting with /, ., #, or ?';
+                        }
+                    }
+                    else if (!hasScheme && !isProtocolRelative) {
+                        // It's a relative URL
+                        if (!allowRelative) {
+                            return 'Must be an absolute URL';
+                        }
+                        // Validate it's a reasonable relative path
+                        if (!value.startsWith('/') &&
+                            !value.startsWith('.') &&
+                            !value.startsWith('#') &&
+                            !value.startsWith('?')) {
+                            return 'Must be a valid relative URL';
+                        }
+                    }
+                    else {
+                        // It's an absolute URL, validate with URL constructor
+                        try {
+                            const url = new URL(value);
+                            // Extract scheme without the trailing colon
+                            const urlScheme = url.protocol.slice(0, -1);
+                            // Check if scheme is allowed
+                            const schemeMatches = schemes.some((s) => s instanceof RegExp ? s.test(urlScheme) : s === urlScheme);
+                            if (!schemeMatches) {
+                                const schemeList = schemes
+                                    .map((s) => (s instanceof RegExp ? s.toString() : s))
+                                    .join(', ');
+                                return `URL scheme must be one of: ${schemeList}`;
+                            }
+                        }
+                        catch {
+                            return 'Must be a valid URL';
+                        }
+                    }
+                }
+                break;
+            case 'regex':
+                if (typeof value === 'string' && !rule.constraint.pattern.test(value)) {
+                    return `Must match pattern${rule.constraint.name ? ` (${rule.constraint.name})` : ''}`;
+                }
+                break;
+            case 'positive':
+                if (typeof value === 'number' && value <= 0) {
+                    return 'Must be positive';
+                }
+                break;
+            case 'negative':
+                if (typeof value === 'number' && value >= 0) {
+                    return 'Must be negative';
+                }
+                break;
+            case 'integer':
+                if (typeof value === 'number' && !Number.isInteger(value)) {
+                    return 'Must be an integer';
+                }
+                break;
+            case 'date': {
+                if (typeof value === 'string') {
+                    const format = rule.constraint || 'YYYY-MM-DD';
+                    cmsLogger.debug('[Rule.validate] DATE validation', { value, format });
+                    // Parse with strict mode
+                    const parsed = dayjs(value, format, true);
+                    cmsLogger.debug('[Rule.validate] DATE parsed', {
+                        isValid: parsed.isValid(),
+                        parsed: parsed.format()
+                    });
+                    if (!parsed.isValid()) {
+                        cmsLogger.debug('[Rule.validate] DATE validation FAILED - invalid format');
+                        return `Invalid date format. Expected: ${format}`;
+                    }
+                    // Verify the parsed date matches the input (catches invalid dates like 2025-02-31)
+                    if (parsed.format(format) !== value) {
+                        cmsLogger.debug('[Rule.validate] DATE validation FAILED - format mismatch', {
+                            expected: value,
+                            got: parsed.format(format)
+                        });
+                        return `Invalid date. Expected format: ${format}`;
+                    }
+                    cmsLogger.debug('[Rule.validate] DATE validation PASSED');
+                }
+                break;
+            }
+            case 'datetime': {
+                if (typeof value === 'string') {
+                    const format = rule.constraint || 'YYYY-MM-DD HH:mm';
+                    cmsLogger.debug('[Rule.validate] DATETIME validation', { value, format });
+                    // A canonical ISO-8601 timestamp (machine-stamped: hooks, APIs) is always valid,
+                    // independent of the field's admin display format.
+                    if (isIso8601DateTime(value)) {
+                        cmsLogger.debug('[Rule.validate] DATETIME validation PASSED (ISO-8601)');
+                        break;
+                    }
+                    // Parse with strict mode
+                    const parsed = dayjs(value, format, true);
+                    cmsLogger.debug('[Rule.validate] DATETIME parsed', {
+                        isValid: parsed.isValid(),
+                        parsed: parsed.format()
+                    });
+                    if (!parsed.isValid()) {
+                        cmsLogger.debug('[Rule.validate] DATETIME validation FAILED - invalid format');
+                        return `Invalid datetime format. Expected: ${format}`;
+                    }
+                    // Verify the parsed datetime matches the input (catches invalid dates like 2025-02-31 23:59)
+                    if (parsed.format(format) !== value) {
+                        cmsLogger.debug('[Rule.validate] DATETIME validation FAILED - format mismatch', {
+                            expected: value,
+                            got: parsed.format(format)
+                        });
+                        return `Invalid datetime. Expected format: ${format}`;
+                    }
+                    cmsLogger.debug('[Rule.validate] DATETIME validation PASSED');
+                }
+                break;
+            }
+            case 'custom': {
+                const customResult = await rule.constraint(value, context);
+                if (customResult === false) {
+                    return 'Validation failed';
+                }
+                if (typeof customResult === 'string') {
+                    return customResult;
+                }
+                if (Array.isArray(customResult) && customResult.length > 0) {
+                    return customResult[0].message;
+                }
+                break;
+            }
+        }
+        return null;
+    }
+    isRequired() {
+        return this._required;
+    }
+    // Helper method to normalize objects for comparison (exclude _key)
+    normalizeForComparison(value) {
+        if (value === null || value === undefined) {
+            return value;
+        }
+        if (Array.isArray(value)) {
+            return value.map((item) => this.normalizeForComparison(item));
+        }
+        if (typeof value === 'object') {
+            const normalized = {};
+            for (const [key, val] of Object.entries(value)) {
+                if (key !== '_key') {
+                    normalized[key] = this.normalizeForComparison(val);
+                }
+            }
+            return normalized;
+        }
+        return value;
+    }
+}

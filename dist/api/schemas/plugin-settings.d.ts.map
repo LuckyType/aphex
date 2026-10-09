@@ -1,0 +1,1 @@
+{"version":3,"file":"plugin-settings.d.ts","sourceRoot":"","sources":["../../../src/lib/api/schemas/plugin-settings.ts"],"names":[],"mappings":"AAAA,OAAO,EAAE,CAAC,EAAE,MAAM,KAAK,CAAC;AAMxB,eAAO,MAAM,yBAAyB;;iBAEpC,CAAC;AAEH,MAAM,MAAM,yBAAyB,GAAG,CAAC,CAAC,KAAK,CAAC,OAAO,yBAAyB,CAAC,CAAC"}

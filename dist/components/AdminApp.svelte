@@ -1,0 +1,2207 @@
+<script lang="ts">
+	import * as i18n from '../i18n/index';
+	import { studioExtensions } from '../studio-extensions';
+	/**
+	 * AdminApp - Complete CMS Admin Interface
+	 * A packaged, reusable Sanity-style admin UI
+	 */
+	import { Alert, AlertDescription, AlertTitle } from '@aphexcms/ui/shadcn/alert';
+	import { Button } from '@aphexcms/ui/shadcn/button';
+	import { Input } from '@aphexcms/ui/shadcn/input';
+	import { useSidebar } from '@aphexcms/ui/shadcn/sidebar';
+	import * as Tabs from '@aphexcms/ui/shadcn/tabs';
+	import * as Popover from '@aphexcms/ui/shadcn/popover';
+	import * as Select from '@aphexcms/ui/shadcn/select';
+	import { page } from '$app/state';
+	import { goto } from '$app/navigation';
+	import { SvelteURLSearchParams } from 'svelte/reactivity';
+	import type { SchemaType } from '../types/index';
+	import type { CMSPlugin, AdminToolProps } from '../plugins/types';
+	import { createPartResolver } from '../plugins/resolver';
+	import type { AdminArea } from '../admin/types';
+	import { setAdminNav } from '../admin/nav.svelte';
+	import type { Component } from 'svelte';
+	import { tick } from 'svelte';
+	import { setFieldComponents } from '../admin/field-components.svelte';
+	import { setBlockPreviews, type BlockPreviewProps } from '../admin/block-previews.svelte';
+	import AdminSlot from './admin/AdminSlot.svelte';
+	import type { UserSessionPreferences } from '../types/organization';
+	import { resolvePreviewTitle, resolvePreviewSubtitle } from '../utils/preview';
+	import DocumentEditor from './admin/DocumentEditor.svelte';
+	import DocumentVersionPanel from './admin/DocumentVersionPanel.svelte';
+	import DocumentsSkeleton from './admin/DocumentsSkeleton.svelte';
+	import MediaBrowser from './admin/MediaBrowser.svelte';
+	import ConfirmDialogHost from './admin/confirm-dialog/ConfirmDialogHost.svelte';
+	import { documents, organizations } from '../api/index';
+	import { getCollectionVersion } from '../document-refresh.svelte';
+	import {
+		FileText,
+		Ellipsis,
+		ArrowDownAZ,
+		ArrowUpZA,
+		ArrowDown01,
+		ArrowUp10,
+		ArrowDownUp,
+		ChevronLeft,
+		ChevronRight,
+		Plus,
+		Search,
+		X
+	} from '@lucide/svelte';
+	import type { Organization } from '../types/organization';
+	import { getOrderingsForSchema } from '../utils/default-orderings';
+	import { cmsLogger } from '../utils/logger';
+	import { pluralize as __cmsPluralize } from '../utils/pluralize';
+	const pluralize = (title: string) => i18n.plural(title, __cmsPluralize);
+	import { toast } from 'svelte-sonner';
+	import { setPermissionsContext } from '../permissions-context.svelte';
+
+	interface Props {
+		schemas: SchemaType[];
+		documentTypes: Array<{ name: string; title: string; description?: string }>;
+		schemaError?: { message: string } | null;
+		title?: string;
+		tabTitle?: string;
+		graphqlSettings?: { endpoint: string; enableGraphiQL: boolean } | null;
+		isReadOnly?: boolean;
+		/**
+		 * Capabilities resolved for the current session. Used for per-action UI
+		 * gating. When absent, all actions are shown and the server remains the
+		 * enforcement surface.
+		 */
+		capabilities?: string[];
+		/** Effective organization role name, for role-list style checks. */
+		rbacRole?: string | null;
+		activeTab?: { value: AdminArea };
+		handleTabChange: (value: string) => void;
+		userPreferences?: UserSessionPreferences | null;
+		/**
+		 * Build-time plugins, imported client-side (component parts can't cross
+		 * SvelteKit `load`). Their document-action parts render in the editor toolbar.
+		 */
+		plugins?: CMSPlugin[];
+		/**
+		 * Inline editor previews for custom rich-text block types, keyed by `_type`.
+		 * Without one, a block renders as a generic card (title/subtitle from its
+		 * `preview` config); with one, the real block renders inline as you write.
+		 * App-owned on purpose — the app owns presentation.
+		 */
+		blockPreviews?: Record<string, Component<BlockPreviewProps>>;
+	}
+
+	let {
+		schemas: appSchemas,
+		documentTypes: documentTypesFromServer,
+		schemaError = null,
+		title = 'Aphex CMS',
+		tabTitle = undefined,
+		graphqlSettings = null,
+		isReadOnly = false,
+		capabilities = [],
+		rbacRole = null,
+		activeTab = { value: 'structure' } as { value: AdminArea },
+		handleTabChange = () => {},
+		userPreferences = null,
+		plugins = [],
+		blockPreviews = {}
+	}: Props = $props();
+
+	// One resolver over the (client-side) plugins, reused for every part kind.
+	const partResolver = $derived(createPartResolver(plugins));
+
+	// Plugin-inclusive schema list: app schemas plus any `aphex/schema` parts, then
+	// any `aphex/schema/transform` parts applied — the same pipeline the server engine
+	// runs in createCMSConfig, so the editor and the engine agree. The plugins are
+	// already client-side here (we hold them for component parts), so the admin
+	// resolves this itself — no app wiring. Everything downstream references `schemas`.
+	const schemas = $derived(
+		partResolver.applySchemaTransforms([...appSchemas, ...partResolver.schemaTypes()])
+	);
+
+	// Publish plugin field-input widgets so SchemaField can swap them in for a
+	// field's `input` key (falling back to the built-in renderer).
+	setFieldComponents((input) => partResolver.fieldComponent(input)?.component);
+	// Inline block previews come from the app (presentation is app-owned).
+	setBlockPreviews((type) => blockPreviews[type]);
+
+	// Plane-split guard: a plugin's `aphex/schema` document types must also reach the
+	// server engine (register the plugin in aphex.config). If one is present on the
+	// client but absent from the server's document-type list, the editor would render
+	// a type the engine can't validate or persist — warn loudly in dev.
+	$effect(() => {
+		const serverTypes = new Set(documentTypesFromServer.map((t) => t.name));
+		for (const s of partResolver.schemaTypes()) {
+			if (s.type === 'document' && !serverTypes.has(s.name)) {
+				cmsLogger.warn(
+					'[plugins]',
+					`Schema type "${s.name}" is contributed by a plugin on the client, but the server ` +
+						`engine doesn't know it. Register the plugin in aphex.config.ts (plugins: [...]) too, ` +
+						`or documents of this type can't be validated or saved.`
+				);
+			}
+		}
+	});
+
+	// Publish capabilities to every descendant (DocumentEditor, fields, etc)
+	// via Svelte context. Using a getter closure so prop reactivity propagates:
+	// if the parent swaps the capabilities array (e.g. role change mid-session)
+	// every `perms.can()` call in the subtree picks it up on next read.
+	const perms = setPermissionsContext(
+		() => capabilities,
+		() => rbacRole
+	);
+
+	// Plugin admin tools contributed by plugins. Capability-gated (privileged roles
+	// bypass). Each becomes a `plugin:<id>` area. `placement` decides where the
+	// trigger renders: `'tab'` (default) in the top tab strip, `'sidebar'` in the
+	// left sidebar nav — the latter keeps the tab strip short once several plugins
+	// are installed.
+	const adminTools = $derived(
+		partResolver.adminTools({
+			capabilities: [...capabilities],
+			overrideAccess: rbacRole === 'super_admin' || rbacRole === 'admin'
+		})
+	);
+	// Tab-placed tools render into the top strip here; sidebar-placed tools are
+	// rendered by AppSidebar from the plugin list (persistent across admin pages).
+	const tabTools = $derived(adminTools.filter((t) => (t.placement ?? 'tab') === 'tab'));
+	// Centralized admin URL navigation — intents own which params they set/clear.
+	// Published to descendants (editor, plugin tools) so they navigate the same way.
+	const nav = setAdminNav();
+
+	function openAdminTool(id: string) {
+		activeTab.value = `plugin:${id}`;
+		nav.openArea(`plugin:${id}`);
+	}
+
+	// Keep a state of the organization id
+	let currentOrgId = $state<string | null>(page.url.searchParams.get('orgId'));
+
+	// Stable context handed to every plugin admin-tool component.
+	const adminToolContext = $derived<AdminToolProps>({
+		organizationId: currentOrgId,
+		capabilities,
+		role: rbacRole,
+		can: (capability) =>
+			rbacRole === 'super_admin' || rbacRole === 'admin' || capabilities.includes(capability),
+		schemas,
+		navigate: (area) => {
+			activeTab.value = area;
+		},
+		openDocument: (documentType, documentId) => {
+			// Guard: without a type the editor can't resolve a schema ("No schema found").
+			if (!documentType || !documentId) {
+				cmsLogger.warn('[AdminApp]', 'openDocument called without type/id', {
+					documentType,
+					documentId
+				});
+				return;
+			}
+			// The editor lives in the structure area — switch to it first (like
+			// navigateToDocumentType does) so opening a doc from a plugin tab actually
+			// shows the editor instead of leaving state stranded on the plugin tab.
+			if (activeTab.value !== 'structure') handleTabChange('structure');
+			navigateToEditDocument(documentId, documentType);
+		}
+	});
+
+	// Merge document types with schema icons (schemas have icons, server data doesn't),
+	// then filter out any schemas the caller can't read. Mirrors the server check:
+	// an `access.read` list on a schema is an allowlist of role names (built-in
+	// or custom); absence of a list means "whoever can read documents at all".
+	const documentTypes = $derived(
+		documentTypesFromServer
+			.map((docType) => {
+				const schema = schemas.find((s) => s.name === docType.name);
+				return {
+					...docType,
+					icon: schema?.icon,
+					group: schema?.group,
+					access: schema?.access,
+					singleton: schema?.singleton ?? false
+				};
+			})
+			.filter((docType) => {
+				const readList = docType.access?.read;
+				if (!readList) return true; // no list = open to any reader
+				// Functions (policy-based access) can't be evaluated on the client
+				// without a target doc — show them and let the server enforce.
+				if (typeof readList === 'function') return true;
+				const role = perms.role;
+				return role !== null && readList.includes(role);
+			})
+	);
+
+	const hasDocumentTypes = $derived(documentTypes.length > 0);
+
+	// Bucket document types by their `group` property. Ungrouped types sit in a
+	// leading null bucket; named groups follow in first-seen order.
+	const groupedDocumentTypes = $derived.by(() => {
+		const buckets = new Map<string | null, typeof documentTypes>();
+		buckets.set(null, []);
+		for (const dt of documentTypes) {
+			const key = dt.group ?? null;
+			if (!buckets.has(key)) buckets.set(key, []);
+			buckets.get(key)!.push(dt);
+		}
+		return Array.from(buckets.entries())
+			.filter(([, items]) => items.length > 0)
+			.map(([name, items]) => ({ name, items }));
+	});
+
+	// Client-side routing state
+	let currentView = $state<'dashboard' | 'documents' | 'editor'>('dashboard');
+	let selectedDocumentType = $state<string | null>(null);
+
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	let documentsList = $state<any[]>([]);
+	let loading = $state(false);
+	let error = $state<string | null>(null);
+
+	// Pagination state
+	let docCurrentPage = $state(1);
+	let docTotalPages = $state(1);
+	let docTotalDocs = $state(0);
+	let docPageSize = $state(20);
+	const PAGE_SIZE_OPTIONS = [20, 50, 100] as const;
+	let docSearchQuery = $state('');
+	let docSearchOpen = $state(false);
+	let docSearchInputEl = $state<HTMLInputElement | null>(null);
+	let docSearchTimeout: ReturnType<typeof setTimeout>;
+
+	function toggleDocSearch() {
+		if (docSearchOpen) {
+			docSearchOpen = false;
+			if (docSearchQuery) handleDocSearchInput('');
+		} else {
+			docSearchOpen = true;
+			tick().then(() => docSearchInputEl?.focus());
+		}
+	}
+
+	// Organizations lookup map for displaying org names
+	let organizationsMap = $state<Map<string, Organization>>(new Map());
+
+	// Mobile navigation state (Sanity-style)
+	let mobileView = $state<'types' | 'documents' | 'editor'>('types');
+
+	// Window size reactivity — default to mobile-safe width for SSR,
+	// immediately overwritten on mount.
+	let windowWidth = $state(typeof window !== 'undefined' ? window.innerWidth : 375);
+
+	// Document editor state (moved before layoutConfig)
+	let editingDocumentId = $state<string | null>(null);
+	let isCreatingDocument = $state(false);
+
+	// Focus mode — when on, the editor takes the full admin panel.
+	// Side panels (types sidebar + documents list) collapse to hidden, the
+	// existing mobile breadcrumb is reused as a navigation strip, and the
+	// URL gets `?focus=1` so refresh keeps you in focus mode. Esc exits.
+	let focusModeOn = $state(false);
+
+	function toggleFocusMode() {
+		focusModeOn = !focusModeOn;
+		nav.patch({ focus: focusModeOn ? '1' : null });
+	}
+
+	function exitFocusMode() {
+		if (!focusModeOn) return;
+		focusModeOn = false;
+		nav.patch({ focus: null });
+	}
+
+	// Sync focus state from URL — covers refresh, deep links, back button.
+	$effect(() => {
+		const urlFocus = page.url.searchParams.get('focus') === '1';
+		if (urlFocus !== focusModeOn) {
+			focusModeOn = urlFocus;
+		}
+	});
+
+	// Presentation mode — side panels collapse and the editor splits with a
+	// live preview iframe. Independent from focus mode; Esc also exits.
+	let presentationModeOn = $state(false);
+
+	// Sidebar context (set by the SidebarProvider ancestor). Used to reclaim screen
+	// real estate for the preview canvas when presentation mode opens.
+	const sidebar = useSidebar();
+
+	function togglePresentationMode() {
+		presentationModeOn = !presentationModeOn;
+		// Entering presentation mode: collapse the nav rail so the preview gets the room.
+		if (presentationModeOn) sidebar?.setOpen(false);
+	}
+
+	function exitPresentationMode() {
+		presentationModeOn = false;
+	}
+
+	// Both modes hide the side panels and only make sense with an editor open.
+	// Leaving the editor through anything other than the back button (e.g. the
+	// sidebar "Studio" link keeps this component mounted while navigating to the
+	// structure view) must also exit them — otherwise the structure view renders
+	// with every panel hidden: a blank page.
+	$effect(() => {
+		if (currentView !== 'editor') {
+			if (presentationModeOn) presentationModeOn = false;
+			if (focusModeOn) focusModeOn = false;
+		}
+	});
+
+	// Esc to exit focus mode.
+	$effect(() => {
+		if (typeof window === 'undefined') return;
+		const handler = (e: KeyboardEvent) => {
+			if (e.key === 'Escape' && presentationModeOn) {
+				exitPresentationMode();
+			}
+			if (e.key === 'Escape' && focusModeOn) {
+				exitFocusMode();
+			}
+		};
+		window.addEventListener('keydown', handler);
+		return () => window.removeEventListener('keydown', handler);
+	});
+
+	// Version history panel state
+	let showVersionPanel = $state(false);
+	let versionPanelDocId = $state<string | null>(null);
+	let versionPreviewData = $state<{
+		versionNumber: number;
+		data: Record<string, any>;
+		eventType: string;
+	} | null>(null);
+
+	// Documents list sorting state
+	let sortDropdownOpen = $state(false);
+	let currentSortName = $state<string>('updatedAtDesc'); // Default to "Last Edited"
+
+	// Derive available orderings from current schema
+	const availableOrderings = $derived.by(() => {
+		if (!selectedDocumentType) return [];
+		const schema = schemas.find((s) => s.name === selectedDocumentType);
+		if (!schema) return [];
+		return getOrderingsForSchema(schema);
+	});
+
+	// Get current ordering object (or derive it from currentSortName)
+	const currentOrdering = $derived.by(() => {
+		// First try to find it in availableOrderings
+		let ordering = availableOrderings.find((o) => o.name === currentSortName);
+
+		// If not found (e.g., it's an Asc version we created dynamically), derive it
+		if (!ordering && currentSortName) {
+			const isAsc = currentSortName.endsWith('Asc');
+			const baseName = currentSortName.replace('Desc', '').replace('Asc', '');
+			const descVersion = availableOrderings.find((o) => o.name === `${baseName}Desc`);
+
+			if (descVersion && isAsc) {
+				// Create asc version dynamically
+				ordering = {
+					...descVersion,
+					name: currentSortName,
+					by: descVersion.by.map((rule) => ({ ...rule, direction: 'asc' as const }))
+				};
+			}
+		}
+
+		return ordering || availableOrderings[0];
+	});
+
+	// Build sort string for API
+	// Single field: 'title' (ascending) or '-publishedAt' (descending)
+	// Multiple fields: ['title', '-publishedAt']
+	const sortString = $derived.by(() => {
+		if (!currentOrdering) return undefined;
+		const sortFields = currentOrdering.by.map((rule) =>
+			rule.direction === 'desc' ? `-${rule.field}` : rule.field
+		);
+		// Return array for multiple fields, string for single field
+		return sortFields.length === 1 ? sortFields[0] : sortFields;
+	});
+
+	// Editor stack for nested references
+	interface EditorStackItem {
+		documentId: string;
+		documentType: string;
+		isCreating: boolean;
+	}
+	let editorStack = $state<EditorStackItem[]>([]);
+
+	// Bumped to ask the base (primary) editor's preview to re-fetch — e.g. after a
+	// referenced doc autosaves, so the base preview reflects the change.
+	let baseRefreshToken = $state(0);
+
+	// Human label for a document type: the schema's `title` (e.g. "Blog Post"),
+	// falling back to a prettified name so `blog_post` never surfaces as "Blog_post".
+	function typeLabel(name: string | null | undefined): string {
+		if (!name) return '';
+		const title = schemas.find((s) => s.name === name)?.title;
+		return title ?? name.charAt(0).toUpperCase() + name.slice(1).replace(/_/g, ' ');
+	}
+
+	// Track which editor is currently active/focused (0 = primary, 1+ = stacked)
+	let activeEditorIndex = $state<number>(0);
+
+	// Layout: editors take precedence. When space is tight, panels collapse
+	// to 60px strips — types first, then the docs list.
+	const MIN_EDITOR_WIDTH = 650;
+	const COLLAPSED_WIDTH = 60;
+	const TYPES_WIDTH = 350;
+	const DOCS_WIDTH = 350;
+	const VERSION_PANEL_WIDTH = 280;
+
+	/**
+	 * Width actually available to the panes, measured from the pane container.
+	 *
+	 * Not `window.innerWidth`: the app sidebar sits outside this container and is
+	 * itself collapsible, so the window is wider than the panes ever get. Feeding
+	 * the window width to the collapse math below made it believe there was
+	 * ~260px more room than existed, so the panels never collapsed and the editor
+	 * was squeezed instead. Measuring is also stable — the container is `flex-1`
+	 * off the sidebar, so its width doesn't depend on the panes inside it.
+	 */
+	let contentWidth = $state(0);
+
+	let layoutConfig = $derived.by(() => {
+		// A stacked reference counts as a second editor *only when it is a real
+		// column*. In presentation mode it isn't — it renders as an `absolute`
+		// overlay **inside** the primary editor's container so the live preview
+		// stays visible behind it. Counting it here made the two compete for the
+		// same width, and opening the version panel (which subtracts 280px below)
+		// was enough to push `maxEditors` to 1. The expanded slot then went to the
+		// stacked editor, index 0 collapsed, and its container picked up `hidden` —
+		// taking the overlay nested inside it along with it. Both editors vanished
+		// and the version panel was left alone on the left of the row.
+		const stackIsOwnColumn = editorStack.length > 0 && !presentationModeOn;
+		const totalEditors = (currentView === 'editor' ? 1 : 0) + (stackIsOwnColumn ? 1 : 0);
+
+		if (totalEditors === 0) {
+			return {
+				totalEditors: 0,
+				expandedCount: 0,
+				collapsedCount: 0,
+				typesCollapsed: false,
+				docsCollapsed: false,
+				expandedIndices: [] as number[],
+				activeIndex: activeEditorIndex,
+				typesExpanded: true,
+				docsExpanded: true
+			};
+		}
+
+		const validActiveIndex =
+			activeEditorIndex < 0
+				? activeEditorIndex
+				: Math.max(0, Math.min(activeEditorIndex, totalEditors - 1));
+
+		const hasDocs = !!selectedDocumentType && !currentTypeIsSingleton;
+		const typesActive = activeEditorIndex === -1;
+		const docsActive = activeEditorIndex === -2;
+
+		// Two editors open → always collapse both panels to maximize editing space
+		// Unless user explicitly clicked a collapsed strip to expand it
+		let typesExpanded = typesActive || totalEditors < 2;
+		let docsExpanded = docsActive || totalEditors < 2;
+
+		// Everything competing with the editor for horizontal space. The version
+		// panel is a sibling of the editor inside this container, so it has to be
+		// subtracted too — leaving it out is what let a 280px panel open on top of
+		// an editor that was already at its minimum.
+		const available = (contentWidth || windowWidth) - (showVersionPanel ? VERSION_PANEL_WIDTH : 0);
+
+		let panelsWidth =
+			(typesExpanded ? TYPES_WIDTH : COLLAPSED_WIDTH) +
+			(hasDocs ? (docsExpanded ? DOCS_WIDTH : COLLAPSED_WIDTH) : 0);
+		let editorSpace = available - panelsWidth;
+		let maxEditors = Math.floor(editorSpace / MIN_EDITOR_WIDTH);
+
+		// Reclaim space for the editor by collapsing the list panels. An open editor
+		// is never the thing that gives way — a list losing 290px is recoverable in
+		// one click, an editor squeezed under its minimum is unusable.
+		//
+		// Types goes first, then docs. Not depth order, which would take docs first:
+		// depth is about how you got here, and what matters is what you still need
+		// once you're here. While editing, the type list is the pane you're least
+		// likely to want — you already know what you're editing, and switching type
+		// is a rarer move than switching between documents of the same type, which
+		// is the docs list's entire job. Collapsing the sibling list first to keep a
+		// list of types you aren't using has it backwards.
+		//
+		// A panel the user explicitly expanded (by clicking its collapsed strip) is
+		// never collapsed — an explicit click has to take effect. Collapsing it
+		// back in the same derivation is indistinguishable from the click doing
+		// nothing. If the editor then has no room, it becomes a strip instead and
+		// one click swaps them back; every pane stays reachable.
+		const reclaim = (collapseTypes: boolean, collapseDocs: boolean) => {
+			if (maxEditors >= 1) return;
+			if (collapseDocs && hasDocs) docsExpanded = false;
+			if (collapseTypes) typesExpanded = false;
+			panelsWidth =
+				(typesExpanded ? TYPES_WIDTH : COLLAPSED_WIDTH) +
+				(hasDocs ? (docsExpanded ? DOCS_WIDTH : COLLAPSED_WIDTH) : 0);
+			editorSpace = available - panelsWidth;
+			maxEditors = Math.floor(editorSpace / MIN_EDITOR_WIDTH);
+		};
+
+		if (totalEditors >= 1) {
+			reclaim(!typesActive, false); // types, unless the user just opened it
+			reclaim(false, !docsActive); // then docs, unless the user just opened it
+
+			// Neither list was explicitly opened, so there is no click to honour —
+			// collapse them regardless rather than leave the editor unusable.
+			if (!typesActive && !docsActive) {
+				reclaim(true, false);
+				reclaim(false, true);
+			}
+		}
+
+		// MIN_EDITOR_WIDTH is what the editor *wants*, not a floor it must clear to
+		// be shown. If the lists couldn't be collapsed any further (the user
+		// explicitly opened one), the editor simply takes what's left — a narrow
+		// editor still beats a 60px strip sitting next to unused space.
+		if (maxEditors < 1) maxEditors = 1;
+
+		// Build expanded editor indices, prioritizing active + most recent.
+		// A negative `validActiveIndex` means a *list* panel holds focus (-1 types,
+		// -2 docs), not an editor. Seeding the array with it left no editor in the
+		// expanded set at all, so clicking the document list collapsed the open
+		// editor to a 60px strip. Focus and space priority are separate concerns:
+		// fall back to the deepest editor so one is always expanded.
+		const primaryIndex = validActiveIndex >= 0 ? validActiveIndex : totalEditors - 1;
+		let expandedIndices: number[] = [primaryIndex];
+		if (maxEditors > 1) {
+			for (let i = totalEditors - 1; i >= 0 && expandedIndices.length < maxEditors; i--) {
+				if (i !== primaryIndex) expandedIndices.push(i);
+			}
+		}
+
+		return {
+			totalEditors,
+			expandedCount: expandedIndices.length,
+			collapsedCount: totalEditors - expandedIndices.length,
+			typesCollapsed: !typesExpanded,
+			docsCollapsed: !docsExpanded,
+			expandedIndices,
+			activeIndex: validActiveIndex,
+			typesExpanded,
+			docsExpanded
+		};
+	});
+
+	// Pane widths: both lists are fixed (350px expanded, 60px collapsed) and never
+	// flex. Only the editor absorbs leftover width — it is the one pane that reads
+	// better wide, whereas a list stretched across 700px is mostly whitespace. With
+	// no document open the lists simply sit at their natural width and the space to
+	// the right stays empty.
+	let typesPanel = $derived.by(() => {
+		// Focus/presentation mode hides the types sidebar so the editor takes full width.
+		if (focusModeOn || presentationModeOn) return 'hidden';
+
+		if (windowWidth < 620) {
+			return mobileView === 'types' ? 'w-full' : 'hidden';
+		}
+
+		// A space with a single type needs no types column beside its list.
+		if (documentTypes.length === 1 && selectedDocumentType === documentTypes[0]?.name) {
+			return 'hidden';
+		}
+
+		return layoutConfig.typesExpanded ? 'w-[350px]' : 'w-[60px]';
+	});
+
+	// True when the user is currently looking at a singleton-flagged doc type.
+	// Drives layout adjustments — singletons skip the document-list panel
+	// entirely and just show types-sidebar + editor.
+	const currentTypeIsSingleton = $derived(
+		!!selectedDocumentType &&
+			(schemas.find((s) => s.name === selectedDocumentType)?.singleton ?? false)
+	);
+
+	let documentsPanelState = $derived.by(() => {
+		if (focusModeOn || presentationModeOn) return { visible: false, width: 'none' };
+		if (currentTypeIsSingleton) return { visible: false, width: 'none' };
+		if (windowWidth < 620) {
+			const state = { visible: mobileView === 'documents', width: 'full' };
+			cmsLogger.debug('[Mobile Documents Panel]', { windowWidth, mobileView, state });
+			return state;
+		}
+		if (!selectedDocumentType) return { visible: false, width: 'none' };
+
+		const width = layoutConfig.docsExpanded ? 'normal' : 'compact';
+		return { visible: true, width };
+	});
+
+	let primaryEditorState = $derived.by(() => {
+		if (windowWidth < 620) {
+			return { visible: mobileView === 'editor', expanded: true };
+		}
+
+		if (currentView !== 'editor') return { visible: false, expanded: false };
+
+		// In focus mode, only the active editor shows — if active is a stacked
+		// editor, the primary hides.
+		if (focusModeOn && activeEditorIndex !== 0) {
+			return { visible: true, expanded: false };
+		}
+
+		const primaryIndex = 0;
+		const isExpanded = layoutConfig.expandedIndices.includes(primaryIndex);
+
+		return { visible: true, expanded: isExpanded };
+	});
+
+	// Update window width on resize
+	$effect(() => {
+		if (typeof window !== 'undefined') {
+			windowWidth = window.innerWidth;
+			const handleResize = () => {
+				windowWidth = window.innerWidth;
+			};
+			window.addEventListener('resize', handleResize);
+			return () => window.removeEventListener('resize', handleResize);
+		}
+	});
+
+	// Fetch organizations for lookup (when viewing multi-org documents)
+	$effect(() => {
+		// Re-fetch when includeChildOrganizations changes
+		// const _includeChildren = userPreferences?.includeChildOrganizations;
+
+		async function fetchOrganizations() {
+			try {
+				const result = await organizations.list();
+				if (result.success && result.data) {
+					const map = new Map<string, Organization>();
+					result.data.forEach((org) => {
+						map.set(org.id, org);
+					});
+					organizationsMap = map;
+				}
+			} catch {
+				toast.error(i18n.t('Failed to fetch organizations'));
+			}
+		}
+
+		fetchOrganizations();
+	});
+
+	/**
+	 * A URL naming an asset should land on the media area.
+	 *
+	 * One-shot, on the initial URL only. Reacting to the param on every change
+	 * would drag the user back to media whenever they navigated away with an
+	 * `assetId` still in the query — and the param stays until the detail panel
+	 * is closed, so that is the common case, not the edge one.
+	 */
+	let appliedInitialAssetId = false;
+	$effect(() => {
+		if (appliedInitialAssetId) return;
+		appliedInitialAssetId = true;
+		if (page.url.searchParams.get('assetId') && activeTab.value !== 'media') {
+			handleTabChange('media');
+		}
+	});
+
+	// Watch URL params for bookmarkable navigation
+	$effect(() => {
+		const url = page.url;
+		const docType = url.searchParams.get('docType');
+		const action = url.searchParams.get('action');
+		const docId = url.searchParams.get('docId');
+		const stackParam = url.searchParams.get('stack');
+		const historyParam = url.searchParams.get('history');
+
+		cmsLogger.debug('[URL Effect]', 'Params:', {
+			docType,
+			action,
+			docId,
+			stackParam,
+			fullURL: url.toString()
+		});
+
+		if (action === 'create' && docType) {
+			cmsLogger.debug('[URL Effect]', 'Branch: CREATE');
+			currentView = 'editor';
+			mobileView = 'editor';
+			isCreatingDocument = true;
+			editingDocumentId = null;
+			editorStack = [];
+			if (selectedDocumentType !== docType) {
+				docCurrentPage = 1;
+				docSearchQuery = '';
+				selectedDocumentType = docType;
+				fetchDocuments(docType);
+			}
+			// Note: no fallback refetch when docsList is empty — empty is a valid
+			// steady state (type has no records). fetchDocuments reassigns the
+			// list (new identity), which retriggers this effect; any "refetch if
+			// empty" guard loops forever. If you need a manual refresh, use a
+			// button, not an effect.
+		} else if (docId) {
+			cmsLogger.debug('[URL Effect]', 'Branch: EDIT (docId)');
+			currentView = 'editor';
+			mobileView = 'editor';
+			editingDocumentId = docId;
+			isCreatingDocument = false;
+
+			// Parse stack param to restore stacked editors
+			if (stackParam) {
+				const stackItems = stackParam.split(',').map((item) => {
+					const [type, id] = item.split(':');
+					return { documentType: type, documentId: id, isCreating: false };
+				}) as EditorStackItem[];
+
+				// Only update stack and activeEditorIndex if the stack actually changed
+				const stackChanged =
+					editorStack.length !== stackItems.length ||
+					editorStack.some(
+						(item, i) =>
+							item.documentId !== stackItems[i]?.documentId ||
+							item.documentType !== stackItems[i]?.documentType
+					);
+
+				if (stackChanged) {
+					cmsLogger.debug(
+						'[AdminApp]',
+						'Stack changed, updating editorStack and activeEditorIndex'
+					);
+					editorStack = stackItems;
+					// Set active editor to the last stacked editor
+					activeEditorIndex = stackItems.length; // 0 = primary, so stackItems.length is the last stacked editor
+				}
+			} else {
+				// Only reset if there was a stack before
+				if (editorStack.length > 0) {
+					editorStack = [];
+					activeEditorIndex = 0; // Primary editor is active
+				}
+			}
+
+			// Restore version history panel from URL.
+			//
+			// Retarget on every navigation, not only when the panel is closed. The
+			// `history=1` param survives switching documents, so a panel opened on
+			// document A stayed pinned to A while the editor moved to B — the version
+			// list was wrong and Restore would have written to the document the user
+			// was no longer looking at. Any preview of A's content is dropped too.
+			if (historyParam === '1') {
+				const targetDocId = stackParam
+					? (editorStack[editorStack.length - 1]?.documentId ?? docId)
+					: docId;
+				if (!showVersionPanel || versionPanelDocId !== targetDocId) {
+					showVersionPanel = true;
+					versionPanelDocId = targetDocId;
+					versionPreviewData = null;
+				}
+			} else if (!historyParam && showVersionPanel) {
+				showVersionPanel = false;
+				versionPanelDocId = null;
+				versionPreviewData = null;
+			}
+
+			if (docType) {
+				if (selectedDocumentType !== docType) {
+					selectedDocumentType = docType;
+					fetchDocuments(docType);
+				}
+			} else {
+				fetchDocumentForEditing(docId);
+			}
+		} else if (docType) {
+			cmsLogger.debug('[URL Effect]', 'Branch: DOCUMENTS (docType only)');
+			// Singletons never render the list — bounce straight to the editor.
+			// Covers direct URLs, refresh, back-button — anything that lands on
+			// `?docType=<singleton>` without a docId.
+			const docTypeSchema = schemas.find((s) => s.name === docType);
+			if (docTypeSchema?.singleton) {
+				navigateToDocumentType(docType);
+				return;
+			}
+			currentView = 'documents';
+			mobileView = 'documents';
+			editingDocumentId = null;
+			isCreatingDocument = false;
+			editorStack = [];
+			// Only fetch if docType changed (org changes are handled by separate effect)
+			if (selectedDocumentType !== docType) {
+				docCurrentPage = 1;
+				docSearchQuery = '';
+				selectedDocumentType = docType;
+				fetchDocuments(docType);
+			} else {
+				selectedDocumentType = docType;
+			}
+		} else {
+			currentView = 'dashboard';
+			mobileView = 'types';
+			selectedDocumentType = null;
+			editingDocumentId = null;
+			isCreatingDocument = false;
+			editorStack = [];
+		}
+	});
+
+	// Watch orgId changes to refetch documents when switching organizations
+	$effect(() => {
+		const orgId = page.url.searchParams.get('orgId');
+
+		// When orgId changes and we have a selected document type, refetch documents
+		if (orgId && orgId !== currentOrgId && selectedDocumentType) {
+			docCurrentPage = 1;
+			fetchDocuments(selectedDocumentType);
+			currentOrgId = orgId;
+		}
+	});
+
+	// Refetch the current list when a document of this type was created/updated/deleted
+	// elsewhere in the session — typically the agent chat, which has no UI of its own to keep
+	// this list in sync. See document-refresh.svelte.ts. Keyed per type (not a single scalar)
+	// so switching types doesn't cause a redundant fetch on top of the one the type-switch
+	// handler already does.
+	const lastSeenCollectionVersions = new Map<string, number>();
+	// Debounced — a bulk agent operation (e.g. "create 50 posts") fires one notify per document,
+	// each its own SSE round trip, so without this a refetch would fire 50 times in a row.
+	let collectionRefetchTimer: ReturnType<typeof setTimeout> | undefined;
+	$effect(() => {
+		if (!selectedDocumentType) return;
+		const docType = selectedDocumentType;
+		const version = getCollectionVersion(docType);
+		const lastSeen = lastSeenCollectionVersions.get(docType);
+		lastSeenCollectionVersions.set(docType, version);
+		if (lastSeen !== undefined && version !== lastSeen) {
+			clearTimeout(collectionRefetchTimer);
+			collectionRefetchTimer = setTimeout(() => fetchDocuments(docType), 300);
+		}
+	});
+
+	async function navigateToDocumentType(docType: string) {
+		if (activeTab.value !== 'structure') {
+			handleTabChange('structure');
+		}
+
+		// Singletons skip the list view: list-by-type lazy-creates and returns
+		// the canonical row, so we just open the editor on the resolved id.
+		const schema = schemas.find((s) => s.name === docType);
+		if (schema?.singleton) {
+			const response = await documents.list({ type: docType });
+			if (response.success && response.data?.[0]?.id) {
+				await navigateToEditDocument(response.data[0].id, docType, false);
+				return;
+			}
+			// Fall through to the list view if resolution fails so the user
+			// at least sees an error surface rather than a stuck sidebar click.
+		}
+
+		await nav.openType(docType);
+		mobileView = 'documents';
+	}
+
+	async function navigateToCreateDocument(docType: string) {
+		await nav.createDocument(docType);
+		mobileView = 'editor';
+	}
+
+	async function navigateToEditDocument(docId: string, docType?: string, replace: boolean = false) {
+		await nav.openDocument(docId, docType, { replace });
+		mobileView = 'editor';
+	}
+
+	async function navigateBack() {
+		// Going back always exits focus/presentation mode — otherwise the user
+		// lands on the doc-list view with side panels still hidden, which feels stuck.
+		if (focusModeOn) focusModeOn = false;
+		if (presentationModeOn) presentationModeOn = false;
+
+		// Check if we came from another document (mobile reference navigation)
+		const fromDocId = page.url.searchParams.get('fromDocId');
+		const fromDocType = page.url.searchParams.get('fromDocType');
+
+		if (fromDocId && fromDocType) {
+			// Navigate back to the document we came from
+			await navigateToEditDocument(fromDocId, fromDocType, false);
+		} else if (selectedDocumentType && !currentTypeIsSingleton) {
+			// Back to the document list for the current type
+			await nav.closeToType(selectedDocumentType);
+			mobileView = 'documents';
+		} else {
+			// Back to the dashboard
+			await nav.goHome();
+			mobileView = 'types';
+		}
+	}
+
+	function handleOpenVersionHistory(docId: string) {
+		showVersionPanel = true;
+		versionPanelDocId = docId;
+		nav.patch({ history: '1' });
+	}
+
+	function handleCloseVersionPanel() {
+		showVersionPanel = false;
+		versionPanelDocId = null;
+		versionPreviewData = null;
+		nav.patch({ history: null });
+	}
+
+	// Close version panel when navigating away
+	let prevDocType = $state<string | null>(null);
+	let prevDocId = $state<string | null>(null);
+	let initialNavDone = $state(false);
+	$effect(() => {
+		if (selectedDocumentType !== prevDocType || editingDocumentId !== prevDocId) {
+			prevDocType = selectedDocumentType;
+			prevDocId = editingDocumentId;
+			if (initialNavDone && showVersionPanel) {
+				showVersionPanel = false;
+				versionPanelDocId = null;
+				versionPreviewData = null;
+			}
+			initialNavDone = true;
+		}
+	});
+
+	async function handleOpenReference(documentId: string, documentType: string) {
+		// On mobile, navigate to the referenced document directly
+		// Add fromDocId to track where we came from for proper back navigation
+		if (windowWidth < 620) {
+			const params = new SvelteURLSearchParams({
+				docId: documentId,
+				docType: documentType
+			});
+			// Track the document we're coming from
+			if (editingDocumentId) {
+				params.set('fromDocId', editingDocumentId);
+				if (selectedDocumentType) {
+					params.set('fromDocType', selectedDocumentType);
+				}
+			}
+			await goto(`/admin?${params.toString()}`, { replaceState: false });
+			mobileView = 'editor';
+			return;
+		}
+
+		// On desktop — push onto the reference history stack. The UI only ever
+		// shows one stacked panel (the last entry). The back button pops the
+		// stack instead of closing, so you can walk back through the chain.
+		if (editingDocumentId === documentId) {
+			activeEditorIndex = 0;
+			return;
+		}
+
+		const newEntry = { documentId, documentType, isCreating: false };
+
+		// If clicking a ref from the primary editor (activeEditorIndex === 0)
+		// and a stack already exists, the user is picking a different ref from
+		// the same array — replace the whole stack with the new pick.
+		// If clicking from within the stacked panel, push deeper.
+		const newStack =
+			activeEditorIndex === 0 && editorStack.length > 0 ? [newEntry] : [...editorStack, newEntry];
+
+		// URL tracks the full chain for refresh support
+		const stackParam = newStack.map((item) => `${item.documentType}:${item.documentId}`).join(',');
+		const params = new SvelteURLSearchParams(page.url.searchParams);
+		params.set('stack', stackParam);
+		await goto(`/admin?${params.toString()}`, { replaceState: false });
+
+		// The stacked panel is always index 1 (only one panel rendered)
+		activeEditorIndex = 1;
+	}
+
+	/**
+	 * Mirror the open asset into `?assetId=`, so a media item is linkable.
+	 *
+	 * `replaceState`, because browsing a media library is not navigation —
+	 * clicking through twenty thumbnails would otherwise bury the page the user
+	 * arrived from under twenty history entries.
+	 */
+	async function syncAssetIdParam(assetId: string | null) {
+		const params = new SvelteURLSearchParams(page.url.searchParams);
+		if (params.get('assetId') === (assetId ?? null)) return;
+		if (assetId) params.set('assetId', assetId);
+		else params.delete('assetId');
+		await goto(`/admin?${params.toString()}`, { replaceState: true, noScroll: true });
+	}
+
+	// Back button on the stacked panel — pop one level. If the stack
+	// becomes empty, the panel closes entirely.
+	async function handleStackedEditorBack() {
+		const newStack = editorStack.slice(0, -1);
+
+		const params = new SvelteURLSearchParams(page.url.searchParams);
+		if (newStack.length > 0) {
+			const stackParam = newStack
+				.map((item) => `${item.documentType}:${item.documentId}`)
+				.join(',');
+			params.set('stack', stackParam);
+		} else {
+			params.delete('stack');
+		}
+		await goto(`/admin?${params.toString()}`, { replaceState: false });
+
+		activeEditorIndex = newStack.length > 0 ? 1 : 0;
+	}
+
+	// Hard close — removes the stacked panel entirely (used by delete action)
+	async function handleCloseStackedEditor(_index: number) {
+		const params = new SvelteURLSearchParams(page.url.searchParams);
+		params.delete('stack');
+		params.delete('history');
+		await goto(`/admin?${params.toString()}`, { replaceState: false });
+		activeEditorIndex = 0;
+	}
+
+	// Set active editor when clicking on a strip
+	function setActiveEditor(index: number) {
+		cmsLogger.debug('[AdminApp]', 'setActiveEditor called:', {
+			previousIndex: activeEditorIndex,
+			newIndex: index,
+			editorStackLength: editorStack.length
+		});
+		activeEditorIndex = index;
+	}
+
+	let versionPanelRef = $state<{ refresh: () => void } | null>(null);
+
+	function handleAutoSave(documentId: string, title: string) {
+		if (documentsList.length > 0) {
+			documentsList = documentsList.map((doc) =>
+				doc.id === documentId ? { ...doc, title: title } : doc
+			);
+		}
+		if (showVersionPanel && versionPanelDocId === documentId) {
+			versionPanelRef?.refresh();
+		}
+		// A referenced doc (open in the reference panel) autosaved — nudge the base
+		// preview to re-fetch, so its server-loaded view (e.g. a list that includes
+		// this doc) reflects the edit. Not fired for the base doc itself, which already
+		// live-updates via the data push.
+		if (editorStack.some((e) => e.documentId === documentId)) baseRefreshToken++;
+	}
+
+	function handleDocumentPublished(documentId: string) {
+		if (showVersionPanel && versionPanelDocId === documentId) {
+			versionPanelRef?.refresh();
+		}
+	}
+
+	async function fetchDocumentForEditing(docId: string) {
+		loading = true;
+		error = null;
+
+		try {
+			const result = await documents.getById(docId);
+
+			if (result.success && result.data) {
+				const documentType = result.data.type;
+
+				if (documentsList.length === 0 || selectedDocumentType !== documentType) {
+					await fetchDocuments(documentType);
+				}
+
+				selectedDocumentType = documentType;
+			} else {
+				throw new Error(result.error || 'Failed to fetch document');
+			}
+		} catch (err) {
+			toast.error(err instanceof Error ? err.message : i18n.t('Failed to load document'));
+			error = err instanceof Error ? err.message : i18n.t('Failed to load document');
+			await goto('/admin', { replaceState: true });
+		} finally {
+			loading = false;
+		}
+	}
+
+	function handleDocSearchInput(value: string) {
+		docSearchQuery = value;
+		clearTimeout(docSearchTimeout);
+		docSearchTimeout = setTimeout(() => {
+			docCurrentPage = 1;
+			if (selectedDocumentType) fetchDocuments(selectedDocumentType);
+		}, 300);
+	}
+
+	async function fetchDocuments(docType: string) {
+		// No type = nothing to list (e.g. mid-navigation from a plugin tab before a
+		// type is selected). Bail quietly rather than hitting the API and toasting
+		// "Document type is required".
+		if (!docType) return;
+		cmsLogger.debug('[AdminApp]', 'FETCHING DOCUMENTS', { sort: sortString });
+		loading = true;
+		error = null;
+
+		try {
+			const result = await documents.list({
+				docType,
+				page: docCurrentPage,
+				pageSize: docPageSize,
+				includeChildOrganizations: userPreferences?.includeChildOrganizations ?? false,
+				sort: sortString,
+				search: docSearchQuery.trim() || undefined
+			});
+
+			if (result.success && result.data) {
+				// Update pagination state from response
+				if (result.pagination) {
+					docTotalPages = result.pagination.totalPages;
+					docTotalDocs = result.pagination.total;
+				} else {
+					docTotalPages = 1;
+					docTotalDocs = result.data.length;
+				}
+				// Find schema for preview config
+				const schema = schemas.find((s) => s.name === docType);
+
+				documentsList = result.data.map((doc: any) => {
+					// With LocalAPI, data is already flattened at top level (not in draftData)
+					// The document itself IS the data, with _meta containing metadata
+
+					const title = resolvePreviewTitle(doc, schema);
+					const subtitle = resolvePreviewSubtitle(doc, schema) ?? undefined;
+					const badge = studioExtensions().listBadge?.(docType, doc.id) ?? null;
+
+					// Metadata is in _meta field (from LocalAPI transformation)
+					const meta = doc._meta || {};
+
+					return {
+						id: doc.id,
+						title,
+						subtitle,
+						slug: doc.slug,
+						badge,
+						status: meta.status || 'draft',
+						publishedAt: meta.publishedAt ? new Date(meta.publishedAt) : null,
+						updatedAt: meta.updatedAt ? new Date(meta.updatedAt) : null,
+						createdAt: meta.createdAt ? new Date(meta.createdAt) : null,
+						// hasChanges is tracked via publishedHash comparison
+						// If publishedHash is null, it's never been published or has unpublished changes
+						hasChanges: meta.status === 'published' && meta.publishedHash === null,
+						// Include organization info for multi-org view
+						organizationId: meta.organizationId || null
+					};
+				});
+			} else {
+				throw new Error(result.error || 'Failed to fetch documents');
+			}
+		} catch (err) {
+			toast.error(err instanceof Error ? err.message : i18n.t('Failed to load documents'));
+			error = err instanceof Error ? err.message : i18n.t('Failed to load documents');
+			documentsList = [];
+		} finally {
+			loading = false;
+		}
+	}
+</script>
+
+<!-- Plugin admin-tool tabs (placement: 'tab') — registered into the Sidebar's tab strip. -->
+{#if tabTools.length > 0}
+	<AdminSlot name="admin-tabs" id="plugin-admin-tools">
+		{#each tabTools as tool (tool.id)}
+			<button
+				onclick={() => openAdminTool(tool.id)}
+				class="{activeTab.value === `plugin:${tool.id}`
+					? 'bg-background text-foreground shadow'
+					: 'text-muted-foreground'} ring-offset-background focus-visible:ring-ring inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-md px-3 py-1 text-sm font-medium whitespace-nowrap transition-all focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
+			>
+				{#if tool.icon}
+					{@const Icon = tool.icon}
+					<Icon class="h-4 w-4" />
+				{/if}
+				{tool.title}
+			</button>
+		{/each}
+	</AdminSlot>
+{/if}
+
+<!--
+	Sidebar-placed plugin tools (placement: 'sidebar') are rendered by AppSidebar
+	directly from the plugin list, at the persistent layout level — not here — so
+	the Tools nav survives on every admin page (settings included), where AdminApp
+	isn't mounted. AdminApp still owns the tab-placed tools (above) and renders each
+	tool's `plugin:<id>` content area (below).
+-->
+
+<svelte:head>
+	<title
+		>{tabTitle ??
+			(activeTab.value === 'structure'
+				? i18n.t('Content')
+				: activeTab.value === 'media'
+					? i18n.t('Media')
+					: 'Vision')}{tabTitle ? '' : ` - ${title}`}</title
+	>
+</svelte:head>
+
+<div class="flex h-full flex-col overflow-hidden">
+	<!-- Breadcrumb navigation: mobile (< 620px) or focus mode on any width -->
+	{#if (windowWidth < 620 || focusModeOn) && activeTab.value === 'structure'}
+		<div class="border-border bg-background border-b">
+			<div class="flex h-12 items-center px-4">
+				{#if mobileView === 'documents' && selectedDocumentType}
+					<button
+						onclick={async () => {
+							mobileView = 'types';
+							const params = new SvelteURLSearchParams(page.url.searchParams);
+							params.delete('docType');
+							params.delete('docId');
+							params.delete('action');
+							params.delete('stack');
+							params.delete('history');
+							await goto(`/admin?${params.toString()}`, { replaceState: false });
+						}}
+						class="text-muted-foreground hover:text-foreground flex items-center gap-2 text-sm"
+					>
+						<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								stroke-width="2"
+								d="M15 19l-7-7 7-7"
+							/>
+						</svg>
+						{i18n.t('Content')}
+					</button>
+					<span class="text-muted-foreground mx-2">/</span>
+					<span class="text-sm font-medium">
+						{pluralize(
+							documentTypes.find((t) => t.name === selectedDocumentType)?.title ||
+								selectedDocumentType
+						)}
+					</span>
+				{:else if mobileView === 'editor'}
+					<Button
+						onclick={navigateBack}
+						variant="ghost"
+						class="text-muted-foreground hover:text-foreground text-sm"
+					>
+						<svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								stroke-width="2"
+								d="M15 19l-7-7 7-7"
+							/>
+						</svg>
+					</Button>
+					<span class="ml-3 text-sm font-medium">
+						{selectedDocumentType
+							? documentTypes.find((t) => t.name === selectedDocumentType)?.title ||
+								selectedDocumentType
+							: i18n.t('Document')}
+					</span>
+				{:else}
+					<span class="text-sm font-medium">{i18n.t('Content')}</span>
+				{/if}
+			</div>
+		</div>
+	{/if}
+
+	<!-- Main Content -->
+	<div class="flex-1 overflow-hidden">
+		<Tabs.Root value={activeTab.value} onValueChange={handleTabChange} class="h-full">
+			<Tabs.Content value="structure" class="h-full overflow-hidden">
+				<!-- One h1 per view, for screen reader navigation. -->
+				{#if !currentTypeIsSingleton}
+					<h1 class="sr-only">
+						{selectedDocumentType
+							? pluralize(
+									documentTypes.find((t) => t.name === selectedDocumentType)?.title ||
+										selectedDocumentType
+								)
+							: i18n.t('Content')}
+					</h1>
+				{/if}
+				{#key `${currentView}-${selectedDocumentType}`}
+					<div
+						bind:clientWidth={contentWidth}
+						class={windowWidth < 620 ? 'h-full w-full' : 'flex h-full w-full overflow-hidden'}
+					>
+						{#if schemaError}
+							<div class="bg-destructive/5 flex flex-1 items-center justify-center p-8">
+								<div class="w-full max-w-2xl">
+									<Alert variant="destructive">
+										<svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+											<path
+												stroke-linecap="round"
+												stroke-linejoin="round"
+												stroke-width="2"
+												d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.704-.833-2.464 0L4.35 16.5c-.77.833.192 2.5 1.732 2.5z"
+											/>
+										</svg>
+										<AlertTitle>{i18n.t('Schema Validation Error')}</AlertTitle>
+										<AlertDescription class="whitespace-pre-line">
+											{schemaError.message}
+										</AlertDescription>
+									</Alert>
+								</div>
+							</div>
+						{:else}
+							<!-- Types Panel -->
+							<div
+								class="border-rule border-r transition-all duration-200 {windowWidth < 620
+									? typesPanel === 'hidden'
+										? 'hidden'
+										: 'h-full w-screen'
+									: typesPanel} {typesPanel === 'hidden'
+									? 'hidden'
+									: 'block'} h-full overflow-hidden"
+							>
+								{#if typesPanel === 'w-[60px]'}
+									<button
+										onclick={() => setActiveEditor(-1)}
+										class="hover:bg-muted/30 flex h-full w-full cursor-pointer flex-col transition-colors"
+										title={i18n.t('Click to expand content types')}
+									>
+										<div class="flex flex-1 items-start justify-center p-2 pt-8 text-left">
+											<div
+												class="text-foreground -mt-2 text-sm font-medium whitespace-nowrap [writing-mode:vertical-rl]"
+											>
+												{i18n.t('Content')}
+											</div>
+										</div>
+									</button>
+								{:else}
+									<div class="h-full overflow-y-auto p-3">
+										{#if hasDocumentTypes}
+											<h2
+												class="text-muted-foreground border-rule mt-2 mb-3 hidden px-2 pb-3 text-sm font-medium sm:block sm:border-b"
+											>
+												{i18n.t('Content')}
+											</h2>
+											{#each groupedDocumentTypes as bucket (bucket.name ?? '__ungrouped__')}
+												{#if bucket.name}
+													<div
+														class="text-muted-foreground mt-3 mb-1 px-2 text-xs font-semibold tracking-wide uppercase first:mt-0"
+													>
+														{bucket.name}
+													</div>
+												{/if}
+												{#each bucket.items as docType (docType.name)}
+													<button
+														onclick={() => navigateToDocumentType(docType.name)}
+														class="hover:bg-muted/50 group flex w-full cursor-pointer items-center justify-between rounded-md px-2 py-2.5 text-left transition-colors {selectedDocumentType ===
+														docType.name
+															? 'bg-muted/50 studio-selected-row'
+															: ''}"
+														title={docType.description || ''}
+													>
+														<div class="flex items-center gap-2">
+															<div
+																class="text-muted-foreground flex h-5 w-5 items-center justify-center"
+															>
+																{#if docType.icon}
+																	{@const Icon = docType.icon}
+																	<Icon class="h-4 w-4" />
+																{:else}
+																	<FileText class="h-4 w-4" />
+																{/if}
+															</div>
+															<span class="text-sm"
+																>{docType.singleton
+																	? docType.title
+																	: pluralize(docType.title)}</span
+															>
+														</div>
+														<svg
+															class="text-muted-foreground h-4 w-4 opacity-0 transition-opacity group-hover:opacity-100"
+															fill="none"
+															viewBox="0 0 24 24"
+															stroke="currentColor"
+														>
+															<path
+																stroke-linecap="round"
+																stroke-linejoin="round"
+																stroke-width="2"
+																d="M9 5l7 7-7 7"
+															/>
+														</svg>
+													</button>
+												{/each}
+											{/each}
+										{:else}
+											<div class="p-6 text-center">
+												<div
+													class="bg-muted/50 mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full"
+												>
+													<FileText class="text-muted-foreground h-8 w-8" />
+												</div>
+												<h3 class="mb-2 font-medium">{i18n.t('No content types found')}</h3>
+												<p class="text-muted-foreground mb-4 text-sm">
+													{i18n.t('Get started by defining your first schema type')}
+												</p>
+												<p class="text-muted-foreground text-xs">
+													{i18n.t('Add schemas in')}
+													<code class="bg-muted rounded px-1.5 py-0.5 text-xs"
+														>src/lib/schemaTypes/</code
+													>
+												</p>
+											</div>
+										{/if}
+									</div>
+								{/if}
+							</div>
+
+							<!-- Documents Panel -->
+							{#if selectedDocumentType}
+								<div
+									class="border-rule flex h-full flex-col overflow-hidden border-r transition-all duration-200
+		              {!documentsPanelState.visible ? 'hidden' : ''}
+		              {windowWidth < 620 ? (documentsPanelState.visible ? 'w-screen' : 'hidden') : ''}
+		              {windowWidth >= 620 && documentsPanelState.width === 'full' ? 'w-full' : ''}
+		              {windowWidth >= 620 && documentsPanelState.width === 'normal' ? 'w-[350px]' : ''}
+		              {windowWidth >= 620 && documentsPanelState.width === 'compact' ? 'w-[60px]' : ''}
+		              {windowWidth >= 620 && documentsPanelState.width === 'flex' ? 'flex-1' : ''}
+		            "
+								>
+									{#if documentsPanelState.width === 'compact'}
+										<button
+											onclick={() => setActiveEditor(-2)}
+											class="hover:bg-muted/30 flex h-full w-full cursor-pointer flex-col transition-colors"
+											title={i18n.t('Click to expand documents list')}
+										>
+											<div class="flex flex-1 items-start justify-center p-2 pt-8 text-left">
+												<div
+													class="text-foreground -mt-2 text-sm font-medium whitespace-nowrap [writing-mode:vertical-rl]"
+												>
+													{pluralize(
+														documentTypes.find((t) => t.name === selectedDocumentType)?.title ||
+															selectedDocumentType
+													)}
+												</div>
+											</div>
+										</button>
+									{:else}
+										{@const currentDocType = documentTypes.find(
+											(t) => t.name === selectedDocumentType
+										)}
+										<div class="border-border bg-muted/30 border-b p-3">
+											<div class="flex items-center justify-between">
+												<div class="flex items-center gap-3">
+													{#if windowWidth > 620}
+														<!-- Desktop: Icon -->
+														<div class="flex h-6 w-6 items-center justify-center">
+															{#if currentDocType?.icon}
+																{@const Icon = currentDocType.icon}
+																<Icon class="text-muted-foreground h-4 w-4" />
+															{:else}
+																<FileText class="text-muted-foreground h-4 w-4" />
+															{/if}
+														</div>
+													{/if}
+													<div>
+														<h2 class="text-sm font-medium">
+															{pluralize(currentDocType?.title || selectedDocumentType)}
+														</h2>
+														<p class="text-muted-foreground text-xs">
+															{i18n.tn(docTotalDocs, '{count} document', '{count} documents')}
+														</p>
+													</div>
+												</div>
+												<div class="flex items-center gap-1">
+													<Button
+														size="sm"
+														variant="ghost"
+														onclick={toggleDocSearch}
+														class="h-8 w-8 p-0 {docSearchOpen || docSearchQuery ? 'bg-muted' : ''}"
+														title={i18n.t('Search documents')}
+													>
+														<Search class="h-4 w-4" />
+													</Button>
+													{#if perms.can('document.create') && !schemas.find((s) => s.name === selectedDocumentType)?.singleton}
+														{#if studioExtensions().createLabel?.(selectedDocumentType)}
+															<Button
+																size="sm"
+																onclick={() => navigateToCreateDocument(selectedDocumentType!)}
+																class="h-8 gap-1.5 px-3"
+															>
+																<Plus class="h-3.5 w-3.5" aria-hidden="true" />
+																{studioExtensions().createLabel?.(selectedDocumentType)}
+															</Button>
+														{:else}
+															<Button
+																size="sm"
+																variant="ghost"
+																onclick={() => navigateToCreateDocument(selectedDocumentType!)}
+																class="h-8 w-8 p-0"
+																title={i18n.t('Create new document')}
+															>
+																<svg
+																	class="h-4 w-4"
+																	fill="none"
+																	viewBox="0 0 24 24"
+																	stroke="currentColor"
+																>
+																	<path
+																		stroke-linecap="round"
+																		stroke-linejoin="round"
+																		stroke-width="2"
+																		d="M12 4v16m8-8H4"
+																	/>
+																</svg>
+															</Button>
+														{/if}
+													{/if}
+
+													<!-- Sorting Menu Popover -->
+													<Popover.Root bind:open={sortDropdownOpen}>
+														<Popover.Trigger>
+															{#snippet child({ props })}
+																<Button
+																	{...props}
+																	size="sm"
+																	variant="ghost"
+																	class="h-8 w-8 cursor-pointer p-0"
+																	title={i18n.t('Sort documents')}
+																>
+																	<Ellipsis class="h-4 w-4" />
+																</Button>
+															{/snippet}
+														</Popover.Trigger>
+														<Popover.Content class="w-60 p-2">
+															<div class="text-muted-foreground mb-2 px-2 text-xs font-semibold">
+																{i18n.t('Sort by')}
+															</div>
+															<div class="flex flex-col gap-0.5">
+																{#each availableOrderings as ordering (ordering.name)}
+																	{@const fieldName = ordering.by[0]?.field}
+																	{@const baseName = ordering.name
+																		.replace('Desc', '')
+																		.replace('Asc', '')}
+																	{@const isActive =
+																		currentSortName === ordering.name ||
+																		currentSortName === `${baseName}Asc`}
+																	{@const direction =
+																		isActive && currentSortName.endsWith('Asc')
+																			? 'asc'
+																			: ordering.by[0]?.direction}
+																	{@const currentSchema = schemas.find(
+																		(s) => s.name === selectedDocumentType
+																	)}
+																	{@const schemaField = currentSchema?.fields.find(
+																		(f) => f.name === fieldName
+																	)}
+																	{@const fieldType =
+																		schemaField?.type ||
+																		(fieldName === 'updatedAt' || fieldName === 'createdAt'
+																			? 'datetime'
+																			: 'string')}
+																	<button
+																		onclick={async () => {
+																			// Toggle between desc ↔ asc for active field, or select new field (desc)
+																			if (isActive) {
+																				// Toggle direction: desc → asc or asc → desc
+																				const newDirection = direction === 'desc' ? 'asc' : 'desc';
+																				// const fieldName = ordering.by[0]?.field;
+																				const baseName = ordering.name
+																					.replace('Desc', '')
+																					.replace('Asc', '');
+																				currentSortName = `${baseName}${newDirection === 'asc' ? 'Asc' : 'Desc'}`;
+																			} else {
+																				// Select this ordering (defaults to desc)
+																				currentSortName = ordering.name;
+																			}
+
+																			if (selectedDocumentType) {
+																				docCurrentPage = 1;
+																				await fetchDocuments(selectedDocumentType);
+																			}
+																		}}
+																		class="hover:bg-muted flex items-center justify-between rounded px-2 py-2 text-left text-sm transition-colors {isActive
+																			? 'bg-muted'
+																			: ''}"
+																	>
+																		<span class={isActive ? 'font-medium' : ''}>
+																			{i18n
+																				.label(ordering.title)
+																				.replace(' (A-Z)', '')
+																				.replace(' (Z-A)', '')
+																				.replace(' (Newest)', '')
+																				.replace(' (Oldest)', '')
+																				.replace(' (High to Low)', '')
+																				.replace(' (Low to High)', '')}
+																		</span>
+																		{#if isActive}
+																			<span class="text-muted-foreground">
+																				{#if fieldType === 'string'}
+																					{#if direction === 'asc'}
+																						<ArrowDownAZ class="h-4 w-4" />
+																					{:else}
+																						<ArrowUpZA class="h-4 w-4" />
+																					{/if}
+																				{:else if fieldType === 'number' || fieldType === 'date' || fieldType === 'datetime'}
+																					{#if direction === 'asc'}
+																						<ArrowDown01 class="h-4 w-4" />
+																					{:else}
+																						<ArrowUp10 class="h-4 w-4" />
+																					{/if}
+																				{:else if direction === 'asc'}
+																					<ArrowDownUp class="h-4 w-4" />
+																				{:else}
+																					<ArrowDownUp class="h-4 w-4" />
+																				{/if}
+																			</span>
+																		{/if}
+																	</button>
+																{/each}
+															</div>
+														</Popover.Content>
+													</Popover.Root>
+												</div>
+											</div>
+
+											{#if docSearchOpen}
+												<div class="relative mt-2">
+													<Search
+														size={14}
+														class="text-muted-foreground absolute top-1/2 left-2.5 -translate-y-1/2"
+													/>
+													<Input
+														bind:ref={docSearchInputEl}
+														placeholder={i18n.t('Search {pluralLower}', {
+															plural: pluralize(currentDocType?.title || selectedDocumentType),
+															pluralLower: pluralize(
+																currentDocType?.title || selectedDocumentType
+															).toLowerCase()
+														})}
+														class="h-8 pl-8 text-sm {docSearchQuery ? 'pr-8' : ''}"
+														value={docSearchQuery}
+														oninput={(e) =>
+															handleDocSearchInput((e.target as HTMLInputElement).value)}
+														onkeydown={(e) => {
+															if (e.key === 'Escape') toggleDocSearch();
+														}}
+													/>
+													{#if docSearchQuery}
+														<button
+															onclick={() => handleDocSearchInput('')}
+															class="text-muted-foreground hover:text-foreground absolute top-1/2 right-2.5 -translate-y-1/2"
+															title={i18n.t('Clear search')}
+														>
+															<X class="h-3.5 w-3.5" />
+														</button>
+													{/if}
+												</div>
+											{/if}
+										</div>
+
+										<div class="flex-1 overflow-y-auto">
+											{#if error}
+												<div class="p-4">
+													<Alert variant="destructive">
+														<AlertDescription>{error}</AlertDescription>
+													</Alert>
+												</div>
+											{:else if loading}
+												<DocumentsSkeleton />
+											{:else if documentsList.length > 0 && selectedDocumentType && studioExtensions().documentLists?.[selectedDocumentType]}
+												{@const DocumentList =
+													studioExtensions().documentLists![selectedDocumentType]}
+												<DocumentList
+													rows={documentsList}
+													activeId={editingDocumentId}
+													onselect={(id) => navigateToEditDocument(id, selectedDocumentType!)}
+												/>
+											{:else if documentsList.length > 0}
+												{#each documentsList as doc, index (index)}
+													{@const isActive = editingDocumentId === doc.id}
+													<button
+														onclick={() => navigateToEditDocument(doc.id, selectedDocumentType!)}
+														class="hover:bg-muted/50 border-border group flex w-full cursor-pointer items-center justify-between border-b p-3 text-left transition-colors {isActive
+															? 'bg-muted/50 studio-selected-row'
+															: ''}"
+													>
+														<div class="flex min-w-0 flex-1 items-center gap-3">
+															<div class="flex h-6 w-6 items-center justify-center">
+																{#if currentDocType?.icon}
+																	{@const Icon = currentDocType.icon}
+																	<Icon class="text-muted-foreground h-4 w-4" />
+																{:else}
+																	<FileText class="text-muted-foreground h-4 w-4" />
+																{/if}
+															</div>
+															<div class="min-w-0 flex-1">
+																{#if userPreferences?.includeChildOrganizations && doc.organizationId && organizationsMap.has(doc.organizationId)}
+																	<p class="text-muted-foreground/70 truncate text-xs italic">
+																		{organizationsMap.get(doc.organizationId)?.name}
+																	</p>
+																{/if}
+																<div class="flex min-w-0 items-center gap-2">
+																	<h3 class="truncate text-sm font-medium">{doc.title}</h3>
+																	{#if doc.badge}
+																		<span
+																			class="border-border text-muted-foreground shrink-0 rounded border px-1.5 text-[10px] font-medium tracking-wide uppercase"
+																			title={doc.badge.description}
+																			>{doc.badge.label}<span class="sr-only"
+																				>: {doc.badge.description}</span
+																			></span
+																		>
+																	{/if}
+																</div>
+																{#if doc.subtitle}
+																	<p class="text-muted-foreground truncate text-xs">
+																		{doc.subtitle}
+																	</p>
+																{:else if doc.slug}
+																	<p class="text-muted-foreground text-xs">/{doc.slug}</p>
+																{/if}
+															</div>
+														</div>
+														<div class="flex items-center gap-2">
+															<span class="text-muted-foreground text-xs">
+																{doc.updatedAt?.toLocaleDateString(i18n.locale()) || ''}
+															</span>
+															<div class="flex items-center gap-1">
+																{#if doc.status === 'published'}
+																	{#if doc.hasChanges}
+																		<span
+																			class="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500"
+																			title={i18n.t('Unpublished changes')}
+																		></span>
+																	{/if}
+																	<span
+																		class="h-1.5 w-1.5 shrink-0 rounded-full bg-green-500"
+																		title={i18n.t('Published')}
+																	></span>
+																{:else if doc.status === 'unpublished'}
+																	<span
+																		class="bg-muted-foreground/60 h-1.5 w-1.5 shrink-0 rounded-full"
+																		title={i18n.t('Unpublished')}
+																	></span>
+																{:else}
+																	<span
+																		class="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500"
+																		title={i18n.t('Draft')}
+																	></span>
+																{/if}
+															</div>
+														</div>
+													</button>
+												{/each}
+											{:else}
+												<div class="p-6 text-center">
+													<div
+														class="bg-muted/50 mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full"
+													>
+														{#if currentDocType?.icon}
+															{@const Icon = currentDocType.icon}
+															<Icon class="text-muted-foreground h-8 w-8" />
+														{:else}
+															<FileText class="text-muted-foreground h-8 w-8" />
+														{/if}
+													</div>
+													{#if docSearchQuery}
+														<h3 class="mb-2 font-medium">{i18n.t('No matching documents')}</h3>
+														<p class="text-muted-foreground text-sm">
+															{i18n.t('No results for "{query}". Try a different search.', {
+																query: docSearchQuery
+															})}
+														</p>
+													{:else}
+														<h3 class="mb-2 font-medium">{i18n.t('No documents found')}</h3>
+														<p class="text-muted-foreground text-sm">
+															{(selectedDocumentType &&
+																studioExtensions().emptyListText?.(selectedDocumentType)) ||
+																i18n.t(
+																	'Create your first {type} document using the + button above',
+																	{
+																		type: selectedDocumentType,
+																		typeLabel: typeLabel(selectedDocumentType)
+																	}
+																)}
+														</p>
+													{/if}
+												</div>
+											{/if}
+										</div>
+
+										<!-- Pagination Controls -->
+										{#if docTotalDocs > PAGE_SIZE_OPTIONS[0]}
+											<div
+												class="border-border flex items-center justify-between border-t px-3 py-2"
+											>
+												<div class="flex items-center gap-1">
+													<Button
+														size="sm"
+														variant="ghost"
+														class="h-7 w-7 p-0"
+														disabled={docCurrentPage <= 1}
+														onclick={async () => {
+															docCurrentPage = Math.max(1, docCurrentPage - 1);
+															if (selectedDocumentType) await fetchDocuments(selectedDocumentType);
+														}}
+													>
+														<ChevronLeft class="h-4 w-4" />
+													</Button>
+													<span class="text-muted-foreground text-xs">
+														{i18n.t('{from}–{to} of {total}', {
+															from: (docCurrentPage - 1) * docPageSize + 1,
+															to: Math.min(docCurrentPage * docPageSize, docTotalDocs),
+															total: docTotalDocs
+														})}
+													</span>
+													<Button
+														size="sm"
+														variant="ghost"
+														class="h-7 w-7 p-0"
+														disabled={docCurrentPage >= docTotalPages}
+														onclick={async () => {
+															docCurrentPage = Math.min(docTotalPages, docCurrentPage + 1);
+															if (selectedDocumentType) await fetchDocuments(selectedDocumentType);
+														}}
+													>
+														<ChevronRight class="h-4 w-4" />
+													</Button>
+												</div>
+												<Select.Root
+													type="single"
+													value={String(docPageSize)}
+													onValueChange={async (value) => {
+														if (value) {
+															docPageSize = Number(value);
+															docCurrentPage = 1;
+															if (selectedDocumentType) await fetchDocuments(selectedDocumentType);
+														}
+													}}
+												>
+													<Select.Trigger size="sm" class="h-7 border-none text-xs shadow-none">
+														{i18n.t('{count} / page', { count: docPageSize })}
+													</Select.Trigger>
+													<Select.Content>
+														<Select.Group>
+															{#each PAGE_SIZE_OPTIONS as size}
+																<Select.Item
+																	value={String(size)}
+																	label={i18n.t('{count} / page', { count: size })}
+																>
+																	{i18n.t('{count} / page', { count: size })}
+																</Select.Item>
+															{/each}
+														</Select.Group>
+													</Select.Content>
+												</Select.Root>
+											</div>
+										{/if}
+									{/if}
+								</div>
+							{/if}
+
+							<!-- Primary Editor Panel -->
+							{#if primaryEditorState.visible}
+								<!-- `overflow-y` is `auto` normally but `hidden` in presentation mode, and that
+								     is load-bearing rather than cosmetic. The stacked reference panel below is
+								     an `absolute inset-y-0` sibling inside this box, and for a *scroll
+								     container* the containing block of an absolute child is the padding box —
+								     the whole scrollable extent, not the visible height. With `auto` the panel
+								     therefore stretched to the scroll height and pinned its footer (Publish,
+								     Schedule, Unpublish) below the fold, so a referenced document opened in
+								     presentation mode looked like it had no publish controls at all; the bar
+								     visible at the bottom of the window was the base editor's showing through.
+								     Nothing is lost by disabling it here: in presentation mode DocumentEditor is
+								     `h-full overflow-hidden` and scrolls its own field column internally. -->
+								<div
+									class="relative transition-all duration-200 {windowWidth < 620
+										? 'w-screen'
+										: 'flex-1'} h-full overflow-x-hidden {presentationModeOn
+										? 'overflow-y-hidden'
+										: 'overflow-y-auto'} {primaryEditorState.expanded ? '' : 'hidden'}"
+									style={windowWidth >= 620 ? 'min-width: 0;' : ''}
+								>
+									<DocumentEditor
+										{schemas}
+										{plugins}
+										documentType={selectedDocumentType!}
+										documentId={editingDocumentId}
+										isCreating={isCreatingDocument}
+										focusMode={focusModeOn}
+										onToggleFocus={toggleFocusMode}
+										presentationMode={presentationModeOn}
+										onTogglePresentation={togglePresentationMode}
+										hideActionBar={presentationModeOn && editorStack.length > 0}
+										refreshToken={baseRefreshToken}
+										organizationId={currentOrgId}
+										onBack={navigateBack}
+										onOpenReference={handleOpenReference}
+										onOpenVersionHistory={handleOpenVersionHistory}
+										externalVersionPreview={versionPanelDocId === editingDocumentId
+											? versionPreviewData
+											: null}
+										onSaved={async (docId) => {
+											if (selectedDocumentType) {
+												await fetchDocuments(selectedDocumentType);
+											}
+											// For first-time creation, update URL and local state.
+											// Use goto with replaceState:true so page.url stays in sync —
+											// raw replaceState() from $app/navigation updates the URL bar
+											// but leaves page.url.searchParams stale, which breaks any
+											// subsequent navigation that reads from it (e.g. opening a
+											// stacked reference editor) because the old ?action=create
+											// gets carried forward.
+											if (isCreatingDocument) {
+												// Update local state FIRST so the URL Effect's EDIT branch
+												// sees consistent values when goto fires it.
+												isCreatingDocument = false;
+												editingDocumentId = docId;
+
+												const params = new SvelteURLSearchParams(page.url.searchParams);
+												params.set('docId', docId);
+												if (selectedDocumentType) params.set('docType', selectedDocumentType);
+												params.delete('action');
+												await goto(`/admin?${params.toString()}`, {
+													replaceState: true,
+													keepFocus: true,
+													noScroll: true
+												});
+											} else {
+												// For subsequent saves, use normal navigation
+												navigateToEditDocument(docId, selectedDocumentType!);
+											}
+										}}
+										onAutoSaved={handleAutoSave}
+										onPublished={async (docId) => {
+											handleDocumentPublished(docId);
+											if (selectedDocumentType) {
+												await fetchDocuments(selectedDocumentType);
+											}
+										}}
+										onUnpublished={async (docId) => {
+											handleDocumentPublished(docId);
+											if (selectedDocumentType) {
+												await fetchDocuments(selectedDocumentType);
+											}
+										}}
+										onRestored={async (docId) => {
+											handleDocumentPublished(docId);
+											if (selectedDocumentType) {
+												await fetchDocuments(selectedDocumentType);
+											}
+										}}
+										onDeleted={async () => {
+											if (selectedDocumentType) {
+												await fetchDocuments(selectedDocumentType);
+												const params = new SvelteURLSearchParams(page.url.searchParams);
+												params.set('docType', selectedDocumentType);
+												params.delete('docId');
+												params.delete('action');
+												await goto(`/admin?${params.toString()}`, { replaceState: false });
+											} else {
+												const orgId = page.url.searchParams.get('orgId');
+												const url = orgId ? `/admin?orgId=${orgId}` : '/admin';
+												await goto(url, { replaceState: false });
+											}
+										}}
+										{isReadOnly}
+									/>
+
+									<!-- Presentation-mode reference: a left-anchored panel over the fields
+									     column only (no dimming backdrop), so the base editor's live
+									     preview stays fully visible and interactive on the right. Close
+									     with the panel's Back button. -->
+									{#if presentationModeOn && editorStack.length > 0}
+										{@const currentRef = editorStack[editorStack.length - 1]!}
+										<div
+											class="border-rule bg-background absolute inset-y-0 left-0 z-40 flex w-full max-w-[520px] flex-col border-r shadow-2xl"
+										>
+											{@render referenceEditorBody(currentRef)}
+										</div>
+									{/if}
+								</div>
+								{#if !primaryEditorState.expanded && !focusModeOn && !presentationModeOn}
+									<!-- Collapsed Primary Editor Strip -->
+									<button
+										onclick={() => setActiveEditor(0)}
+										class="border-rule hover:bg-muted/50 flex h-full w-[60px] cursor-pointer flex-col border-l transition-colors"
+										title={i18n.t('Click to expand {value}', {
+											value: typeLabel(selectedDocumentType)
+										})}
+									>
+										<div class="flex flex-1 items-start justify-center p-2 pt-8 text-left">
+											<div
+												class="text-foreground -mt-2 text-sm font-medium whitespace-nowrap [writing-mode:vertical-rl]"
+											>
+												{typeLabel(selectedDocumentType)}
+											</div>
+										</div>
+									</button>
+								{/if}
+							{/if}
+
+							<!-- Stacked Reference Panel — only the last entry in the stack is
+							     rendered. In presentation mode it opens as a modal over the
+							     current editor (so you stay anchored to the document + preview
+							     you were editing); otherwise it's a side panel. Back pops the
+							     stack (walks the ref chain); closing clears it. -->
+							{#if editorStack.length > 0 && !presentationModeOn}
+								{@const currentRef = editorStack[editorStack.length - 1]!}
+								{@const isExpanded = focusModeOn
+									? activeEditorIndex === 1
+									: layoutConfig.expandedIndices.includes(1)}
+
+								{#if isExpanded}
+									<div
+										class="border-rule h-full flex-1 overflow-x-hidden overflow-y-auto border-l transition-all duration-200"
+										style="min-width: 0;"
+									>
+										{@render referenceEditorBody(currentRef)}
+									</div>
+								{:else if !focusModeOn}
+									<!-- Collapsed Stacked Editor Strip -->
+									<button
+										onclick={() => setActiveEditor(1)}
+										class="border-rule hover:bg-muted/50 flex h-full w-[60px] cursor-pointer flex-col border-l transition-colors"
+										title={i18n.t('Click to expand {value}', {
+											value: typeLabel(currentRef.documentType)
+										})}
+									>
+										<div class="flex h-full flex-1 items-start justify-center p-2 pt-8 text-left">
+											<div
+												class="text-foreground text-sm font-medium whitespace-nowrap [writing-mode:vertical-rl]"
+											>
+												{typeLabel(currentRef.documentType)}
+											</div>
+										</div>
+									</button>
+								{/if}
+							{/if}
+						{/if}
+
+						<!-- Version History Panel. Below 620px there is no room for a 280px
+						     column beside the editor — it left ~95px for the fields — so it
+						     becomes a full-screen sheet, dismissed with its own close button. -->
+						{#if showVersionPanel && versionPanelDocId}
+							<div
+								class={windowWidth < 620
+									? 'bg-background fixed inset-0 z-50 overflow-y-auto'
+									: 'border-rule h-full w-[280px] shrink-0 overflow-y-auto border-l transition-all duration-200'}
+							>
+								<DocumentVersionPanel
+									bind:this={versionPanelRef}
+									documentId={versionPanelDocId}
+									onClose={handleCloseVersionPanel}
+									onPreviewVersion={(v) => {
+										versionPreviewData = v;
+									}}
+									onRestored={async () => {
+										versionPreviewData = null;
+										if (selectedDocumentType) {
+											await fetchDocuments(selectedDocumentType);
+										}
+									}}
+								/>
+							</div>
+						{/if}
+					</div>
+				{/key}
+			</Tabs.Content>
+
+			{#if graphqlSettings?.enableGraphiQL}
+				<Tabs.Content value="vision" class="m-0 h-full p-0">
+					<div class="bg-muted/10 flex h-full items-center justify-center">
+						<div class="space-y-4 text-center">
+							<div
+								class="bg-primary/10 mx-auto flex h-16 w-16 items-center justify-center rounded-full"
+							>
+								<svg
+									class="text-primary h-8 w-8"
+									fill="none"
+									viewBox="0 0 24 24"
+									stroke="currentColor"
+								>
+									<path
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										stroke-width="2"
+										d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"
+									/>
+								</svg>
+							</div>
+
+							<div>
+								<h3 class="mb-2 text-lg font-semibold">GraphQL Playground</h3>
+
+								<p class="text-muted-foreground mb-4">Query your CMS data with the GraphQL API</p>
+
+								<a
+									href={graphqlSettings.endpoint}
+									target="_blank"
+									class="bg-primary text-primary-foreground hover:bg-primary/90 inline-flex items-center gap-2 rounded-md px-4 py-2 transition-colors"
+								>
+									Open Playground
+
+									<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+										<path
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											stroke-width="2"
+											d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+										/>
+									</svg>
+								</a>
+							</div>
+						</div>
+					</div>
+				</Tabs.Content>
+			{/if}
+
+			<Tabs.Content value="media" class="m-0 h-full p-0">
+				<MediaBrowser
+					active={activeTab.value === 'media'}
+					assetId={page.url.searchParams.get('assetId')}
+					onAssetOpen={syncAssetIdParam}
+				/>
+			</Tabs.Content>
+
+			<!-- Plugin admin tools — each rendered as its own top-level area. -->
+			{#each adminTools as tool (tool.id)}
+				{@const Tool = tool.component}
+				<Tabs.Content value={`plugin:${tool.id}`} class="m-0 h-full overflow-auto p-0">
+					<Tool tool={adminToolContext} />
+				</Tabs.Content>
+			{/each}
+		</Tabs.Root>
+	</div>
+</div>
+
+<ConfirmDialogHost />
+
+<!-- Shared body for a stacked reference editor — always form-only (no nested preview
+     iframe). In presentation mode it renders inside a modal over the base editor, whose
+     live preview stays visible behind it; otherwise it's the side panel. -->
+{#snippet referenceEditorBody(currentRef: EditorStackItem)}
+	<DocumentEditor
+		{schemas}
+		{plugins}
+		documentType={currentRef.documentType}
+		documentId={currentRef.documentId}
+		isCreating={currentRef.isCreating}
+		organizationId={currentOrgId}
+		onBack={handleStackedEditorBack}
+		backLabel={i18n.t('Back')}
+		onOpenReference={handleOpenReference}
+		onOpenVersionHistory={handleOpenVersionHistory}
+		externalVersionPreview={versionPanelDocId === currentRef.documentId ? versionPreviewData : null}
+		onSaved={async () => {}}
+		onAutoSaved={handleAutoSave}
+		onPublished={async (docId) => {
+			handleDocumentPublished(docId);
+			if (selectedDocumentType) {
+				await fetchDocuments(selectedDocumentType);
+			}
+		}}
+		onUnpublished={async (docId) => {
+			handleDocumentPublished(docId);
+			if (selectedDocumentType) {
+				await fetchDocuments(selectedDocumentType);
+			}
+		}}
+		onRestored={async (docId) => {
+			handleDocumentPublished(docId);
+			if (selectedDocumentType) {
+				await fetchDocuments(selectedDocumentType);
+			}
+		}}
+		onDeleted={async () => {
+			handleCloseStackedEditor(0);
+		}}
+		{isReadOnly}
+	/>
+{/snippet}

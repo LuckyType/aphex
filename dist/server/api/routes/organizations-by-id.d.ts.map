@@ -1,0 +1,1 @@
+{"version":3,"file":"organizations-by-id.d.ts","sourceRoot":"","sources":["../../../../src/lib/server/api/routes/organizations-by-id.ts"],"names":[],"mappings":"AAAA,OAAO,EAAE,IAAI,EAAE,MAAM,MAAM,CAAC;AAK5B,OAAO,KAAK,EAAE,QAAQ,EAAE,MAAM,UAAU,CAAC;AAkDzC,eAAO,MAAM,uBAAuB,EAAE,IAAI,CAAC,QAAQ,CAiQhD,CAAC"}

@@ -1,0 +1,234 @@
+import type { Document } from '../../types/index.js';
+import type { DocumentVersion, DocumentVersionList } from '../../types/version.js';
+import type { Where, FindOptions, FindResult } from '../../types/filters.js';
+export interface DocumentFilters {
+    organizationId: string;
+    type?: string;
+    status?: string;
+    limit?: number;
+    offset?: number;
+    depth?: number;
+    filterOrganizationIds?: string[];
+}
+export interface CreateDocumentData {
+    organizationId: string;
+    type: string;
+    draftData: any;
+    createdBy?: string;
+    /** Optional explicit primary key — used by singleton documents. */
+    id?: string;
+}
+export interface UpdateDocumentData {
+    draftData?: any;
+    status?: string;
+    updatedBy?: string;
+    /** Compare-and-swap guard: the revision the caller last read. Omit to skip
+     *  the check (existing unconditional-write behavior). */
+    expectedRevision?: number;
+}
+/**
+ * Thrown when a write's `expectedRevision` no longer matches the document's
+ * current revision — another writer (a second tab, an AI agent, a concurrent
+ * request) saved in between the caller's read and this write. Callers should
+ * surface this distinctly from a validation error: re-fetch and let the user
+ * decide, never silently retry with an overwrite.
+ */
+export declare class RevisionConflictError extends Error {
+    readonly documentId: string;
+    readonly expectedRevision: number;
+    readonly currentRevision: number;
+    constructor(message: string, documentId: string, expectedRevision: number, currentRevision: number);
+}
+/**
+ * Document adapter interface for document-specific operations
+ */
+export interface DocumentAdapter {
+    createDocument(data: CreateDocumentData): Promise<Document>;
+    /**
+     * Resolve the owning tenant for a public document route without an existing
+     * organization context. Implementations must match the globally unique primary
+     * key, trusted document type, published status, and non-null published data,
+     * and return no document content.
+     */
+    resolvePublishedDocumentOrganizationId(id: string, documentType: string): Promise<string | null>;
+    /**
+     * @param expectedRevision - Compare-and-swap guard. When provided, the
+     *   update only applies if the document's current revision matches;
+     *   otherwise implementations throw {@link RevisionConflictError}. Omit to
+     *   write unconditionally (last-write-wins, the pre-CAS behavior).
+     */
+    updateDocDraft(organizationId: string, id: string, data: any, updatedBy?: string, expectedRevision?: number): Promise<Document | null>;
+    deleteDocById(organizationId: string, id: string): Promise<boolean>;
+    /**
+     * Recompute the document's precomputed full-text search index (`search_text`
+     * column, and on SQLite the FTS5 shadow table row) from caller-supplied text.
+     * Called by `CollectionAPI` as a best-effort step after `createDocument`/
+     * `updateDocDraft` succeeds — same shape as reference-index sync: not folded
+     * into the write transaction, self-healing on the next edit if it's missed.
+     * Optional so adapters without full-text search aren't broken.
+     */
+    updateSearchText?(organizationId: string, id: string, searchText: string): Promise<void>;
+    publishDoc(organizationId: string, id: string, expectedRevision?: number): Promise<Document | null>;
+    unpublishDoc(organizationId: string, id: string, expectedRevision?: number): Promise<Document | null>;
+    countDocsByType(organizationId: string, type: string): Promise<number>;
+    getDocCountsByType(organizationId: string): Promise<Record<string, number>>;
+    /**
+     * Find multiple documents with advanced filtering and pagination
+     * @param organizationId - Organization ID for multi-tenancy
+     * @param collectionName - Collection/document type to query
+     * @param options - Advanced filter options (where, limit, offset, sort, etc.)
+     * @returns Paginated result with documents and metadata
+     */
+    findManyDocAdvanced(organizationId: string, collectionName: string, options?: FindOptions): Promise<FindResult<Document>>;
+    /**
+     * Find a single document by ID with advanced options
+     * @param organizationId - Organization ID for multi-tenancy
+     * @param id - Document ID
+     * @param options - Options for depth, select, perspective
+     * @returns Document or null if not found
+     */
+    findByDocIdAdvanced(organizationId: string, id: string, options?: Partial<FindOptions>): Promise<Document | null>;
+    /**
+     * Count documents matching a where clause
+     * @param organizationId - Organization ID for multi-tenancy
+     * @param collectionName - Collection/document type to query
+     * @param where - Filter conditions
+     * @returns Count of matching documents
+     */
+    countDocuments(organizationId: string, collectionName: string, where?: Where): Promise<number>;
+    /**
+     * Replace the asset-reference index rows for one document.
+     *
+     * Delete-then-insert for `(organizationId, documentId)`, so it is idempotent
+     * and cannot leave stale rows behind — a reference removed from a document has
+     * to disappear from the index, and reconciling row-by-row is a harder way to
+     * get the same result.
+     *
+     * **Called inside the document's own write transaction**, so the rows commit or
+     * roll back with it and a saved document is never unindexed. It was
+     * best-effort post-commit at first; that was wrong, because the `usage` filter
+     * *is* this index, so a dropped write doesn't cost a badge — it offers an
+     * in-use asset for deletion.
+     *
+     * **Deleting an asset still consults {@link findDocumentsReferencingAsset}**,
+     * which reads the documents themselves. Defence in depth: that independent
+     * guard is what caught the drift this contract replaced.
+     *
+     * Optional, like the other reference methods — an adapter that doesn't
+     * implement it simply has no index, and the `usage` filter is unavailable.
+     */
+    replaceAssetReferences?(organizationId: string, documentId: string, documentType: string, references: Array<{
+        assetId: string;
+        fieldPath: string;
+        plane: 'draft' | 'published';
+    }>): Promise<void>;
+    /** Whether the asset-reference index holds any rows for this org (backfill check). */
+    hasAnyAssetReferences?(organizationId: string): Promise<boolean>;
+    /**
+     * How many distinct documents reference each of these assets, **from the
+     * index**.
+     *
+     * The counterpart to {@link countDocumentReferencesForAssets}, which answers
+     * the same question by scanning documents. Both exist on purpose, and which
+     * one a caller wants follows from what the number is for:
+     *
+     * - **This one, for anything the library displays.** It reads the same rows as
+     *   the `usage` filter, so a count and the Unused filter beside it cannot
+     *   contradict each other. It is also indexed, where the scan is
+     *   assets × documents.
+     * - **The scan, for the delete guard.** Structure-blind, so a shape the walker
+     *   doesn't model can't cause an in-use asset to be destroyed.
+     *
+     * They can still disagree, and that is the design: the guard deliberately
+     * over-approximates. What must never happen again is two *display* surfaces
+     * disagreeing, which is what a count from the scan next to a filter from the
+     * index produced.
+     *
+     * Counts distinct documents, not rows — an asset used in two fields of one
+     * document, or in both its planes, is one document that would break.
+     */
+    countAssetReferencesForAssets?(organizationId: string, assetIds: string[]): Promise<Record<string, number>>;
+    /**
+     * Every distinct `type` present in the org's documents — including types with
+     * no registered schema.
+     *
+     * The asset-reference backfill needs this rather than the schema registry.
+     * Removing a schema type doesn't remove its documents, and those documents
+     * keep whatever assets they referenced. The delete guard scans them (it reads
+     * documents, unfiltered), so an index built only over registered types
+     * disagrees with the guard on exactly those assets: the "Unused" filter offers
+     * them, and the delete then refuses.
+     *
+     * Only the *asset* index can use this. `collectAssetReferences` walks raw JSON
+     * and needs no schema, whereas the document-to-document walker is schema-aware
+     * and has nothing to walk a schema-less type with.
+     */
+    listStoredDocumentTypes?(organizationId: string): Promise<string[]>;
+    /**
+     * Indexed field paths for one asset — where inside each document it is used.
+     *
+     * Display only, and deliberately separate from
+     * {@link findDocumentsReferencingAsset}: that one reads the documents and stays
+     * the authority for the delete guard, while this annotates its results with
+     * "Hero image" or "Gallery, image 2". A missing or stale row costs a label, not
+     * correctness, so the two are never merged.
+     */
+    findAssetReferenceFieldPaths?(organizationId: string, assetId: string): Promise<Array<{
+        documentId: string;
+        fieldPath: string;
+        plane: string;
+    }>>;
+    /**
+     * Find documents that reference a specific asset ID in their data
+     * Searches both draftData and publishedData JSONB columns
+     * @param organizationId - Organization ID for multi-tenancy
+     * @param assetId - The asset ID to search for
+     * @returns Array of referencing documents (id, type, status, title)
+     */
+    findDocumentsReferencingAsset?(organizationId: string, assetId: string, knownTypes?: string[]): Promise<Array<{
+        documentId: string;
+        type: string;
+        title: string;
+        status: string | null;
+    }>>;
+    /**
+     * Count document references for multiple asset IDs in batch
+     * @param organizationId - Organization ID for multi-tenancy
+     * @param assetIds - Array of asset IDs to count references for
+     * @param knownTypes - Only count references from these document types (excludes orphaned types)
+     * @returns Map of asset ID to reference count
+     */
+    countDocumentReferencesForAssets?(organizationId: string, assetIds: string[], knownTypes?: string[]): Promise<Record<string, number>>;
+    /**
+     * Clear references to a deleted asset from document data. Returns the number
+     * of documents modified.
+     *
+     * Clears `draftData` on every document, and `publishedData` only on
+     * non-published ones (the stale copy left by an unpublish). It must NOT
+     * rewrite `publishedData` on a published document — that column is written
+     * only by publish, and mutating it here would desync the content hash. The
+     * reference leaves published data on the next publish instead.
+     *
+     * Must not filter by registered schema type: a document whose type was
+     * removed from the codebase still holds the reference, and is exactly what a
+     * force-delete leaves behind.
+     *
+     * Renamed from `clearAssetFromPublishedData`, which described neither what it
+     * did nor what it now does.
+     */
+    clearAssetReferences?(organizationId: string, assetId: string): Promise<number>;
+    createDocumentVersion?(data: {
+        documentId: string;
+        organizationId: string;
+        eventType: 'draft' | 'publish';
+        data: any;
+        createdBy?: string | null;
+    }): Promise<DocumentVersion | null>;
+    listDocumentVersions?(organizationId: string, documentId: string, options?: {
+        limit?: number;
+        offset?: number;
+    }): Promise<DocumentVersionList>;
+    getDocumentVersion?(organizationId: string, documentId: string, versionNumber: number): Promise<DocumentVersion | null>;
+    deleteDocumentVersions?(documentId: string, versionIds: string[]): Promise<void>;
+}
+//# sourceMappingURL=document.d.ts.map

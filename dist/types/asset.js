@@ -1,0 +1,2 @@
+// types/asset.ts
+export {};

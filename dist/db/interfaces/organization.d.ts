@@ -1,0 +1,28 @@
+import type { Organization, NewOrganization, OrganizationMember, NewOrganizationMember, Invitation, NewInvitation, UserSession, OrganizationMembership } from '../../types/organization.js';
+export interface OrganizationAdapter {
+    createOrganization(data: NewOrganization): Promise<Organization>;
+    findAllOrganizations(): Promise<Organization[]>;
+    findOrganizationById(id: string): Promise<Organization | null>;
+    findOrganizationBySlug(slug: string): Promise<Organization | null>;
+    updateOrganization(id: string, data: Partial<Omit<Organization, 'id' | 'createdAt' | 'createdBy'>>): Promise<Organization | null>;
+    deleteOrganization(id: string): Promise<boolean>;
+    addMember(data: NewOrganizationMember): Promise<OrganizationMember>;
+    removeMember(organizationId: string, userId: string): Promise<boolean>;
+    removeAllMembers(organizationId: string): Promise<boolean>;
+    updateMemberRole(organizationId: string, userId: string, role: string): Promise<OrganizationMember | null>;
+    findUserMembership(userId: string, organizationId: string): Promise<OrganizationMember | null>;
+    findUserOrganizations(userId: string): Promise<OrganizationMembership[]>;
+    findOrganizationMembers(organizationId: string): Promise<OrganizationMember[]>;
+    createInvitation(data: NewInvitation): Promise<Invitation>;
+    findInvitationByToken(token: string): Promise<Invitation | null>;
+    findOrganizationInvitations(organizationId: string): Promise<Invitation[]>;
+    findInvitationsByEmail(email: string): Promise<Invitation[]>;
+    acceptInvitation(token: string, userId: string): Promise<OrganizationMember>;
+    deleteInvitation(id: string, organizationId?: string): Promise<boolean>;
+    removeAllInvitations(organizationId: string): Promise<boolean>;
+    cleanupExpiredInvitations(): Promise<number>;
+    updateUserSession(userId: string, organizationId: string): Promise<void>;
+    findUserSession(userId: string): Promise<UserSession | null>;
+    deleteUserSession(userId: string): Promise<boolean>;
+}
+//# sourceMappingURL=organization.d.ts.map

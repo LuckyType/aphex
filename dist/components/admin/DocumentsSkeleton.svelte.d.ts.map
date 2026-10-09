@@ -1,0 +1,1 @@
+{"version":3,"file":"DocumentsSkeleton.svelte.d.ts","sourceRoot":"","sources":["../../../src/lib/components/admin/DocumentsSkeleton.svelte.ts"],"names":[],"mappings":"AAMC,KAAK,KAAK,GAAG;IACZ,eAAe,CAAC,EAAE,MAAM,CAAC;CACzB,CAAC;AAoCH,QAAA,MAAM,iBAAiB,2CAAwC,CAAC;AAChE,KAAK,iBAAiB,GAAG,UAAU,CAAC,OAAO,iBAAiB,CAAC,CAAC;AAC9D,eAAe,iBAAiB,CAAC"}

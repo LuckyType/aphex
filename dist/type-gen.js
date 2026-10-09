@@ -1,0 +1,723 @@
+import { createPartResolver } from './plugins/resolver.js';
+import { isFieldRequired } from './field-validation/utils.js';
+import { toPascalCase } from './utils/string-case.js';
+/**
+ * Map Aphex field types to TypeScript types
+ */
+function mapFieldTypeToTS(field, schemaMap, opts = {}) {
+    const { inArray = false, resolved = false, parentSchemaName, blockContentFields } = opts;
+    switch (field.type) {
+        case 'string':
+        case 'text':
+        case 'slug':
+        case 'url':
+            return 'string';
+        case 'number':
+            return 'number';
+        case 'boolean':
+            return 'boolean';
+        case 'date':
+            // Dates are stored as ISO date strings (YYYY-MM-DD)
+            return 'string';
+        case 'datetime':
+            // Datetimes are stored as ISO datetime strings in UTC (YYYY-MM-DDTHH:mm:ssZ)
+            return 'string';
+        case 'image':
+            // Image fields store a Sanity-style value: { _type: 'image', asset: { _type: 'reference', _ref } }
+            return 'ImageValue';
+        case 'file':
+            // File fields mirror image: { _type: 'file', asset: { _type: 'reference', _ref } }
+            return 'FileValue';
+        case 'array': {
+            if (!('of' in field) || !field.of || field.of.length === 0) {
+                return 'unknown[]';
+            }
+            if (field.of.some((item) => item.type === 'block')) {
+                if (parentSchemaName && blockContentFields) {
+                    const info = blockContentFields.find((f) => f.schemaName === parentSchemaName && f.fieldName === field.name);
+                    if (info)
+                        return getBlockContentArrayType(info);
+                }
+                return 'PortableTextBlock[]';
+            }
+            // Map each array item type. Items get `_key?` injected at runtime by
+            // ArrayField for stable DnD ordering; reflect that in the type.
+            const types = field.of
+                .map((item) => {
+                // Reference array item: stored as { _type: 'reference', _ref, _key }.
+                // Raw mode → Reference<Target>; resolved mode → Target (the raw
+                // target — at depth=1 the resolver doesn't recurse into the
+                // fetched docs, so their inner refs stay raw).
+                if (item.type === 'reference') {
+                    const to = item.to;
+                    const targets = to
+                        ?.map((t) => {
+                        const target = schemaMap.get(t.type);
+                        return target ? toPascalCase(t.type) : null;
+                    })
+                        .filter((s) => !!s) ?? [];
+                    if (targets.length === 0) {
+                        return resolved ? 'unknown' : 'Reference<unknown>';
+                    }
+                    const union = targets.join(' | ');
+                    if (resolved) {
+                        return targets.length === 1 ? targets[0] : `(${union})`;
+                    }
+                    return targets.length === 1 ? `Reference<${targets[0]}>` : `Reference<${union}>`;
+                }
+                // Named object schema — refs inside it are part of the same
+                // document tree, so in resolved mode point at the *Resolved
+                // variant (only if it actually has refs; otherwise no Resolved
+                // variant was emitted).
+                const refSchema = schemaMap.get(item.type);
+                if (refSchema && refSchema.type === 'object') {
+                    const useResolved = resolved && hasReferences(refSchema, schemaMap);
+                    const name = toPascalCase(item.type) + (useResolved ? 'Resolved' : '');
+                    return `(${name} & { _key?: string })`;
+                }
+                // Inline object or primitive — recurse, propagating resolved.
+                return mapFieldTypeToTS(item, schemaMap, { inArray: true, resolved });
+            })
+                .filter((t) => t !== 'unknown');
+            if (types.length === 0) {
+                return 'unknown[]';
+            }
+            return types.length === 1 ? `${types[0]}[]` : `Array<${types.join(' | ')}>`;
+        }
+        case 'object': {
+            if (!('fields' in field) || !field.fields) {
+                return 'Record<string, unknown>';
+            }
+            // Generate inline interface for object fields. When this object is
+            // itself an array item, prepend the runtime-only `_key?` and
+            // `_type?` discriminator props.
+            const arrayMeta = inArray ? '  _key?: string;\n  _type?: string;\n' : '';
+            const props = field.fields
+                .map((f) => {
+                const tsType = mapFieldTypeToTS(f, schemaMap, { resolved });
+                const optional = isFieldOptional(f) ? '?' : '';
+                return `  ${f.name}${optional}: ${tsType};`;
+            })
+                .join('\n');
+            return `{\n${arrayMeta}${props}\n}`;
+        }
+        case 'reference': {
+            const to = field.to;
+            const targets = to
+                ?.map((t) => (schemaMap.get(t.type) ? toPascalCase(t.type) : null))
+                .filter((s) => !!s) ?? [];
+            if (resolved) {
+                // At depth=1 the ref is replaced with the full target doc (raw shape).
+                if (targets.length === 0)
+                    return 'unknown';
+                return targets.length === 1 ? targets[0] : targets.join(' | ');
+            }
+            // Raw: stored as { _type: 'reference', _ref } — same shape as array items.
+            if (targets.length === 0)
+                return 'Reference<unknown>';
+            const union = targets.join(' | ');
+            return targets.length === 1 ? `Reference<${targets[0]}>` : `Reference<${union}>`;
+        }
+        default:
+            return 'unknown';
+    }
+}
+/**
+ * The depth=0 write shape (TypeScript type string) for a single field, e.g.
+ * `string` for a slug, `Reference<author>` for a reference, `ImageValue` for an
+ * image. Same mapping `generate-types` uses to emit `generated-types.ts`, so
+ * agent-facing schema introspection (MCP `get_schema`) can derive value shapes
+ * from the one source of truth instead of hand-authoring a parallel list.
+ */
+export function fieldWriteShape(field, schemas) {
+    const schemaMap = new Map(schemas.map((s) => [s.name, s]));
+    return mapFieldTypeToTS(field, schemaMap, {});
+}
+/**
+ * Determine if a field is optional based on validation rules
+ */
+function isFieldOptional(field) {
+    return !isFieldRequired(field);
+}
+function generateBlockTypeInterface(info) {
+    const props = info.fields
+        .map((f) => {
+        const tsType = mapFieldTypeToTS(f, new Map(), {});
+        const optional = isFieldOptional(f) ? '?' : '';
+        return `  ${f.name}${optional}: ${tsType};`;
+    })
+        .join('\n');
+    return `export interface ${info.interfaceName} {\n  _type: '${info.name}';\n  _key: string;\n${props}\n}`;
+}
+function collectBlockContentFields(schemas, schemaMap) {
+    const allBlockTypes = new Map();
+    const fields = [];
+    for (const schema of schemas) {
+        for (const field of schema.fields) {
+            if (field.type !== 'array' || !('of' in field) || !field.of)
+                continue;
+            const blockDef = field.of.find((item) => item.type === 'block');
+            if (!blockDef)
+                continue;
+            const mapTypeName = `${toPascalCase(schema.name)}${toPascalCase(field.name)}Types`;
+            const blockTypes = [];
+            const inlineTypes = [];
+            const annotations = [];
+            let hasImage = false;
+            for (const item of field.of) {
+                if (item.type === 'block')
+                    continue;
+                if (item.type === 'image') {
+                    hasImage = true;
+                    continue;
+                }
+                const existing = schemaMap.get(item.type);
+                const itemFields = item.fields || existing?.fields || [];
+                const interfaceName = toPascalCase(item.type) + 'Block';
+                const info = {
+                    name: item.type,
+                    interfaceName,
+                    fields: itemFields
+                };
+                if (!allBlockTypes.has(item.type)) {
+                    allBlockTypes.set(item.type, info);
+                }
+                blockTypes.push(info);
+            }
+            const blockOfItems = blockDef.of;
+            if (blockOfItems) {
+                for (const item of blockOfItems) {
+                    const existing = schemaMap.get(item.type);
+                    const itemFields = item.fields || existing?.fields || [];
+                    const interfaceName = toPascalCase(item.type) + 'Inline';
+                    const info = {
+                        name: item.type,
+                        interfaceName,
+                        fields: itemFields
+                    };
+                    if (!allBlockTypes.has(`inline:${item.type}`)) {
+                        allBlockTypes.set(`inline:${item.type}`, info);
+                    }
+                    inlineTypes.push(info);
+                }
+            }
+            const markAnnotations = blockDef.marks?.annotations;
+            if (markAnnotations) {
+                for (const ann of markAnnotations) {
+                    const interfaceName = toPascalCase(ann.name) + 'Annotation';
+                    const info = {
+                        name: ann.name,
+                        interfaceName,
+                        fields: ann.fields || []
+                    };
+                    if (!allBlockTypes.has(`annotation:${ann.name}`)) {
+                        allBlockTypes.set(`annotation:${ann.name}`, info);
+                    }
+                    annotations.push(info);
+                }
+            }
+            fields.push({
+                schemaName: schema.name,
+                fieldName: field.name,
+                mapTypeName,
+                blockTypes,
+                inlineTypes,
+                annotations,
+                hasImage
+            });
+        }
+    }
+    return { fields, allBlockTypes };
+}
+function generateBlockContentTypes(allBlockTypes, fields) {
+    if (fields.length === 0)
+        return '';
+    const sections = [];
+    // Standalone interfaces (deduped)
+    const interfaces = [];
+    for (const [, info] of allBlockTypes) {
+        interfaces.push(generateBlockTypeInterface(info));
+    }
+    // Image block (built-in)
+    const hasAnyImage = fields.some((f) => f.hasImage);
+    if (hasAnyImage) {
+        // `asset` borrows the document-level image field's type rather than restating
+        // a bare `{ _ref, _type }`. They are the same value at runtime — asset
+        // injection writes url/alt/width/height/srcset onto both — and spelling only
+        // the reference here made `image.asset.srcset` a type error inside rich text
+        // while the identical read compiled on a document field. The same fix was
+        // already applied to `ImageValue` itself; this is the half that was missed.
+        // (`ImageValue` in the body is what triggers its import below.)
+        interfaces.push(`export interface PortableTextImageBlock {
+  _type: 'image';
+  _key: string;
+  asset?: ImageValue['asset'];
+  alt?: string;
+}`);
+    }
+    if (interfaces.length > 0) {
+        sections.push(interfaces.join('\n\n'));
+    }
+    // Per-field mapped types for indexed access
+    for (const field of fields) {
+        const entries = [];
+        for (const bt of field.blockTypes) {
+            entries.push(`  ${bt.name}: ${bt.interfaceName};`);
+        }
+        if (field.hasImage) {
+            entries.push(`  image: PortableTextImageBlock;`);
+        }
+        for (const it of field.inlineTypes) {
+            entries.push(`  ${it.name}: ${it.interfaceName};`);
+        }
+        for (const ann of field.annotations) {
+            entries.push(`  ${ann.name}: ${ann.interfaceName};`);
+        }
+        if (entries.length > 0) {
+            sections.push(`export interface ${field.mapTypeName} {\n${entries.join('\n')}\n}`);
+        }
+    }
+    return sections.join('\n\n');
+}
+function getBlockContentArrayType(field) {
+    const types = ['PortableTextBlock'];
+    for (const bt of field.blockTypes) {
+        types.push(bt.interfaceName);
+    }
+    if (field.hasImage) {
+        types.push('PortableTextImageBlock');
+    }
+    if (types.length === 1)
+        return 'PortableTextBlock[]';
+    return `Array<\n    | ${types.join('\n    | ')}\n  >`;
+}
+/**
+ * Generate TypeScript interface for a schema type. When `resolved` is true,
+ * emits the depth=1 shape (refs swapped for their targets) under the name
+ * `<Name>Resolved`.
+ */
+function generateInterface(schema, schemaMap, resolved = false, blockContentFields) {
+    const interfaceName = toPascalCase(schema.name) + (resolved ? 'Resolved' : '');
+    const fields = schema.fields
+        .map((field) => {
+        const tsType = mapFieldTypeToTS(field, schemaMap, {
+            resolved,
+            parentSchemaName: schema.name,
+            blockContentFields
+        });
+        const optional = isFieldOptional(field) ? '?' : '';
+        // Build comment with description and format information
+        let comment = '';
+        const needsComment = field.description || field.type === 'date' || field.type === 'datetime';
+        if (needsComment) {
+            const parts = [];
+            if (field.description) {
+                parts.push(field.description);
+            }
+            if (field.type === 'date') {
+                const dateField = field;
+                const format = dateField.options?.dateFormat || 'YYYY-MM-DD';
+                parts.push(`@format ISO date string (YYYY-MM-DD) - displays as ${format}`);
+            }
+            else if (field.type === 'datetime') {
+                const dateTimeField = field;
+                const dateFormat = dateTimeField.options?.dateFormat || 'YYYY-MM-DD';
+                const timeFormat = dateTimeField.options?.timeFormat || 'HH:mm';
+                parts.push(`@format ISO datetime string in UTC (YYYY-MM-DDTHH:mm:ssZ) - displays as ${dateFormat} ${timeFormat}`);
+            }
+            if (parts.length > 0) {
+                comment = `  /**\n   * ${parts.join('\n   * ')}\n   */\n`;
+            }
+        }
+        return `${comment}  ${field.name}${optional}: ${tsType};`;
+    })
+        .join('\n');
+    // Add id and _meta fields for document types, _type for object types
+    const isDocument = schema.type === 'document';
+    let finalFields;
+    if (isDocument) {
+        finalFields = `  /** Document ID */
+  id: string;
+${fields}
+  /** Document metadata */
+  _meta?: {
+    type: string;
+    status: 'draft' | 'published';
+    organizationId: string;
+    createdAt: Date | null;
+    updatedAt: Date | null;
+    createdBy?: string;
+    updatedBy?: string;
+    publishedAt?: Date | null;
+    publishedHash?: string | null;
+  };`;
+    }
+    else {
+        // Object types include _type for array item discrimination
+        finalFields = `  /** Object type discriminator */
+  _type?: string;
+${fields}`;
+    }
+    return `export interface ${interfaceName} {\n${finalFields}\n}`;
+}
+/**
+ * True if the schema (or any object schema reachable from it) contains a
+ * reference field. Used to skip emitting `*Resolved` variants for schemas
+ * that have nothing to resolve.
+ */
+function hasReferences(schema, schemaMap, visited = new Set()) {
+    if (visited.has(schema.name))
+        return false;
+    visited.add(schema.name);
+    return schema.fields.some((f) => fieldHasReferences(f, schemaMap, visited));
+}
+function fieldHasReferences(field, schemaMap, visited) {
+    if (field.type === 'reference')
+        return true;
+    if (field.type === 'array' && 'of' in field && field.of) {
+        return field.of.some((item) => {
+            if (item.type === 'reference')
+                return true;
+            const named = schemaMap.get(item.type);
+            if (named && named.type === 'object')
+                return hasReferences(named, schemaMap, visited);
+            return fieldHasReferences(item, schemaMap, visited);
+        });
+    }
+    if (field.type === 'object' && 'fields' in field && field.fields) {
+        return field.fields.some((f) => fieldHasReferences(f, schemaMap, visited));
+    }
+    return false;
+}
+/**
+ * Generate the Collections interface augmentation. Singleton-flagged schemas
+ * are typed as `SingletonCollection<T>` (a narrowed pick exposing only
+ * `get`/`update`/`publish`/`unpublish`/`singletonId`/`schema`) so consumers
+ * can't accidentally call list/findByID/create/delete on them at compile
+ * time. The runtime is still the same CollectionAPI instance.
+ */
+function generateCollectionsAugmentation(documentSchemas) {
+    const mappings = documentSchemas
+        .map((schema) => {
+        const interfaceName = toPascalCase(schema.name);
+        const collectionType = schema.singleton
+            ? `SingletonCollection<${interfaceName}>`
+            : `CollectionAPI<${interfaceName}>`;
+        return `    ${schema.name}: ${collectionType};`;
+    })
+        .join('\n');
+    return `declare module '@aphexcms/cms-core/server' {
+  interface Collections {
+${mappings}
+  }
+}`;
+}
+/**
+ * Generate complete TypeScript types file with module augmentation
+ */
+export function generateTypes(schemas) {
+    // Create schema map for lookups
+    const schemaMap = new Map(schemas.map((s) => [s.name, s]));
+    // Separate document and object types
+    const documentSchemas = schemas.filter((s) => s.type === 'document');
+    const objectSchemas = schemas.filter((s) => s.type === 'object');
+    // Collect block content field info for typed unions
+    const { fields: blockContentFields, allBlockTypes } = collectBlockContentFields(schemas, schemaMap);
+    // Raw shape (storage / depth=0)
+    const objectInterfaces = objectSchemas
+        .map((s) => generateInterface(s, schemaMap, false, blockContentFields))
+        .join('\n\n');
+    const documentInterfaces = documentSchemas
+        .map((s) => generateInterface(s, schemaMap, false, blockContentFields))
+        .join('\n\n');
+    // Resolved shape (depth=1) — only for schemas that actually contain refs.
+    const objectResolvedInterfaces = objectSchemas
+        .filter((s) => hasReferences(s, schemaMap))
+        .map((s) => generateInterface(s, schemaMap, true, blockContentFields))
+        .join('\n\n');
+    const documentResolvedInterfaces = documentSchemas
+        .filter((s) => hasReferences(s, schemaMap))
+        .map((s) => generateInterface(s, schemaMap, true, blockContentFields))
+        .join('\n\n');
+    // Block content types (custom blocks, inline objects, annotations)
+    const blockContentTypeDefs = generateBlockContentTypes(allBlockTypes, blockContentFields);
+    const hasResolved = !!(objectResolvedInterfaces || documentResolvedInterfaces);
+    // Generate Collections interface augmentation
+    const hasSingletons = documentSchemas.some((s) => s.singleton);
+    const collectionsAugmentation = generateCollectionsAugmentation(documentSchemas);
+    const resolvedSection = hasResolved
+        ? `
+
+// ============================================================================
+// Resolved Types (depth=1) — refs swapped for their target docs
+// ============================================================================
+//
+// Use these when reading with \`depth: 1\`. The local API and HTTP routes default
+// to depth=0 (raw IDs); pass \`{ depth: 1 }\` to get the resolved shape:
+//
+//   const menu = (await cms.collections.menu.get(id, { depth: 1 })) as MenuResolved;
+//
+// At depth=1 only the outer document's refs resolve — refs inside the resolved
+// targets stay raw, which is why \`MenuResolved.items\` is \`MenuItem[]\` (not
+// \`MenuItemResolved[]\`).
+
+${objectResolvedInterfaces ? objectResolvedInterfaces + '\n\n' : ''}${documentResolvedInterfaces}`
+        : '';
+    // Only import the asset value types the generated interfaces actually reference, so a
+    // schema with no image (or no file) fields doesn't pull in an unused import.
+    const generatedBody = [
+        blockContentTypeDefs,
+        objectInterfaces,
+        documentInterfaces,
+        resolvedSection,
+        collectionsAugmentation
+    ].join('\n');
+    const assetImports = [
+        /\bImageValue\b/.test(generatedBody) ? 'ImageValue' : null,
+        /\bFileValue\b/.test(generatedBody) ? 'FileValue' : null
+    ].filter((name) => name !== null);
+    const apiImports = hasSingletons ? 'CollectionAPI, SingletonCollection' : 'CollectionAPI';
+    const importNames = [apiImports, ...assetImports].join(', ');
+    // Build the complete file
+    const output = `/**
+ * Generated types for Aphex CMS
+ * This file is auto-generated - DO NOT EDIT manually
+ */
+import type { ${importNames} } from '@aphexcms/cms-core/server';
+
+/**
+ * A reference to another document, stored as \`{ _type: 'reference', _ref }\`
+ * inside arrays. At depth=0 (default) this is the raw shape; at depth=1 the
+ * field is replaced with the target document — see the \`*Resolved\` variants.
+ */
+export interface Reference<T = unknown> {
+	_type: 'reference';
+	_ref: string;
+	_key?: string;
+	/** Phantom — present only in the type, used for inferring the target. */
+	__targetType?: T;
+}
+
+export interface PortableTextBlock {
+	_type: 'block';
+	_key: string;
+	style?: string;
+	children: Array<{
+		_type: 'span';
+		_key: string;
+		text: string;
+		marks?: string[];
+	}>;
+	markDefs?: Array<{
+		_type: string;
+		_key: string;
+		[key: string]: unknown;
+	}>;
+	listItem?: string;
+	level?: number;
+}
+
+// ============================================================================
+// Block Content Types (custom blocks, inline objects, annotations)
+// ============================================================================
+
+${blockContentTypeDefs}
+
+// ============================================================================
+// Object Types (nested in documents)
+// ============================================================================
+
+${objectInterfaces}
+
+// ============================================================================
+// Document Types (collections)
+// ============================================================================
+
+${documentInterfaces}${resolvedSection}
+
+// ============================================================================
+// Module Augmentation - Extends Collections interface globally
+// ============================================================================
+
+${collectionsAugmentation}
+`;
+    return output;
+}
+/**
+ * CLI helper to generate types from schema file
+ */
+/**
+ * Compile a `.ts` module with esbuild (stubbing icons + Svelte components, which never
+ * affect types) and dynamically import it, returning the module namespace. Used for both
+ * the schema module and the optional plugins module.
+ */
+async function compileAndImportModule(absolutePath, tempName, opts = {}) {
+    const path = await import('path');
+    const { pathToFileURL } = await import('url');
+    const fs = await import('fs/promises');
+    let modulePath = absolutePath;
+    let tempFile = null;
+    if (absolutePath.endsWith('.ts')) {
+        const { build } = await import('esbuild');
+        const { existsSync } = await import('fs');
+        /** Does this dist file exist? Named so the resolver below reads cleanly. */
+        const fsSyncFor = (candidate) => existsSync(candidate);
+        const tempOutFile = path.join(path.dirname(absolutePath), tempName);
+        // The plugins module imports plugin *main* entries (Svelte-laden) and cms-core
+        // runtime utils — so bundle the plugins (the Svelte-stub strips their components)
+        // and alias cms-core to its built dist (real JS; source `.ts` can't load in Node).
+        // The schema module keeps `@aphexcms/*` external (its plugin imports use the
+        // server-safe `/schema` subpath, which loads fine).
+        /*
+         * cms-core's dist directory, when we were handed its entry file. Used by the
+         * resolver below to map subpath imports; `undefined` disables that mapping.
+         */
+        const cmsCoreDistDir = opts.bundlePlugins && opts.cmsCoreDist ? path.dirname(opts.cmsCoreDist) : undefined;
+        await build({
+            entryPoints: [absolutePath],
+            bundle: true,
+            format: 'esm',
+            platform: 'node',
+            outfile: tempOutFile,
+            external: opts.bundlePlugins ? ['sharp', 'graphql', 'graphql-yoga'] : ['@aphexcms/*'],
+            plugins: [
+                {
+                    name: 'remove-icons',
+                    setup(build) {
+                        /*
+                         * Map `@aphexcms/cms-core` — and its subpaths — onto the built dist.
+                         * The source `.ts` entry can't run in Node, so plugins' cms-core
+                         * runtime imports have to come from dist.
+                         *
+                         * This was esbuild's `alias` option, which matches on prefix and
+                         * appends the remainder: with the package aliased to `dist/index.js`,
+                         * `@aphexcms/cms-core/local-api/auth-helpers` became
+                         * `dist/index.js/local-api/auth-helpers` and failed to resolve. That
+                         * made *any* plugin importing a cms-core subpath break type
+                         * generation, which is not something a plugin author could be
+                         * expected to work out. dist mirrors src, so a subpath maps by
+                         * appending `.js` (or `/index.js` for a directory).
+                         */
+                        if (cmsCoreDistDir) {
+                            build.onResolve({ filter: /^@aphexcms\/cms-core(\/|$)/ }, (args) => {
+                                const subpath = args.path.slice('@aphexcms/cms-core'.length).replace(/^\//, '');
+                                if (!subpath)
+                                    return { path: opts.cmsCoreDist };
+                                const asFile = path.join(cmsCoreDistDir, `${subpath}.js`);
+                                if (fsSyncFor(asFile))
+                                    return { path: asFile };
+                                const asDir = path.join(cmsCoreDistDir, subpath, 'index.js');
+                                if (fsSyncFor(asDir))
+                                    return { path: asDir };
+                                // Unknown subpath: fall through to esbuild's own resolution so
+                                // the error names the real import rather than a mangled path.
+                                return null;
+                            });
+                        }
+                        // SvelteKit's `$env/*` virtual modules (dynamic/static, public/private)
+                        // only exist inside Vite — plain esbuild can't resolve them. A
+                        // plugin/schema module may import one just to read a default config
+                        // value, which never affects the generated types, so stub it out to
+                        // an empty object rather than fail the whole build.
+                        build.onResolve({ filter: /^\$env\// }, (args) => {
+                            return { path: args.path, namespace: 'env-stub' };
+                        });
+                        build.onLoad({ filter: /.*/, namespace: 'env-stub' }, () => {
+                            return { contents: 'export const env = {};', loader: 'js' };
+                        });
+                        build.onResolve({ filter: /^@lucide\/svelte/ }, (args) => {
+                            return { path: args.path, namespace: 'lucide-stub' };
+                        });
+                        // CJS rather than ESM: esbuild validates ESM named imports against
+                        // the module's exports, so `export default {}` breaks any plugin
+                        // doing `import { Sparkles } from '@lucide/svelte'`. Named imports
+                        // off a CJS stub become property access instead, so every icon name
+                        // resolves to undefined — which is what the `icon:` rewrite below
+                        // wants anyway.
+                        build.onLoad({ filter: /.*/, namespace: 'lucide-stub' }, () => {
+                            return { contents: 'module.exports = {}', loader: 'js' };
+                        });
+                        // Stub .svelte components — a schema/plugin module can transitively
+                        // import component parts (actions, tools, widgets) that never affect types.
+                        build.onResolve({ filter: /\.svelte(\?.*)?$/ }, (args) => {
+                            return { path: args.path, namespace: 'svelte-stub' };
+                        });
+                        // CJS for the same reason as the lucide stub above: components can be
+                        // imported by name (`import { Foo } from './parts.svelte'`).
+                        build.onLoad({ filter: /.*/, namespace: 'svelte-stub' }, () => {
+                            return { contents: 'module.exports = {}', loader: 'js' };
+                        });
+                        build.onLoad({ filter: /\.(ts|js)$/ }, async (args) => {
+                            const contents = await fs.readFile(args.path, 'utf8');
+                            const transformed = contents.replace(/icon:\s*\w+/g, 'icon: undefined');
+                            return { contents: transformed, loader: args.path.endsWith('.ts') ? 'ts' : 'js' };
+                        });
+                    }
+                }
+            ]
+        });
+        modulePath = tempOutFile;
+        tempFile = tempOutFile;
+    }
+    // @vite-ignore: path is resolved at CLI runtime, not statically analyzable.
+    const mod = await import(/* @vite-ignore */ pathToFileURL(modulePath).href);
+    if (tempFile) {
+        try {
+            await fs.unlink(tempFile);
+        }
+        catch {
+            // Ignore cleanup errors
+        }
+    }
+    return mod;
+}
+export async function generateTypesFromConfig(schemaPath, outputPath, pluginsPath) {
+    try {
+        const path = await import('path');
+        const fs = await import('fs/promises');
+        const absoluteSchemaPath = path.resolve(process.cwd(), schemaPath);
+        const absoluteOutputPath = path.resolve(process.cwd(), outputPath);
+        const schemaModule = await compileAndImportModule(absoluteSchemaPath, '.temp-schema.mjs');
+        let schemas = schemaModule.schemaTypes || schemaModule.default;
+        if (!schemas || !Array.isArray(schemas)) {
+            throw new Error('Invalid schema file: expected schemaTypes array export');
+        }
+        // Merge plugin-contributed document/object schemas (e.g. Plato's `calendar`) and
+        // apply plugin schema-transforms (e.g. an SEO field group injected into chosen
+        // collections, or a custom field type like `color` desugaring the way it does at
+        // runtime) — same order as `createCMSConfig` in config.ts, so codegen sees exactly
+        // the schema list the running app does. Without the merge step, any document type
+        // that only exists via a plugin's `aphex/schema` part silently never gets a
+        // generated interface. `pluginsPath` points at the app's client-safe plugin
+        // registry (e.g. `src/lib/plugins.ts`, exporting `plugins`).
+        if (pluginsPath) {
+            const absolutePluginsPath = path.resolve(process.cwd(), pluginsPath);
+            // Resolve cms-core's built dist so the plugins' cms-core runtime imports load
+            // (the source `.ts` entry can't run in Node). Present in both the monorepo
+            // (symlink) and real installs (published dist).
+            const fsSync = await import('fs');
+            const cmsCoreDistCandidate = path.join(process.cwd(), 'node_modules/@aphexcms/cms-core/dist/index.js');
+            const cmsCoreDist = fsSync.existsSync(cmsCoreDistCandidate)
+                ? cmsCoreDistCandidate
+                : undefined;
+            const pluginsModule = await compileAndImportModule(absolutePluginsPath, '.temp-plugins.mjs', {
+                bundlePlugins: true,
+                cmsCoreDist
+            });
+            const plugins = (pluginsModule.plugins || pluginsModule.default);
+            if (Array.isArray(plugins)) {
+                const resolver = createPartResolver(plugins);
+                const pluginSchemas = resolver.schemaTypes();
+                schemas = resolver.applySchemaTransforms([...schemas, ...pluginSchemas]);
+            }
+        }
+        const generatedTypes = generateTypes(schemas);
+        // Write to output file
+        await fs.writeFile(absoluteOutputPath, generatedTypes, 'utf-8');
+        console.log(`✅ Types generated successfully at: ${absoluteOutputPath}`);
+    }
+    catch (error) {
+        console.error('❌ Failed to generate types:', error);
+        throw error;
+    }
+}
