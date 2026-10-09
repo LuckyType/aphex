@@ -224,6 +224,19 @@ export const restoreVersionResponse = z.object({
 	message: z.string().optional()
 });
 
+// ---------- POST /documents/:id/discard-draft ----------
+// The published version is written back as the draft.
+
+export const discardDraftRequest = z.object({
+	expectedRevision: z.number().optional()
+});
+
+export const discardDraftResponse = z.object({
+	success: z.literal(true),
+	data: documentSchema,
+	validation: z.unknown().optional()
+});
+
 // ---------- POST /documents/:id/schedule ----------
 
 export const scheduleDocumentRequest = z.object({

@@ -34,6 +34,8 @@ import {
 	getVersionResponse,
 	restoreVersionRequest,
 	restoreVersionResponse,
+	discardDraftRequest,
+	discardDraftResponse,
 	scheduleDocumentRequest,
 	scheduleDocumentResponse
 } from '../../../api/schemas/documents';
@@ -252,6 +254,17 @@ export const ROUTE_REGISTRY: RouteMeta[] = [
 		auth: 'write',
 		request: unpublishDocumentRequest,
 		response: unpublishDocumentResponse
+	},
+	{
+		path: '/api/documents/:id/discard-draft',
+		method: 'POST',
+		summary: 'Discard the draft',
+		description:
+			'Writes the published version back as the draft, through the same save path as any draft edit (hooks, validation, version snapshot, revision guard). 409 if the document is not published.',
+		tag: 'Documents',
+		auth: 'write',
+		request: discardDraftRequest,
+		response: discardDraftResponse
 	},
 	{
 		path: '/api/documents/:id/back-references',
