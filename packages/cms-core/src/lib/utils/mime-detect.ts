@@ -60,6 +60,19 @@ export function detectMimeType(buffer: Buffer, filename?: string): string | null
 		}
 	}
 
+	// WebM: an EBML header whose DocType is "webm". Without this an upload of
+	// `video/webm`, which the default allowed list admits, lands as
+	// octet-stream and is refused.
+	if (
+		buffer[0] === 0x1a &&
+		buffer[1] === 0x45 &&
+		buffer[2] === 0xdf &&
+		buffer[3] === 0xa3 &&
+		buffer.subarray(4, 64).includes('webm', 0, 'ascii')
+	) {
+		return 'video/webm';
+	}
+
 	// SVG: starts with < and contains <svg (check first 256 bytes)
 	const head = buffer.subarray(0, Math.min(buffer.length, 256)).toString('utf-8');
 	if (head.trimStart().startsWith('<') && head.includes('<svg')) {
