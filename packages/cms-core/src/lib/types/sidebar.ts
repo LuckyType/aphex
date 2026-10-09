@@ -43,6 +43,8 @@ export interface SidebarNavGroup {
 	 * that leave the studio, help, version.
 	 */
 	placement?: 'top' | 'bottom';
+	/** Its label folds the items away; it opens itself while one of them is open. */
+	collapsible?: boolean;
 }
 
 export interface SidebarBranding {
@@ -75,6 +77,11 @@ export interface SidebarData {
 	systemNavItems?: SidebarNavItem[];
 	/** Shorthand — the utility tier: bottom-pinned, demoted. Links off-site, help. */
 	secondaryNavItems?: SidebarNavItem[];
+	/**
+	 * Draw a line between groups and above the bottom-pinned group, which then
+	 * keeps the full size instead of being demoted.
+	 */
+	groupDividers?: boolean;
 	organizations?: SidebarOrganization[]; // User's organizations for organization switcher
 	activeOrganization?: SidebarOrganization; // Currently active organization
 	canCreateOrganization?: boolean; // Whether user can create orgs from admin panel
