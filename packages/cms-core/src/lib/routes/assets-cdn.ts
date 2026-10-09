@@ -2,6 +2,7 @@ import type { RequestHandler } from '@sveltejs/kit';
 import { verifyAssetSignature } from '../utils/asset-url-signing';
 import { isAssetPrivate, resolveFieldPrivacy } from '../utils/asset-privacy';
 import { cmsLogger } from '../utils/logger';
+import { aphexLocals } from '../auth/locals';
 import {
 	parseVariantFilename,
 	VARIANT_FORMAT,
@@ -10,7 +11,7 @@ import {
 } from '../storage/keys';
 import { configHashFor, pickVariant, resolveImageConfig } from '../images/variants';
 import { generateVariant } from '../images/generate';
-import { aphexLocals } from '../auth/locals';
+import type { StorageAdapter } from '../storage/interfaces/storage';
 
 /**
  * HTTP headers are ByteString-restricted, so a raw non-ASCII character in a
@@ -74,6 +75,17 @@ export function parseByteRange(
 	if (end < start) return 'unsatisfiable';
 
 	return { start, end };
+}
+
+/**
+ * Read a video's poster frame through the adapter's own path for its key.
+ * Handed the bare key, the local adapter (cms-core 11.2.1) resolves it
+ * against the working directory, outside its base, and refuses, so every
+ * poster read as missing.
+ */
+export function readPoster(storageAdapter: StorageAdapter, assetId: string): Promise<Buffer> {
+	const key = buildPosterKey(assetId);
+	return storageAdapter.getObject(storageAdapter.resolvePath?.(key) ?? key);
 }
 
 function toArrayBuffer(buffer: Buffer): ArrayBuffer {
@@ -284,7 +296,7 @@ export const GET: RequestHandler = async ({ params, locals, setHeaders, request 
 		// thumbnail sitting at a guessable URL.
 		if (filename === POSTER_FILENAME) {
 			try {
-				const poster = await storageAdapter.getObject(buildPosterKey(asset.id));
+				const poster = await readPoster(storageAdapter, asset.id);
 				setHeaders({
 					'Content-Type': 'image/webp',
 					'Content-Length': String(poster.length),
