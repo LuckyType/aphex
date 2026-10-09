@@ -8,7 +8,8 @@
 		SidebarMenuButton,
 		SidebarMenuSub,
 		SidebarMenuSubItem,
-		SidebarMenuSubButton
+		SidebarMenuSubButton,
+		useSidebar
 	} from '@aphexcms/ui/shadcn/sidebar';
 	import { ChevronRight, type IconProps } from '@lucide/svelte';
 	import type { Component } from 'svelte';
@@ -38,6 +39,8 @@
 		isActive?: (item: NavGroupItem) => boolean;
 		isToolActive?: (id: string) => boolean;
 		onSelectTool?: (id: string) => void;
+		/** See SidebarNavGroup.collapsible. */
+		collapsible?: boolean;
 	};
 
 	let {
@@ -47,8 +50,19 @@
 		tools = [],
 		isActive,
 		isToolActive,
-		onSelectTool
+		onSelectTool,
+		collapsible = false
 	}: Props = $props();
+
+	const sidebar = useSidebar();
+	const menuId = $props.id();
+	// Open while one of its items is the page on screen, so the highlighted
+	// entry is never folded away; a click on the label overrides it until the
+	// next navigation changes which item is active.
+	let groupOpen = $derived(items.some((item) => isActive?.(item) ?? false));
+	// The icon-only sidebar hides every label, so the label could not reopen
+	// the group: there the items always show.
+	const itemsShown = $derived(!collapsible || groupOpen || sidebar.state === 'collapsed');
 
 	const demoted = $derived(placement === 'bottom');
 	// One `mt-auto` group wins the leftover space and pins itself (and everything
@@ -57,10 +71,29 @@
 </script>
 
 <SidebarGroup class={demoted ? 'mt-auto' : undefined}>
-	{#if label}
+	{#if collapsible && label}
+		<SidebarGroupLabel>
+			{#snippet child({ props })}
+				<button
+					{...props}
+					type="button"
+					class={[props.class, 'hover:text-sidebar-foreground w-full cursor-pointer']}
+					aria-expanded={groupOpen}
+					aria-controls={menuId}
+					onclick={() => (groupOpen = !groupOpen)}
+				>
+					<span>{label}</span>
+					<ChevronRight
+						class={['ml-auto transition-transform duration-200', groupOpen && 'rotate-90']}
+						aria-hidden="true"
+					/>
+				</button>
+			{/snippet}
+		</SidebarGroupLabel>
+	{:else if label}
 		<SidebarGroupLabel>{label}</SidebarGroupLabel>
 	{/if}
-	<SidebarMenu>
+	<SidebarMenu id={collapsible ? menuId : undefined} hidden={!itemsShown}>
 		{#each items as item (item.title)}
 			{#if item.items && item.items.length > 0}
 				<Collapsible.Root open={item.isActive} class="group/collapsible">
