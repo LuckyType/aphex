@@ -1,4 +1,5 @@
 <script lang="ts">
+	import * as i18n from '../../../../i18n/index';
 	interface Props {
 		type: string;
 		nodeKey: string;
@@ -22,7 +23,7 @@
 	class="inline-object-chip"
 	class:selected
 	onclick={onEdit}
-	title="Edit {type}"
+	title={i18n.t('Edit {type}', { type })}
 	role="button"
 	tabindex="0"
 	onkeydown={(e) => {
@@ -37,7 +38,7 @@
 			e.stopPropagation();
 			onDelete();
 		}}
-		title="Remove">×</button
+		title={i18n.t('Remove')}>×</button
 	>
 </span>
 

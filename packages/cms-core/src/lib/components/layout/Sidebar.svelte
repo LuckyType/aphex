@@ -1,4 +1,5 @@
 <script lang="ts">
+	import * as i18n from '../../i18n/index';
 	import { SidebarProvider, SidebarInset, SidebarTrigger } from '@aphexcms/ui/shadcn/sidebar';
 	import { Separator } from '@aphexcms/ui/shadcn/separator';
 	import { Button } from '@aphexcms/ui/shadcn/button';
@@ -117,7 +118,7 @@
 								? 'bg-background text-foreground shadow'
 								: 'text-muted-foreground'} ring-offset-background focus-visible:ring-ring inline-flex items-center justify-center rounded-md px-3 py-1 text-sm font-medium whitespace-nowrap transition-all focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50"
 						>
-							Structure
+							{i18n.t('Structure')}
 						</button>
 						{#if enableGraphiQL}
 							<button
@@ -136,7 +137,7 @@
 									? 'bg-background text-foreground shadow'
 									: 'text-muted-foreground'} ring-offset-background focus-visible:ring-ring inline-flex items-center justify-center rounded-md px-3 py-1 text-sm font-medium whitespace-nowrap transition-all focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50"
 							>
-								Media
+								{i18n.t('Media')}
 							</button>
 						{/if}
 						<!-- Plugin admin-tool tabs register here (see AdminApp). -->
@@ -158,7 +159,7 @@
 						<Moon
 							class="absolute h-[1.2rem] w-[1.2rem] scale-0 rotate-90 transition-all dark:scale-100 dark:rotate-0"
 						/>
-						<span class="sr-only">Toggle theme</span>
+						<span class="sr-only">{i18n.t('Toggle theme')}</span>
 					</Button>
 				</div>
 			</div>

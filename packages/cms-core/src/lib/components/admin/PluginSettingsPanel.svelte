@@ -1,4 +1,5 @@
 <script lang="ts">
+	import * as i18n from '../../i18n/index';
 	import * as Card from '@aphexcms/ui/shadcn/card';
 	import * as Select from '@aphexcms/ui/shadcn/select';
 	import { Button } from '@aphexcms/ui/shadcn/button';
@@ -49,7 +50,7 @@
 			const res = await fetch('/api/plugin-settings');
 			const json = await res.json();
 			if (!res.ok || !json.success) {
-				loadError = json?.message ?? 'Failed to load plugin settings';
+				loadError = json?.message ?? i18n.t('Failed to load plugin settings');
 				return;
 			}
 			secretsEnabled = json.secretsEnabled ?? true;
@@ -61,7 +62,7 @@
 				savedByPlugin[entry.pluginId] = JSON.stringify(entry.values);
 			}
 		} catch {
-			loadError = 'Failed to load plugin settings';
+			loadError = i18n.t('Failed to load plugin settings');
 		} finally {
 			loading = false;
 		}
@@ -112,15 +113,15 @@
 			});
 			const json = await res.json();
 			if (!res.ok || !json.success) {
-				toast.error(json?.message ?? 'Failed to save settings');
+				toast.error(json?.message ?? i18n.t('Failed to save settings'));
 				return;
 			}
 			valuesByPlugin[decl.pluginId] = { ...json.data.values };
 			savedByPlugin[decl.pluginId] = JSON.stringify(json.data.values);
 			secretDrafts[decl.pluginId] = {}; // clear typed secrets after a successful save
-			toast.success(`${decl.title} settings saved`);
+			toast.success(i18n.t('{title} settings saved', { title: decl.title }));
 		} catch {
-			toast.error('Failed to save settings');
+			toast.error(i18n.t('Failed to save settings'));
 		} finally {
 			savingId = null;
 		}
@@ -135,10 +136,10 @@
 			autocomplete="off"
 			disabled={!secretsEnabled}
 			placeholder={!secretsEnabled
-				? 'Encryption key not configured'
+				? i18n.t('Encryption key not configured')
 				: isSecretSet(decl.pluginId, field.name)
-					? 'Set — type a new value to replace'
-					: 'Enter a value'}
+					? i18n.t('Set — type a new value to replace')
+					: i18n.t('Enter a value')}
 			value={getSecretDraft(decl.pluginId, field.name)}
 			oninput={(e) => setSecretDraft(decl.pluginId, field.name, e.currentTarget.value)}
 		/>
@@ -171,7 +172,7 @@
 			onValueChange={(v) => setVal(decl.pluginId, field.name, v)}
 		>
 			<Select.Trigger class="w-full">
-				{items.find((i) => i.value === value)?.title ?? 'Select…'}
+				{items.find((i) => i.value === value)?.title ?? i18n.t('Select…')}
 			</Select.Trigger>
 			<Select.Content>
 				{#each items as item (item.value)}
@@ -190,12 +191,14 @@
 
 <div class="space-y-6">
 	{#if loading}
-		<p class="text-muted-foreground text-sm">Loading…</p>
+		<p class="text-muted-foreground text-sm">{i18n.t('Loading…')}</p>
 	{:else if loadError}
 		<p class="text-destructive text-sm">{loadError}</p>
 	{:else if declarations.length === 0}
 		<div class="border-muted-foreground/30 rounded-md border border-dashed p-8 text-center">
-			<p class="text-muted-foreground text-sm">No installed plugins have configurable settings.</p>
+			<p class="text-muted-foreground text-sm">
+				{i18n.t('No installed plugins have configurable settings.')}
+			</p>
 		</div>
 	{:else}
 		{#each declarations as decl (decl.pluginId)}
@@ -222,7 +225,7 @@
 						onclick={() => save(decl)}
 						disabled={savingId === decl.pluginId || !isDirty(decl.pluginId)}
 					>
-						{savingId === decl.pluginId ? 'Saving…' : 'Save'}
+						{savingId === decl.pluginId ? i18n.t('Saving…') : i18n.t('Save')}
 					</Button>
 				</Card.Footer>
 			</Card.Root>

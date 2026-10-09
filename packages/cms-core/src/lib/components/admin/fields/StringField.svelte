@@ -1,4 +1,5 @@
 <script lang="ts">
+	import * as i18n from '../../../i18n/index';
 	import { Input } from '@aphexcms/ui/shadcn/input';
 	import * as Select from '@aphexcms/ui/shadcn/select';
 	import * as RadioGroup from '@aphexcms/ui/shadcn/radio-group';
@@ -159,18 +160,19 @@
 				// Current value not in new options - reset to first option
 				const newValue = items[0]?.value || '';
 
-				cmsLogger.debug(`🔄 Dependent field "${field.name}" reset: "${value}" → "${newValue}"`);
+				cmsLogger.debug(`Dependent field "${field.name}" reset: "${value}" → "${newValue}"`);
 				onUpdate(newValue);
 			}
 		}
 	});
+	const [beforeField, afterField] = i18n.tParts('Please select {field} first', 'field');
 </script>
 
 {#if isDependentFieldWithoutValue()}
 	<!-- Show message when dependent field hasn't been selected -->
 	<div class="border-muted-foreground/30 bg-muted/30 rounded-md border border-dashed p-4">
 		<p class="text-muted-foreground text-sm">
-			Please select <span class="font-medium">{dependsOnFieldName()}</span> first
+			{beforeField}<span class="font-medium">{dependsOnFieldName()}</span>{afterField}
 		</p>
 	</div>
 {:else if hasListOptions}

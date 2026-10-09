@@ -1,3 +1,4 @@
+import * as i18n from '../i18n/index';
 import { toast } from 'svelte-sonner';
 
 /**
@@ -7,10 +8,10 @@ export async function copyUrlToClipboard(url: string): Promise<boolean> {
 	try {
 		const shareableUrl = url.startsWith('http') ? url : `${window.location.origin}${url}`;
 		await navigator.clipboard.writeText(shareableUrl);
-		toast.success('URL copied to clipboard');
+		toast.success(i18n.t('URL copied to clipboard'));
 		return true;
 	} catch {
-		toast.error('Failed to copy URL');
+		toast.error(i18n.t('Failed to copy URL'));
 		return false;
 	}
 }
