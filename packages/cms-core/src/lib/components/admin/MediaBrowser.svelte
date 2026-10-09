@@ -63,6 +63,7 @@
 		normalizeAcceptedFileTypes,
 		type AcceptedFileTypes
 	} from '../../utils/file-accept';
+	import { revalidateRejectedUploads } from '../../utils/upload-queue';
 
 	interface Props {
 		/** When true, shows a "Select" button for picking an asset */
@@ -291,6 +292,8 @@
 		status: 'pending' | 'uploading' | 'done' | 'rejected' | 'failed';
 		/** Why it was rejected or failed, shown next to the file. Absent otherwise. */
 		error?: string;
+		/** The server refused it (a 4xx), so `revalidateRejected` must not re-queue it. */
+		serverRejected?: boolean;
 		/** 0–100 while uploading. */
 		progress?: number;
 		/**
@@ -907,19 +910,9 @@
 	 * Retry, nothing in the dialog could clear it.
 	 */
 	function revalidateRejected() {
-		let changed = false;
-		for (const item of uploadQueue) {
-			if (item.status !== 'rejected') continue;
-			const rejection = uploadRejection(item.file);
-			if (!rejection) {
-				item.status = 'pending';
-				item.error = undefined;
-				changed = true;
-			} else if (rejection !== item.error) {
-				item.error = rejection;
-				changed = true;
-			}
-		}
+		// A file the server refused is never re-judged here: these checks can't see
+		// what it objected to, so they would pass it and re-send it on every reload.
+		const changed = revalidateRejectedUploads(uploadQueue, (item) => uploadRejection(item.file));
 		if (changed) {
 			uploadQueue = [...uploadQueue];
 			processUploadQueue();
@@ -994,6 +987,7 @@
 			const retryable =
 				!(err instanceof ApiError) || err.status >= 500 || err.status === 408 || err.status === 429;
 			item.status = retryable ? 'failed' : 'rejected';
+			item.serverRejected = !retryable;
 			item.error = uploadErrorMessage(err);
 		}
 		uploadQueue = [...uploadQueue];
