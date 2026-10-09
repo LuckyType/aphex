@@ -2,6 +2,7 @@ import type { DatabaseAdapter } from '../db/index';
 import type { Document } from '../types/document';
 import type { DocumentVersion, DocumentVersionList } from '../types/version';
 import { emitDocumentPublished } from '../events/emit';
+import { syncDocumentAssetReferences } from './asset-references-service';
 
 /**
  * VersionService — orchestrates document versioning with rolling retention.
@@ -90,6 +91,7 @@ export class VersionService {
 			// never see a publish that didn't happen, nor miss one that did. The non-versioned
 			// publish path (collection-api) emits the same event via the same helper.
 			await emitDocumentPublished(tx, organizationId, result);
+			await syncDocumentAssetReferences(tx, organizationId, result);
 		}
 		return result;
 	}
@@ -180,9 +182,14 @@ export class VersionService {
 		// would leave a published document with no 'publish' version row. Mirror
 		// saveWithVersion / restoreVersion and run both writes in one transaction.
 
-		// No versioning support: a single write, atomic on its own.
+		// No versioning support: no snapshot to write.
 		if (!db.createDocumentVersion) {
-			return db.publishDoc(organizationId, documentId, expectedRevision);
+			// A transaction of its own, so the asset rows commit with it.
+			return db.withTransaction(async (txAdapter) => {
+				const result = await txAdapter.publishDoc(organizationId, documentId, expectedRevision);
+				if (result) await syncDocumentAssetReferences(txAdapter, organizationId, result);
+				return result;
+			});
 		}
 
 		const published = await db.withTransaction((txAdapter) =>
@@ -210,9 +217,20 @@ export class VersionService {
 
 		// A restore is itself a draft write — just as capable of clobbering a
 		// concurrent edit as a normal save, so it goes through the same CAS guard.
-		// No versioning support: a single write, atomic on its own.
+		// No versioning support: no snapshot to write.
 		if (!db.createDocumentVersion) {
-			return db.updateDocDraft(organizationId, documentId, version.data, userId, expectedRevision);
+			// A transaction of its own, so the asset rows commit with it.
+			return db.withTransaction(async (txAdapter) => {
+				const result = await txAdapter.updateDocDraft(
+					organizationId,
+					documentId,
+					version.data,
+					userId,
+					expectedRevision
+				);
+				if (result) await syncDocumentAssetReferences(txAdapter, organizationId, result);
+				return result;
+			});
 		}
 
 		const restored = await db.withTransaction(async (txAdapter) => {
@@ -223,8 +241,10 @@ export class VersionService {
 				userId,
 				expectedRevision
 			);
-			if (result)
+			if (result) {
 				await this.snapshotTx(txAdapter, organizationId, documentId, 'draft', version.data, userId);
+				await syncDocumentAssetReferences(txAdapter, organizationId, result);
+			}
 			return result;
 		});
 		if (restored) await this.enforceRetention(db, documentId, organizationId);
