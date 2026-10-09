@@ -34,6 +34,13 @@ import { fieldWriteShape } from '../type-gen';
 import { hasCapability, resolveCapabilities } from '../types/capabilities';
 import { contentWorkspaceTools } from '../ai/content-workspace-tools';
 import {
+	objectTypeNames,
+	objectTypePart,
+	schemaIsTooLarge,
+	stubbedItemTypes,
+	stubFields
+} from './schema-parts';
+import {
 	DEFAULT_BLOCK_STYLES,
 	DEFAULT_BLOCK_DECORATORS,
 	DEFAULT_BLOCK_LISTS
@@ -186,6 +193,53 @@ function buildWriteShapes(
 	return { writeShapes, shapeLegend };
 }
 
+// `get_schema` for a schema past SCHEMA_INLINE_LIMIT (schema-parts.ts).
+function compactSchemaResult(schema: SchemaType, allSchemas: SchemaType[]): AgentToolResult {
+	const fields = stubFields(schema.fields);
+	const stubbed = { ...schema, fields };
+	const { writeShapes, shapeLegend } = buildWriteShapes(stubbed, allSchemas);
+	for (const field of fields) {
+		const items = stubbedItemTypes(field);
+		if (items.length > 0) {
+			writeShapes[field.name] =
+				`Array<${items.join(' | ')}>, each item { _type: '<type>', _key: string, ...that type's fields }`;
+		}
+	}
+	const portableText = portableTextGuide(stubbed);
+	return ok({
+		schema: stubbed,
+		objectTypes: objectTypeNames(schema),
+		note: "Too large to answer whole: each array item type is a stub. Call get_schema with { collection, type } for one type's fields, write shapes and Portable Text guide.",
+		writeShapes,
+		...(Object.keys(shapeLegend).length > 0 ? { shapeLegend } : {}),
+		...(portableText ? { portableText } : {})
+	});
+}
+
+// `get_schema` with `type`: one array item type of the collection.
+function objectTypeResult(
+	schema: SchemaType,
+	typeName: string,
+	allSchemas: SchemaType[]
+): AgentToolResult {
+	const part = objectTypePart(schema, typeName);
+	if (!part) {
+		return fail(
+			`'${typeName}' is not an array item type of ${schema.name}. Types: ${objectTypeNames(schema).join(', ')}`
+		);
+	}
+	const asSchema = { ...schema, name: typeName, fields: part.definition.fields };
+	const { writeShapes, shapeLegend } = buildWriteShapes(asSchema, allSchemas);
+	const portableText = portableTextGuide(asSchema);
+	return ok({
+		collection: schema.name,
+		...part,
+		writeShapes,
+		...(Object.keys(shapeLegend).length > 0 ? { shapeLegend } : {}),
+		...(portableText ? { portableText } : {})
+	});
+}
+
 /**
  * The content-plane tools, safe to expose against a live instance: all writes go through
  * LocalAPI, so a read-only API key is rejected by the permission layer, not by this
@@ -273,11 +327,19 @@ export const contentAgentTools: ContentAgentTool[] = [
 		definition: {
 			name: 'get_schema',
 			description:
-				"Get the field schema for one collection, so you know the shape to use when creating or updating its documents. Returns { schema, portableText? } — `portableText` is present when the type has rich-text (block) fields and links the open Portable Text spec plus this schema's allowed styles/marks/custom block types.",
+				"Get the field schema for one collection, so you know the shape to use when creating or updating its documents. Returns { schema, portableText? } — `portableText` is present when the type has rich-text (block) fields and links the open Portable Text spec plus this schema's allowed styles/marks/custom block types. A schema too large to answer whole (e.g. a page of nested blocks) comes back with `objectTypes` and each array item type as a stub: call again with `type` for one item type's fields.",
 			mutates: false,
 			requiredCapabilities: [],
 			execution: 'server',
-			inputSchema: z.object({ collection: z.string().describe('Collection name') })
+			inputSchema: z.object({
+				collection: z.string().describe('Collection name'),
+				type: z
+					.string()
+					.optional()
+					.describe(
+						"An array item type of this collection (a name from `objectTypes`, e.g. a block), to get that type's fields alone"
+					)
+			})
 		},
 		execute: async (args: Record<string, unknown>, { aphexCMS }: AgentToolExecutionContext) => {
 			const api = aphexCMS.localAPI;
@@ -285,6 +347,9 @@ export const contentAgentTools: ContentAgentTool[] = [
 			if (!collection) return fail('Missing required string argument: collection');
 			const schema = api.getCollectionSchema(collection);
 			if (!schema) return fail(`Unknown collection: ${collection}`);
+			const typeName = asString(args, 'type');
+			if (typeName) return objectTypeResult(schema, typeName, aphexCMS.config.schemaTypes);
+			if (schemaIsTooLarge(schema)) return compactSchemaResult(schema, aphexCMS.config.schemaTypes);
 			const portableText = portableTextGuide(schema);
 			const { writeShapes, shapeLegend } = buildWriteShapes(schema, aphexCMS.config.schemaTypes);
 			return ok({
