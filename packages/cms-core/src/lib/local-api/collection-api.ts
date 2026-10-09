@@ -7,7 +7,11 @@ import type { DatabaseAdapter } from '../db/index';
 import type { HierarchyService } from '../services/hierarchy-service';
 import type { VersionService } from '../services/version-service';
 import type { ReferencesService } from '../services/references-service';
-import { AssetReferencesService } from '../services/asset-references-service';
+import {
+	AssetReferencesService,
+	publishedPlane,
+	syncDocumentAssetReferences
+} from '../services/asset-references-service';
 import type { Where, WhereTyped, FindOptions, FindResult } from '../types/filters';
 import type { Document } from '../types/document';
 import type { LocalAPIContext } from './types';
@@ -901,7 +905,7 @@ export class CollectionAPI<T = Document> {
 				context.organizationId,
 				id,
 				validationResult.normalizedData,
-				saved.publishedData ?? null
+				publishedPlane(saved)
 			);
 		};
 
@@ -1039,7 +1043,10 @@ export class CollectionAPI<T = Document> {
 	): Promise<Document | null> {
 		return this.databaseAdapter.withTransaction(async (tx) => {
 			const published = await tx.publishDoc(organizationId, id, expectedRevision);
-			if (published) await emitDocumentPublished(tx, organizationId, published);
+			if (published) {
+				await emitDocumentPublished(tx, organizationId, published);
+				await syncDocumentAssetReferences(tx, organizationId, published);
+			}
 			return published;
 		});
 	}
@@ -1141,11 +1148,16 @@ export class CollectionAPI<T = Document> {
 
 		await this.permissions.canUnpublish(context, this.collectionName, existing);
 
-		const document = await this.databaseAdapter.unpublishDoc(
-			context.organizationId,
-			id,
-			options?.expectedRevision
-		);
+		// In a transaction, so the asset rows commit with the unpublish.
+		const document = await this.databaseAdapter.withTransaction(async (tx) => {
+			const unpublished = await tx.unpublishDoc(
+				context.organizationId,
+				id,
+				options?.expectedRevision
+			);
+			if (unpublished) await syncDocumentAssetReferences(tx, context.organizationId, unpublished);
+			return unpublished;
+		});
 		if (!document) {
 			return null;
 		}
