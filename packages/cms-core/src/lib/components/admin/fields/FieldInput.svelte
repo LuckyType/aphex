@@ -31,6 +31,8 @@
 		documentData?: Record<string, any>;
 		/** The object scope this field lives in — see StringField's `siblingData`. */
 		siblingData?: Record<string, any>;
+		/** The schema fields `siblingData` is shaped by. */
+		siblingFields?: Field[];
 		schemaType?: string;
 		fieldPath?: string;
 		organizationId?: string;
@@ -45,6 +47,7 @@
 		validationClasses,
 		documentData,
 		siblingData,
+		siblingFields,
 		schemaType,
 		fieldPath,
 		organizationId,
@@ -84,6 +87,8 @@
 		{value}
 		{documentData}
 		{siblingData}
+		{siblingFields}
+		{schemaType}
 		{onUpdate}
 		{validationClasses}
 		{readonly}

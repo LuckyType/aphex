@@ -2526,6 +2526,7 @@
 											: field}
 										value={viewData[field.name]}
 										documentData={viewData}
+										siblingFields={schema.fields}
 										onUpdate={(newValue) => {
 											if (isViewingPublished) return;
 											documentData = { ...documentData, [field.name]: newValue };

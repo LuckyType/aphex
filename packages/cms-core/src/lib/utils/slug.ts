@@ -31,3 +31,18 @@ export function isValidSlug(slug: string): boolean {
 	const slugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 	return slugPattern.test(slug);
 }
+
+/**
+ * The label to name a slug's `source` field by: its schema title, looked up
+ * among the slug's sibling fields first and the document's fields second (the
+ * same order its value is read in), falling back to the field name.
+ */
+export function slugSourceTitle(
+	source: string,
+	siblingFields?: ReadonlyArray<{ name: string; title?: string }>,
+	documentFields?: ReadonlyArray<{ name: string; title?: string }>
+): string {
+	const field =
+		siblingFields?.find((f) => f.name === source) ?? documentFields?.find((f) => f.name === source);
+	return field?.title || source;
+}
