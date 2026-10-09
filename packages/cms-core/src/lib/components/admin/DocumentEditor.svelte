@@ -64,7 +64,7 @@
 		isCreating: boolean;
 		onBack: () => void;
 		/** When set, the close control renders as a labelled "← {backLabel}" button
-		 *  instead of a bare close (✕) icon — used for reference editors so the action
+		 *  instead of a bare close (x) icon — used for reference editors so the action
 		 *  reads as "go back" rather than "close". */
 		backLabel?: string;
 		onSaved?: (documentId: string) => void;
@@ -285,7 +285,11 @@
 		async publish(_expectedRevision) {
 			await publishDocument();
 			if (saveError) {
-				return { success: false, conflict: saveError.startsWith('Conflict'), error: saveError };
+				return {
+					success: false,
+					conflict: saveError.startsWith(i18n.t('Conflict')),
+					error: saveError
+				};
 			}
 			return {
 				success: true,
@@ -924,11 +928,11 @@
 		scheduledJobs = [];
 		const res = await documents.cancelSchedule(documentId);
 		if (res.success) {
-			toast.success('Schedule cancelled');
+			toast.success(i18n.t('Schedule cancelled'));
 			loadSchedule();
 		} else {
 			scheduledJobs = previous;
-			toast.error(res.error || 'Failed to cancel schedule');
+			toast.error(res.error || i18n.t('Failed to cancel schedule'));
 		}
 	}
 
@@ -989,42 +993,46 @@
 
 	function timeAgo(date: Date): string {
 		const seconds = Math.floor((now - date.getTime()) / 1000);
-		if (seconds < 5) return 'just now';
-		if (seconds < 60) return `${seconds}s ago`;
+		if (seconds < 5) return i18n.t('just now');
+		if (seconds < 60) return i18n.t('{seconds}s ago', { seconds });
 		const minutes = Math.floor(seconds / 60);
-		if (minutes < 60) return `${minutes}m ago`;
+		if (minutes < 60) return i18n.t('{minutes}m ago', { minutes });
 		const hours = Math.floor(minutes / 60);
-		if (hours < 24) return `${hours}h ago`;
-		return date.toLocaleDateString();
+		if (hours < 24) return i18n.t('{hours}h ago', { hours });
+		return date.toLocaleDateString(i18n.locale());
 	}
 
-	const savedAgoText = $derived(lastSaved ? `Saved ${timeAgo(lastSaved)}` : null);
+	const savedAgoText = $derived(
+		lastSaved ? i18n.t('Saved {value}', { value: timeAgo(lastSaved) }) : null
+	);
 
 	// Relative future time for the scheduled-publish indicator ("in 3h"). Reads `now` so it ticks.
 	function timeUntil(date: Date): string {
 		const seconds = Math.floor((date.getTime() - now) / 1000);
-		if (seconds <= 0) return 'now';
-		if (seconds < 60) return `in ${seconds}s`;
+		if (seconds <= 0) return i18n.t('now');
+		if (seconds < 60) return i18n.t('in {seconds}s', { seconds });
 		const minutes = Math.floor(seconds / 60);
-		if (minutes < 60) return `in ${minutes}m`;
+		if (minutes < 60) return i18n.t('in {minutes}m', { minutes });
 		const hours = Math.floor(minutes / 60);
-		if (hours < 24) return `in ${hours}h`;
+		if (hours < 24) return i18n.t('in {hours}h', { hours });
 		const days = Math.floor(hours / 24);
-		return `in ${days}d`;
+		return i18n.tn(days, 'in {count}d', 'in {count}d');
 	}
 
 	// Human phrasing for the schedule banner: "today/tomorrow at 8:00 AM", "on Monday at …",
 	// or "on Nov 10 at …" further out. Reads `now` so it stays current.
 	function humanizeSchedule(date: Date): string {
-		const time = date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+		const time = date.toLocaleTimeString(i18n.locale(), { hour: 'numeric', minute: '2-digit' });
 		const startOfDay = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
 		const days = Math.round((startOfDay(date) - startOfDay(new Date(now))) / 86_400_000);
 		let day: string;
-		if (days <= 0) day = 'today';
-		else if (days === 1) day = 'tomorrow';
-		else if (days < 7) day = `on ${date.toLocaleDateString(undefined, { weekday: 'long' })}`;
-		else day = `on ${date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`;
-		return `${day} at ${time}`;
+		if (days <= 0) day = i18n.t('today');
+		else if (days === 1) day = i18n.t('tomorrow');
+		else if (days < 7)
+			day = `${i18n.t('on')} ${date.toLocaleDateString(i18n.locale(), { weekday: 'long' })}`;
+		else
+			day = `${i18n.t('on')} ${date.toLocaleDateString(i18n.locale(), { month: 'short', day: 'numeric' })}`;
+		return i18n.t('{day} at {time}', { day, time });
 	}
 
 	// Auto-save functionality (every 2 seconds when there are changes)
@@ -1133,7 +1141,7 @@
 
 			cmsLogger.debug(
 				'[Document Editor]',
-				'🧹 Cleared state for document switch:',
+				'Cleared state for document switch:',
 				_docType,
 				_docId || 'new'
 			);
@@ -1166,10 +1174,7 @@
 		if (!isCreating && documentId) {
 			// Skip loading if we just created this document (data is already in memory)
 			if (justCreatedDocument) {
-				cmsLogger.debug(
-					'[Document Editor]',
-					'⏭️  Skipping loadDocumentData - just created document'
-				);
+				cmsLogger.debug('[Document Editor]', 'Skipping loadDocumentData - just created document');
 				justCreatedDocument = false;
 				return;
 			}
@@ -1210,8 +1215,8 @@
 				throw new Error(`Schema type '${effectiveType}' not found`);
 			}
 		} catch (err) {
-			toast.error(err instanceof Error ? err.message : 'Failed to load schema');
-			schemaError = err instanceof Error ? err.message : 'Failed to load schema';
+			toast.error(err instanceof Error ? err.message : i18n.t('Failed to load schema'));
+			schemaError = err instanceof Error ? err.message : i18n.t('Failed to load schema');
 		} finally {
 			schemaLoading = false;
 		}
@@ -1220,7 +1225,7 @@
 	async function loadDocumentData() {
 		if (!documentId) return;
 
-		cmsLogger.debug('[Document Editor]', '📄 Loading document data for:', documentId);
+		cmsLogger.debug('[Document Editor]', 'Loading document data for:', documentId);
 
 		try {
 			const response = await documents.getById(documentId);
@@ -1232,15 +1237,15 @@
 				// With LocalAPI, data is flattened at top level (not in draftData)
 				// Extract all fields except id and _meta
 				const { id: _id, _meta, ...data } = response.data;
-				cmsLogger.debug('[Document Editor', '📄 Full response.data:', _id);
-				cmsLogger.debug('[Document Editor]', '📄 Full response.data:', response.data);
-				cmsLogger.debug('[Document Editor]', '📄 Extracted data (after destructuring):', data);
-				cmsLogger.debug('[Document Editor]', '📄 Keys in extracted data:', Object.keys(data));
-				cmsLogger.debug('[Document Editor]', '📄 Published hash:', _meta?.publishedHash);
+				cmsLogger.debug('[Document Editor', 'Full response.data:', _id);
+				cmsLogger.debug('[Document Editor]', 'Full response.data:', response.data);
+				cmsLogger.debug('[Document Editor]', 'Extracted data (after destructuring):', data);
+				cmsLogger.debug('[Document Editor]', 'Keys in extracted data:', Object.keys(data));
+				cmsLogger.debug('[Document Editor]', 'Published hash:', _meta?.publishedHash);
 
 				documentData = { ...data };
-				cmsLogger.debug('[Document Editor]', '📄 documentData after assignment:', documentData);
-				cmsLogger.debug('[Document Editor]', '📄 Keys in documentData:', Object.keys(documentData));
+				cmsLogger.debug('[Document Editor]', 'documentData after assignment:', documentData);
+				cmsLogger.debug('[Document Editor]', 'Keys in documentData:', Object.keys(documentData));
 				hasUnsavedChanges = false; // Just loaded, so no unsaved changes
 
 				// Run validation on loaded document to show any existing errors
@@ -1252,19 +1257,19 @@
 					}
 				});
 			} else {
-				cmsLogger.debug('[Document Editor]', '❌ Failed to load document data:', response.error);
-				saveError = response.error || 'Failed to load document';
+				cmsLogger.debug('[Document Editor]', 'Failed to load document data:', response.error);
+				saveError = response.error || i18n.t('Failed to load document');
 			}
 		} catch (err) {
-			toast.error(err instanceof ApiError ? err.message : 'Failed to load document');
-			saveError = err instanceof ApiError ? err.message : 'Failed to load document';
+			toast.error(err instanceof ApiError ? err.message : i18n.t('Failed to load document'));
+			saveError = err instanceof ApiError ? err.message : i18n.t('Failed to load document');
 		}
 	}
 
 	async function initializeDocument() {
 		if (!schema) return;
 
-		cmsLogger.debug('[Document Editor]', '🆕 Initializing new document with field defaults');
+		cmsLogger.debug('[Document Editor]', 'Initializing new document with field defaults');
 
 		// Initialize document data with field defaults
 		const initialData: Record<string, any> = {};
@@ -1276,7 +1281,9 @@
 					try {
 						initialData[field.name] = await field.initialValue();
 					} catch {
-						toast.error(`Failed to resolve initial value for "${field.name}"`);
+						toast.error(
+							i18n.t('Failed to resolve initial value for "{name}"', { name: field.name })
+						);
 						// Fall back to default value for the field type
 						initialData[field.name] = getDefaultValueForFieldType(field.type);
 					}
@@ -1308,7 +1315,7 @@
 		hasUnsavedChanges = false;
 		lastSaved = null;
 		saveError = null;
-		cmsLogger.debug('[Document Editor]', '✅ Document initialized with:', initialData);
+		cmsLogger.debug('[Document Editor]', 'Document initialized with:', initialData);
 	}
 
 	// Check if current data differs from last saved draft (or initial defaults for a new doc)
@@ -1363,17 +1370,13 @@
 		// save — including unchecking a boolean or clearing a field.
 		if (hasChanges && schema && canWriteCurrentDoc && !batchActive) {
 			autoSaveTimer = setTimeout(() => {
-				cmsLogger.debug(
-					'[Document Editor]',
-					'🔄 Auto-saving after typing pause (data changed)...',
-					{
-						documentId
-					}
-				);
+				cmsLogger.debug('[Document Editor]', 'Auto-saving after typing pause (data changed)...', {
+					documentId
+				});
 				saveDocument(true); // auto-save
 			}, 1200); // Shorter delay - saves faster but still waits for typing pauses
 		} else if (!hasChanges) {
-			cmsLogger.debug('[Document Editor]', '⏭️  Skipping auto-save - no changes from saved data');
+			cmsLogger.debug('[Document Editor]', 'Skipping auto-save - no changes from saved data');
 		}
 
 		return () => {
@@ -1398,7 +1401,7 @@
 			// ALWAYS allow saving drafts (even with validation errors) - Sanity-style
 			if (isCreating) {
 				// Create new document
-				cmsLogger.debug('[Document Editor]', '🔄 Creating new document with data:', {
+				cmsLogger.debug('[Document Editor]', 'Creating new document with data:', {
 					type: documentType,
 					data: documentData
 				});
@@ -1407,12 +1410,12 @@
 					data: documentData
 				});
 
-				cmsLogger.debug('[Document Editor]', '📝 Document creation response:', response);
+				cmsLogger.debug('[Document Editor]', 'Document creation response:', response);
 
 				if (response.success && response.data) {
 					cmsLogger.debug(
 						'[Document Editor]',
-						'✅ Document created successfully with ID:',
+						'Document created successfully with ID:',
 						response.data.id
 					);
 					// Set flag to prevent loadDocumentData from overwriting our data
@@ -1422,7 +1425,7 @@
 					// Always call onSaved to switch to edit mode after creation
 					onSaved?.(response.data.id);
 				} else {
-					return { success: false, error: response?.error || 'Failed to create document' };
+					return { success: false, error: response?.error || i18n.t('Failed to create document') };
 				}
 			} else if (documentId) {
 				// Update existing document. Send the revision we last read so a stale
@@ -1452,7 +1455,7 @@
 			if (response?.success) {
 				return { success: true, revision: fullDocument?._meta?.revision as number | undefined };
 			}
-			return { success: false, error: response?.error || 'Failed to save document' };
+			return { success: false, error: response?.error || i18n.t('Failed to save document') };
 		} catch (err) {
 			// A 409 means someone else (another tab, an AI agent) saved this document
 			// since we last read it — surface that distinctly rather than a generic
@@ -1462,20 +1465,27 @@
 				return {
 					success: false,
 					conflict: true,
-					error:
+					error: i18n.t(
 						'Conflict: this document was updated by someone else. Reload the page to continue editing.'
+					)
 				};
 			}
 			if (err instanceof ApiError && err.response?.validationErrors) {
 				const validationErrors = err.response.validationErrors;
 				const errorMessages = validationErrors
-					.map((ve: any) => `${ve.field}: ${ve.errors.join(', ')}`)
+					.map(
+						(ve: any) =>
+							`${ve.field}: ${ve.errors.map((e: string) => i18n.validationMessage(e)).join(', ')}`
+					)
 					.join('; ');
-				return { success: false, error: `Validation failed: ${errorMessages}` };
+				return {
+					success: false,
+					error: i18n.t('Validation failed: {errorMessages}', { errorMessages })
+				};
 			}
 			return {
 				success: false,
-				error: err instanceof ApiError ? err.message : 'Failed to save document'
+				error: err instanceof ApiError ? err.message : i18n.t('Failed to save document')
 			};
 		}
 	}
@@ -1519,11 +1529,13 @@
 			}
 		} else {
 			if (result.conflict) {
-				toast.error('This document was changed elsewhere. Reload to see the latest version.');
+				toast.error(
+					i18n.t('This document was changed elsewhere. Reload to see the latest version.')
+				);
 			} else {
-				toast.error(result.error ?? 'Failed to save document');
+				toast.error(result.error ?? i18n.t('Failed to save document'));
 			}
-			saveError = result.error ?? 'Failed to save document';
+			saveError = result.error ?? i18n.t('Failed to save document');
 		}
 
 		saving = false;
@@ -1554,13 +1566,17 @@
 				.slice(0, 3)
 				.map((f) => f.title)
 				.join(', ');
-			const remainder = invalid.length > 3 ? ` and ${invalid.length - 3} more` : '';
+			const remainder =
+				invalid.length > 3 ? i18n.t(' and {value} more', { value: invalid.length - 3 }) : '';
 			const detail = invalid.map((f) => `${f.title}: ${f.messages.join(', ')}`).join('\n');
 
-			saveError = `Cannot publish — fix: ${preview}${remainder}`;
-			toast.error(`Fix ${invalid.length} field${invalid.length === 1 ? '' : 's'} to publish`, {
-				description: detail
-			});
+			saveError = i18n.t('Cannot publish — fix: {preview}{remainder}', { preview, remainder });
+			toast.error(
+				i18n.tn(invalid.length, 'Fix {count} field to publish', 'Fix {count} fields to publish'),
+				{
+					description: detail
+				}
+			);
 			return;
 		}
 
@@ -1584,19 +1600,27 @@
 				const titles = blockers
 					.slice(0, 3)
 					.map((b) => {
-						if (!b.doc) return `Missing (${b.id.slice(0, 8)})`;
+						if (!b.doc) return i18n.t('Missing ({value})', { value: b.id.slice(0, 8) });
 						const d = b.doc as any;
 						const label = d.title ?? d.name ?? d.heading ?? d.label ?? b.id;
 						const type = d._meta?.type;
 						return type ? `"${label}" (${type})` : `"${label}"`;
 					})
 					.join(', ');
-				const remainder = blockers.length > 3 ? ` and ${blockers.length - 3} more` : '';
-				saveError = `Cannot publish — unpublished references: ${titles}${remainder}`;
+				const remainder =
+					blockers.length > 3 ? i18n.t(' and {value} more', { value: blockers.length - 3 }) : '';
+				saveError = i18n.t('Cannot publish — unpublished references: {titles}{remainder}', {
+					titles,
+					remainder
+				});
 				toast.error(
-					`${blockers.length} referenced document${blockers.length === 1 ? '' : 's'} ${blockers.length === 1 ? 'is' : 'are'} not published`,
+					i18n.tn(
+						blockers.length,
+						'{count} referenced document is not published',
+						'{count} referenced documents are not published'
+					),
 					{
-						description: 'Publish the referenced documents first, then try again.'
+						description: i18n.t('Publish the referenced documents first, then try again.')
 					}
 				);
 				return;
@@ -1624,8 +1648,8 @@
 				lastSaved = new Date();
 				publishSuccess = new Date();
 				notifyDocumentChanged(documentId);
-				cmsLogger.debug('[Document Editor]', '✅ Document published successfully');
-				cmsLogger.debug('[Document Editor]', '📄 New published hash:', response.data.publishedHash);
+				cmsLogger.debug('[Document Editor]', 'Document published successfully');
+				cmsLogger.debug('[Document Editor]', 'New published hash:', response.data.publishedHash);
 
 				// Notify parent that document was published
 				if (onPublished && documentId) {
@@ -1635,7 +1659,7 @@
 					loadVersions();
 				}
 			} else {
-				throw new Error(response.error || 'Failed to publish document');
+				throw new Error(response.error || i18n.t('Failed to publish document'));
 			}
 		} catch (err) {
 			if (err instanceof ApiError && err.status === 409) {
@@ -1659,11 +1683,16 @@
 				if (err instanceof ApiError && err.response?.validationErrors) {
 					const validationErrors = err.response.validationErrors;
 					const errorMessages = validationErrors
-						.map((ve: any) => `${ve.field}: ${ve.errors.join(', ')}`)
+						.map(
+							(ve: any) =>
+								`${ve.field}: ${ve.errors.map((e: string) => i18n.validationMessage(e)).join(', ')}`
+						)
 						.join('; ');
-					saveError = `Cannot publish - Validation failed: ${errorMessages}`;
+					saveError = i18n.t('Cannot publish - Validation failed: {errorMessages}', {
+						errorMessages
+					});
 				} else {
-					saveError = err instanceof ApiError ? err.message : 'Failed to publish document';
+					saveError = err instanceof ApiError ? err.message : i18n.t('Failed to publish document');
 				}
 			}
 		} finally {
@@ -1683,10 +1712,10 @@
 					publishedData = response.data;
 					perspective = 'published';
 				} else {
-					toast.error('No published version available');
+					toast.error(i18n.t('No published version available'));
 				}
 			} catch {
-				toast.error('Failed to load published version');
+				toast.error(i18n.t('Failed to load published version'));
 			}
 		} else {
 			perspective = 'draft';
@@ -1757,15 +1786,20 @@
 		// Surface published back-references so the user knows what will end up
 		// with dangling refs in the published perspective. Best-effort —
 		// network errors fall through to the standard confirm.
-		let backRefDescription =
-			'It will be removed from published queries, but the data is preserved and you can re-publish anytime.';
+		let backRefDescription = i18n.t(
+			'It will be removed from published queries, but the data is preserved and you can re-publish anytime.'
+		);
 		try {
 			const backRefRes = await documents.getBackReferences(documentId);
 			if (backRefRes.success && backRefRes.data) {
 				const publishedBackRefs = backRefRes.data.filter((r) => r.status === 'published');
 				if (publishedBackRefs.length > 0) {
 					const count = publishedBackRefs.length;
-					backRefDescription = `${count} published document${count === 1 ? '' : 's'} reference${count === 1 ? 's' : ''} this one — their references will be left dangling in the published perspective until you re-publish them. Continue?`;
+					backRefDescription = i18n.tn(
+						count,
+						'{count} published document references this one — their references will be left dangling in the published perspective until you re-publish them. Continue?',
+						'{count} published documents reference this one — their references will be left dangling in the published perspective until you re-publish them. Continue?'
+					);
 				}
 			}
 		} catch {
@@ -1773,9 +1807,9 @@
 		}
 
 		const confirmUnpublish = await confirmDialog({
-			title: 'Unpublish this document?',
+			title: i18n.t('Unpublish this document?'),
 			description: backRefDescription,
-			confirmText: 'Unpublish',
+			confirmText: i18n.t('Unpublish'),
 			variant: 'destructive'
 		});
 		if (!confirmUnpublish) return;
@@ -1793,7 +1827,7 @@
 					_meta: { ...fullDocument?._meta, status: 'unpublished' }
 				};
 				notifyDocumentChanged(documentId);
-				toast.success('Document unpublished — you can re-publish anytime');
+				toast.success(i18n.t('Document unpublished — you can re-publish anytime'));
 				if (onUnpublished && documentId) {
 					onUnpublished(documentId);
 				}
@@ -1802,9 +1836,11 @@
 			}
 		} catch (err) {
 			if (err instanceof ApiError && err.status === 409) {
-				toast.error('This document was changed elsewhere. Reload to see the latest version.');
+				toast.error(
+					i18n.t('This document was changed elsewhere. Reload to see the latest version.')
+				);
 			} else {
-				toast.error(err instanceof ApiError ? err.message : 'Failed to unpublish document');
+				toast.error(err instanceof ApiError ? err.message : i18n.t('Failed to unpublish document'));
 			}
 		} finally {
 			saving = false;
@@ -1836,10 +1872,14 @@
 					const messages: string[] = [];
 					for (const validationFn of validationFunctions) {
 						const rule = validationFn(new Rule());
-						const markers = await rule.validate(documentData[field.name], { path: [field.name] });
+						const markers = await rule.validate(documentData[field.name], {
+							path: [field.name],
+							document: documentData
+						});
 
 						for (const m of markers) {
-							if (m.level === 'error') messages.push(m.message ?? 'Invalid');
+							if (m.level === 'error')
+								messages.push(i18n.validationMessage(m.message ?? i18n.t('Invalid')));
 						}
 					}
 
@@ -1854,9 +1894,11 @@
 					invalid.push({
 						name: field.name,
 						title: field.title ?? field.name,
-						messages: ['Validation check threw an error']
+						messages: [i18n.t('Validation check threw an error')]
 					});
-					toast.error(`Validation failed for field "${field.title ?? field.name}"`);
+					toast.error(
+						i18n.t('Validation failed for field "{value}"', { value: field.title ?? field.name })
+					);
 				}
 			}
 		}
@@ -1869,9 +1911,9 @@
 		if (!documentId || saving) return;
 
 		const confirmDelete = await confirmDialog({
-			title: 'Delete this document?',
-			description: 'This action cannot be undone.',
-			confirmText: 'Delete',
+			title: i18n.t('Delete this document?'),
+			description: i18n.t('This action cannot be undone.'),
+			confirmText: i18n.t('Delete'),
 			variant: 'destructive'
 		});
 		if (!confirmDelete) return;
@@ -1883,14 +1925,14 @@
 			const response = await documents.deleteById(documentId);
 
 			if (response.success) {
-				cmsLogger.debug('[Document Editor]', '✅ Document deleted successfully');
+				cmsLogger.debug('[Document Editor]', 'Document deleted successfully');
 				onDeleted?.();
 			} else {
-				throw new Error(response.error || 'Failed to delete document');
+				throw new Error(response.error || i18n.t('Failed to delete document'));
 			}
 		} catch (err) {
-			toast.error(err instanceof ApiError ? err.message : 'Failed to delete document');
-			saveError = err instanceof ApiError ? err.message : 'Failed to delete document';
+			toast.error(err instanceof ApiError ? err.message : i18n.t('Failed to delete document'));
+			saveError = err instanceof ApiError ? err.message : i18n.t('Failed to delete document');
 		} finally {
 			saving = false;
 		}
@@ -1953,6 +1995,7 @@
 	function dismissOrphanedFields() {
 		showOrphanedFields = false;
 	}
+	const [beforeTitle, afterTitle] = i18n.tParts('Inspecting {title}', 'title');
 </script>
 
 {#snippet editorActions()}
@@ -1962,21 +2005,21 @@
 				class="text-muted-foreground hidden items-center gap-1.5 text-[10px] font-medium tracking-wider whitespace-nowrap uppercase sm:inline-flex"
 			>
 				<span class="bg-muted-foreground/60 h-1.5 w-1.5 animate-pulse rounded-full"></span>
-				Saving
+				{i18n.t('Saving')}
 			</span>
 		{:else if hasUnsavedChanges}
 			<span
 				class="text-muted-foreground hidden items-center gap-1.5 text-[10px] font-medium tracking-wider whitespace-nowrap uppercase sm:inline-flex"
 			>
 				<span class="bg-muted-foreground/60 h-1.5 w-1.5 rounded-full"></span>
-				Unsaved
+				{i18n.t('Unsaved')}
 			</span>
 		{:else if savedAgoText}
 			<span
 				class="text-muted-foreground hidden items-center gap-1.5 text-[10px] font-medium tracking-wider whitespace-nowrap uppercase sm:inline-flex"
 			>
 				<span class="bg-muted-foreground/60 h-1.5 w-1.5 rounded-full"></span>
-				Auto-saved
+				{i18n.t('Auto-saved')}
 			</span>
 		{/if}
 
@@ -1997,7 +2040,7 @@
 							? 'bg-primary-foreground/60'
 							: ''}"
 					></span>
-					Draft
+					{i18n.t('Draft')}
 				</button>
 				<button
 					class="inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-medium tracking-wider uppercase transition-colors {perspective ===
@@ -2012,16 +2055,18 @@
 								? 'bg-primary-foreground/60'
 								: 'bg-green-500'}"
 						></span>
-						Published · {timeAgo(new Date(fullDocument._meta.publishedAt))}
+						{i18n.t('Published · {ago}', {
+							ago: timeAgo(new Date(fullDocument._meta.publishedAt))
+						})}
 					{:else if isUnpub}
 						<span
 							class="h-1.5 w-1.5 rounded-full {perspective === 'published'
 								? 'bg-primary-foreground/60'
 								: 'bg-muted-foreground/60'}"
 						></span>
-						Unpublished
+						{i18n.t('Unpublished')}
 					{:else}
-						Published
+						{i18n.t('Published')}
 					{/if}
 				</button>
 			</div>
@@ -2055,7 +2100,7 @@
 					size="icon"
 					onclick={() => (showHeaderMenu = !showHeaderMenu)}
 					class="h-8 w-8 cursor-pointer"
-					aria-label="Document actions"
+					aria-label={i18n.t('Document actions')}
 					aria-expanded={showHeaderMenu}
 				>
 					<Ellipsis class="h-4 w-4" />
@@ -2075,7 +2120,8 @@
 							}}
 							class="hover:bg-muted flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-left text-sm transition-colors"
 						>
-							<History class="h-3.5 w-3.5" /> History
+							<History class="h-3.5 w-3.5" />
+							{i18n.t('History')}
 						</button>
 						<button
 							onclick={() => {
@@ -2084,7 +2130,8 @@
 							}}
 							class="hover:bg-muted flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-left text-sm transition-colors"
 						>
-							<Code class="h-3.5 w-3.5" /> Inspect
+							<Code class="h-3.5 w-3.5" />
+							{i18n.t('Inspect')}
 						</button>
 					</div>
 					<!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -2102,7 +2149,7 @@
 				size="icon"
 				onclick={onTogglePresentation}
 				class="hidden h-8 w-8 hover:cursor-pointer lg:flex {presentationMode ? 'text-primary' : ''}"
-				title={presentationMode ? 'Exit visual editing' : 'Present'}
+				title={presentationMode ? i18n.t('Exit visual editing') : i18n.t('Present')}
 			>
 				<Monitor class="h-4 w-4" />
 			</Button>
@@ -2116,7 +2163,7 @@
 				size="icon"
 				onclick={onToggleFocus}
 				class="hidden h-8 w-8 hover:cursor-pointer lg:flex"
-				title={focusMode ? 'Exit focus mode' : 'Enter focus mode'}
+				title={focusMode ? i18n.t('Exit focus mode') : i18n.t('Enter focus mode')}
 			>
 				{#if focusMode}
 					<Minimize2 class="h-4 w-4" />
@@ -2144,7 +2191,7 @@
 				size="icon"
 				onclick={onBack}
 				class="hidden h-8 w-8 hover:cursor-pointer lg:flex"
-				title="Close"
+				title={i18n.t('Close')}
 			>
 				<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
 					<path
@@ -2170,8 +2217,8 @@
 				type="button"
 				onclick={onTogglePresentation}
 				class="hover:text-foreground hover:bg-muted -ml-1 flex shrink-0 cursor-pointer items-center rounded p-1 transition-colors"
-				title="Exit visual editing"
-				aria-label="Exit visual editing"
+				title={i18n.t('Exit visual editing')}
+				aria-label={i18n.t('Exit visual editing')}
 			>
 				<ArrowLeft class="h-4 w-4" />
 			</button>
@@ -2208,7 +2255,7 @@
 		>
 			<Lock class="h-4 w-4 shrink-0" />
 			<span class="min-w-0 text-[0.9375rem] leading-tight font-medium">
-				Scheduled to be {isPub ? 'published' : 'unpublished'}
+				{isPub ? i18n.t('Scheduled to be published') : i18n.t('Scheduled to be unpublished')}
 				{humanizeSchedule(runAtDate)}
 				<span class="text-primary/50 font-normal">· {timeUntil(runAtDate)}</span>
 			</span>
@@ -2218,14 +2265,15 @@
 					class="hover:bg-primary/10 rounded px-2 py-1 text-xs font-medium transition-colors"
 					onclick={() => (showScheduleDialog = true)}
 				>
-					Reschedule
+					{i18n.t('Reschedule')}
 				</button>
 				<button
 					type="button"
 					class="hover:bg-primary/10 flex items-center gap-1 rounded px-2 py-1 text-xs font-medium transition-colors"
 					onclick={cancelSchedule}
 				>
-					<X class="h-3 w-3" /> Cancel
+					<X class="h-3 w-3" />
+					{i18n.t('Cancel', undefined, 'cancel schedule')}
 				</button>
 			</div>
 		</div>
@@ -2263,7 +2311,7 @@
 								class="text-muted-foreground inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-medium tracking-wider uppercase"
 							>
 								<span class="bg-muted-foreground/60 h-1.5 w-1.5 rounded-full"></span>
-								Draft
+								{i18n.t('Draft')}
 							</span>
 						{/if}
 					</div>
@@ -2273,21 +2321,21 @@
 							class="text-muted-foreground inline-flex items-center gap-1.5 text-[10px] font-medium tracking-wider whitespace-nowrap uppercase"
 						>
 							<span class="bg-muted-foreground/60 h-1.5 w-1.5 animate-pulse rounded-full"></span>
-							Saving
+							{i18n.t('Saving')}
 						</span>
 					{:else if hasUnsavedChanges}
 						<span
 							class="text-muted-foreground inline-flex items-center gap-1.5 text-[10px] font-medium tracking-wider whitespace-nowrap uppercase"
 						>
 							<span class="bg-muted-foreground/60 h-1.5 w-1.5 rounded-full"></span>
-							Unsaved
+							{i18n.t('Unsaved')}
 						</span>
 					{:else if savedAgoText}
 						<span
 							class="text-muted-foreground inline-flex items-center gap-1.5 text-[10px] font-medium tracking-wider whitespace-nowrap uppercase"
 						>
 							<span class="bg-muted-foreground/60 h-1.5 w-1.5 rounded-full"></span>
-							Auto-saved
+							{i18n.t('Auto-saved')}
 						</span>
 					{/if}
 				</div>
@@ -2325,7 +2373,7 @@
 							? 'bg-muted text-foreground'
 							: 'text-muted-foreground hover:text-foreground'}"
 					>
-						All fields
+						{i18n.t('All fields')}
 					</button>
 					{#each visibleGroups as group (group.name)}
 						<button
@@ -2365,11 +2413,13 @@
 
 					{#if schemaError}
 						<div class="bg-destructive/10 border-destructive/20 rounded-md border p-3">
-							<p class="text-destructive text-sm">Schema Error: {schemaError}</p>
+							<p class="text-destructive text-sm">
+								{i18n.t('Schema Error: {error}', { error: schemaError })}
+							</p>
 						</div>
 					{:else if schemaLoading}
 						<div class="p-6 text-center">
-							<div class="text-muted-foreground text-sm">Loading schema...</div>
+							<div class="text-muted-foreground text-sm">{i18n.t('Loading schema...')}</div>
 						</div>
 					{:else if schema}
 						<!-- Orphaned Fields Warning -->
@@ -2390,12 +2440,18 @@
 										/>
 									</svg>
 									<h4 class="text-sm font-medium text-orange-800">
-										{orphanedFields.length} orphaned field{orphanedFields.length === 1 ? '' : 's'} detected
+										{i18n.tn(
+											orphanedFields.length,
+											'{count} orphaned field detected',
+											'{count} orphaned fields detected'
+										)}
 									</h4>
 								</div>
 
 								<p class="text-sm text-orange-700">
-									These fields exist in your document but are no longer defined in the schema:
+									{i18n.t(
+										'These fields exist in your document but are no longer defined in the schema:'
+									)}
 								</p>
 
 								<div class="space-y-2">
@@ -2419,7 +2475,7 @@
 												onclick={() => removeOrphanedField(field)}
 												class="ml-3 h-8 border-red-200 px-3 text-red-600 hover:border-red-300 hover:bg-red-50"
 											>
-												Remove
+												{i18n.t('Remove')}
 											</Button>
 										</div>
 									{/each}
@@ -2432,7 +2488,7 @@
 										onclick={cleanupAllOrphanedFields}
 										class="border-orange-600 bg-orange-600 text-white hover:bg-orange-700"
 									>
-										Remove All
+										{i18n.t('Remove All')}
 									</Button>
 									<Button
 										size="sm"
@@ -2440,7 +2496,7 @@
 										onclick={dismissOrphanedFields}
 										class="text-orange-700 hover:text-orange-800"
 									>
-										Dismiss
+										{i18n.t('Dismiss')}
 									</Button>
 								</div>
 							</div>
@@ -2490,15 +2546,17 @@
 								<div
 									class="border-destructive/30 bg-destructive/5 rounded-md border p-4 text-center"
 								>
-									<p class="text-destructive font-medium">Document editor encountered an error</p>
+									<p class="text-destructive font-medium">
+										{i18n.t('Document editor encountered an error')}
+									</p>
 									<p class="text-muted-foreground mt-1 text-sm">
-										{error instanceof Error ? error.message : 'Unknown error'}
+										{error instanceof Error ? error.message : i18n.t('Unknown error')}
 									</p>
 									<button
 										class="bg-primary text-primary-foreground mt-3 rounded px-4 py-2 text-sm"
 										onclick={reset}
 									>
-										Reload editor
+										{i18n.t('Reload editor')}
 									</button>
 								</div>
 							{/snippet}
@@ -2506,7 +2564,7 @@
 					{:else}
 						<div class="border-muted-foreground/30 rounded-md border border-dashed p-4">
 							<p class="text-muted-foreground text-center text-sm">
-								No schema found for document type: {effectiveType}
+								{i18n.t('No schema found for document type: {type}', { type: effectiveType })}
 							</p>
 						</div>
 					{/if}
@@ -2540,7 +2598,7 @@
 								);
 							}}
 							class="hover:bg-muted flex cursor-pointer items-center gap-1.5 rounded px-2 py-1 transition-colors"
-							title={previewEditMode ? 'Disable edit mode' : 'Enable edit mode'}
+							title={previewEditMode ? i18n.t('Disable edit mode') : i18n.t('Enable edit mode')}
 						>
 							<!-- Toggle pill -->
 							<div
@@ -2557,7 +2615,7 @@
 							<span
 								class="text-[11px] font-medium tracking-wide {previewEditMode
 									? 'text-foreground'
-									: 'text-muted-foreground'}">Edit</span
+									: 'text-muted-foreground'}">{i18n.t('Edit')}</span
 							>
 						</button>
 
@@ -2565,7 +2623,7 @@
 						<button
 							onclick={refreshPreview}
 							class="hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer rounded p-1.5 transition-colors"
-							title="Refresh preview"
+							title={i18n.t('Refresh preview')}
 						>
 							<RefreshCw class="h-3.5 w-3.5" />
 						</button>
@@ -2599,14 +2657,14 @@
 								onclick={() => zoomBy(-0.1)}
 								disabled={previewZoom <= 0.5}
 								class="hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer rounded p-1.5 transition-colors disabled:cursor-default disabled:opacity-40"
-								title="Zoom out"
+								title={i18n.t('Zoom out')}
 							>
 								<ZoomOut class="h-3.5 w-3.5" />
 							</button>
 							<button
 								onclick={() => (previewZoom = 1)}
 								class="text-muted-foreground hover:text-foreground w-9 cursor-pointer text-center font-mono text-[11px] tabular-nums transition-colors"
-								title="Reset zoom"
+								title={i18n.t('Reset zoom')}
 							>
 								{Math.round(previewZoom * 100)}%
 							</button>
@@ -2614,7 +2672,7 @@
 								onclick={() => zoomBy(0.1)}
 								disabled={previewZoom >= 1.5}
 								class="hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer rounded p-1.5 transition-colors disabled:cursor-default disabled:opacity-40"
-								title="Zoom in"
+								title={i18n.t('Zoom in')}
 							>
 								<ZoomIn class="h-3.5 w-3.5" />
 							</button>
@@ -2624,7 +2682,7 @@
 						<button
 							onclick={openPreviewInNewTab}
 							class="hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer rounded p-1.5 transition-colors"
-							title="Open in new tab"
+							title={i18n.t('Open in new tab')}
 						>
 							<ExternalLink class="h-3.5 w-3.5" />
 						</button>
@@ -2649,7 +2707,7 @@
 								bind:this={iframeRef}
 								src={iframeUrl}
 								class="h-full w-full border-none"
-								title="Page preview"
+								title={i18n.t('Page preview')}
 							></iframe>
 						</div>
 						{#if isResizing}
@@ -2659,9 +2717,9 @@
 				{:else}
 					<div class="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
 						<Monitor class="text-muted-foreground/30 h-10 w-10" />
-						<p class="text-muted-foreground text-sm">No preview URL yet.</p>
+						<p class="text-muted-foreground text-sm">{i18n.t('No preview URL yet.')}</p>
 						<p class="text-muted-foreground/50 text-xs">
-							Fill in the required fields to enable preview.
+							{i18n.t('Fill in the required fields to enable preview.')}
 						</p>
 					</div>
 				{/if}
@@ -2676,10 +2734,14 @@
 				<!-- Version preview footer -->
 				<div class="flex items-center justify-between">
 					<p class="text-muted-foreground text-sm">
-						Revision from {new Date(activePreview.createdAt || Date.now()).toLocaleString(
-							undefined,
-							{ month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true }
-						)}
+						{i18n.t('Revision from')}
+						{new Date(activePreview.createdAt || Date.now()).toLocaleString(i18n.locale(), {
+							month: 'short',
+							day: 'numeric',
+							hour: 'numeric',
+							minute: '2-digit',
+							hour12: i18n.hour12() ?? true
+						})}
 					</p>
 					<Button
 						size="sm"
@@ -2708,22 +2770,22 @@
 								previewingVersion = null;
 								perspective = 'draft';
 								publishedData = null;
-								toast.success('Revision restored');
+								toast.success(i18n.t('Revision restored'));
 								if (onRestored && documentId) {
 									onRestored(documentId);
 								}
 							} catch (err) {
 								if (err instanceof ApiError && err.status === 409) {
 									toast.error(
-										'This document was changed elsewhere. Reload to see the latest version.'
+										i18n.t('This document was changed elsewhere. Reload to see the latest version.')
 									);
 								} else {
-									toast.error('Failed to restore revision');
+									toast.error(i18n.t('Failed to restore revision'));
 								}
 							}
 						}}
 					>
-						Restore
+						{i18n.t('Restore')}
 					</Button>
 				</div>
 			{:else if isViewingPublished}
@@ -2731,18 +2793,19 @@
 				<div class="flex items-center justify-between">
 					<p class="text-muted-foreground text-sm">
 						{#if fullDocument?._meta?.status === 'unpublished'}
-							Unpublished
+							{i18n.t('Unpublished')}
 						{:else}
-							Published on {fullDocument?._meta?.publishedAt
-								? new Date(fullDocument._meta.publishedAt).toLocaleString(undefined, {
+							{i18n.t('Published on')}
+							{fullDocument?._meta?.publishedAt
+								? new Date(fullDocument._meta.publishedAt).toLocaleString(i18n.locale(), {
 										month: 'short',
 										day: 'numeric',
 										year: 'numeric',
 										hour: 'numeric',
 										minute: '2-digit',
-										hour12: true
+										hour12: i18n.hour12() ?? true
 									})
-								: 'Unknown'}
+								: i18n.t('Unknown')}
 						{/if}
 					</p>
 					<div class="flex items-center gap-2">
@@ -2756,23 +2819,25 @@
 									? 'text-primary'
 									: ''}"
 								title={!canScheduleActionNow
-									? 'Nothing to publish — make a change first'
+									? i18n.t('Nothing to publish — make a change first')
 									: nextSchedule
-										? 'Reschedule'
+										? i18n.t('Reschedule')
 										: scheduleAction === 'publish'
-											? 'Schedule publish'
-											: 'Schedule unpublish'}
+											? i18n.t('Schedule publish')
+											: i18n.t('Schedule unpublish')}
 							>
 								<CalendarClock class="h-4 w-4" />
 							</Button>
 						{/if}
 						{#if fullDocument?._meta?.status === 'unpublished'}
 							{#if canPublishDoc}
-								<Button size="sm" onclick={publishDocument} disabled={saving}>Publish</Button>
+								<Button size="sm" onclick={publishDocument} disabled={saving}
+									>{i18n.t('Publish')}</Button
+								>
 							{/if}
 						{:else if canUnpublishDoc}
 							<Button size="sm" variant="secondary" onclick={unpublishDocument} disabled={saving}>
-								Unpublish
+								{i18n.t('Unpublish')}
 							</Button>
 						{/if}
 					</div>
@@ -2782,7 +2847,7 @@
 					<!-- Left: Transient publish confirmation (save/unsaved now shown in header) -->
 					<div class="flex items-center gap-2">
 						{#if publishSuccess && now - publishSuccess.getTime() < 3000}
-							<Badge variant="default">Published!</Badge>
+							<Badge variant="default">{i18n.t('Published!')}</Badge>
 						{/if}
 					</div>
 
@@ -2798,10 +2863,10 @@
 									? 'text-primary'
 									: ''}"
 								title={!canScheduleActionNow
-									? 'Nothing to publish — make a change first'
+									? i18n.t('Nothing to publish — make a change first')
 									: nextSchedule
-										? 'Reschedule'
-										: 'Schedule publish'}
+										? i18n.t('Reschedule')
+										: i18n.t('Schedule publish')}
 							>
 								<CalendarClock class="h-4 w-4" />
 							</Button>
@@ -2815,13 +2880,13 @@
 								class="cursor-pointer"
 							>
 								{#if saving}
-									Publishing...
+									{i18n.t('Publishing...')}
 								{:else if isUnpublished}
-									Publish
+									{i18n.t('Publish')}
 								{:else if !hasUnpublishedContent}
-									Published
+									{i18n.t('Published')}
 								{:else}
-									Publish Changes
+									{i18n.t('Publish Changes')}
 								{/if}
 							</Button>
 						{:else if isViewingReadOnly}
@@ -2834,7 +2899,7 @@
 								size="icon"
 								class="text-muted-foreground hover:text-destructive h-8 w-8"
 								onclick={deleteDocument}
-								title="Delete document"
+								title={i18n.t('Delete document')}
 							>
 								<Trash2 class="h-4 w-4" />
 							</Button>
@@ -2855,19 +2920,19 @@
 					showVersionHistory = false;
 					previewingVersion = null;
 				}}
-				aria-label="Close version history"
+				aria-label={i18n.t('Close version history')}
 			></button>
 			<!-- Panel -->
 			<div class="bg-background border-rule flex w-80 flex-col border-l shadow-lg">
 				<div class="border-rule flex items-center justify-between border-b px-4 py-3">
-					<h3 class="text-sm font-medium">Version History</h3>
+					<h3 class="text-sm font-medium">{i18n.t('Version History')}</h3>
 					<button
 						class="hover:bg-muted rounded p-1 transition-colors"
 						onclick={() => {
 							showVersionHistory = false;
 							previewingVersion = null;
 						}}
-						aria-label="Close version history"
+						aria-label={i18n.t('Close version history')}
 					>
 						<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
 							<path
@@ -2882,11 +2947,11 @@
 				<div class="flex-1 overflow-auto">
 					{#if versionsLoading && versionsList.length === 0}
 						<div class="p-4 text-center">
-							<span class="text-muted-foreground text-sm">Loading versions...</span>
+							<span class="text-muted-foreground text-sm">{i18n.t('Loading versions...')}</span>
 						</div>
 					{:else if versionsError}
 						<div class="p-4 text-center">
-							<span class="text-destructive text-sm">Failed to load versions</span>
+							<span class="text-destructive text-sm">{i18n.t('Failed to load versions')}</span>
 						</div>
 					{:else if versionsList.length > 0}
 						<div class="divide-y">
@@ -2907,7 +2972,7 @@
 												};
 											}
 										} catch {
-											toast.error('Failed to load version');
+											toast.error(i18n.t('Failed to load version'));
 										}
 									}}
 								>
@@ -2921,18 +2986,20 @@
 													: 'secondary'}
 											class="text-[10px]"
 										>
-											{version.eventType}
+											{i18n.t(version.eventType, undefined, 'version event')}
 										</Badge>
 									</div>
 									<p class="text-muted-foreground text-[11px]">
-										{version.createdAt ? new Date(version.createdAt).toLocaleString() : ''}
+										{version.createdAt
+											? new Date(version.createdAt).toLocaleString(i18n.locale())
+											: ''}
 									</p>
 								</button>
 							{/each}
 						</div>
 					{:else}
 						<div class="p-4 text-center">
-							<span class="text-muted-foreground text-sm">No versions yet</span>
+							<span class="text-muted-foreground text-sm">{i18n.t('No versions yet')}</span>
 						</div>
 					{/if}
 				</div>
@@ -2958,7 +3025,9 @@
 				<!-- Modal header -->
 				<div class="flex items-center justify-between border-b px-4 py-3">
 					<div>
-						<h3 class="text-sm font-semibold">Inspecting <em>{getPreviewTitle()}</em></h3>
+						<h3 class="text-sm font-semibold">
+							{beforeTitle}<em>{getPreviewTitle()}</em>{afterTitle}
+						</h3>
 					</div>
 					<Button
 						variant="ghost"
@@ -2985,7 +3054,7 @@
 								: 'text-muted-foreground hover:text-foreground'}"
 							onclick={() => (inspectTab = 'parsed')}
 						>
-							Parsed
+							{i18n.t('Parsed')}
 						</button>
 						<button
 							class="px-4 py-2 text-sm font-medium transition-colors {inspectTab === 'raw'
@@ -2993,7 +3062,7 @@
 								: 'text-muted-foreground hover:text-foreground'}"
 							onclick={() => (inspectTab = 'raw')}
 						>
-							Raw JSON
+							{i18n.t('Raw JSON')}
 						</button>
 					</div>
 					<div class="flex gap-1 pr-2">
@@ -3004,7 +3073,7 @@
 								: 'text-muted-foreground hover:text-foreground'}"
 							onclick={() => (inspectPerspective = 'draft')}
 						>
-							Draft
+							{i18n.t('Draft')}
 						</button>
 						<button
 							class="rounded px-2 py-1 text-xs font-medium transition-colors {inspectPerspective ===
@@ -3013,7 +3082,7 @@
 								: 'text-muted-foreground hover:text-foreground'}"
 							onclick={() => (inspectPerspective = 'published')}
 						>
-							Published
+							{i18n.t('Published')}
 						</button>
 					</div>
 				</div>
@@ -3021,7 +3090,7 @@
 				<!-- Content -->
 				<div class="flex-1 overflow-auto p-4 font-mono text-sm">
 					{#if inspectPerspective === 'published' && !publishedData}
-						<p class="text-muted-foreground text-sm">No published data available.</p>
+						<p class="text-muted-foreground text-sm">{i18n.t('No published data available.')}</p>
 					{:else}
 						{@const inspectData =
 							inspectPerspective === 'published' && publishedData
@@ -3067,12 +3136,12 @@
 				{/if}
 				{#if Array.isArray(val)}
 					<span class="text-muted-foreground"
-						>[...] {val.length} {val.length === 1 ? 'item' : 'items'}</span
+						>[...] {val.length} {val.length === 1 ? i18n.t('item') : i18n.t('items')}</span
 					>
 				{:else}
 					<span class="text-muted-foreground"
 						>&#123;...&#125; {Object.keys(val).length}
-						{Object.keys(val).length === 1 ? 'property' : 'properties'}</span
+						{Object.keys(val).length === 1 ? i18n.t('property') : i18n.t('properties')}</span
 					>
 				{/if}
 			</summary>

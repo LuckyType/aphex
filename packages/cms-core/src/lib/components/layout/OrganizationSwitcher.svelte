@@ -1,4 +1,5 @@
 <script lang="ts">
+	import * as i18n from '../../i18n/index';
 	import { organizations } from '../../api/index';
 	import { invalidateAll, goto } from '$app/navigation';
 	import { page } from '$app/state';
@@ -74,7 +75,7 @@
 			// Invalidate all data to refetch with new organization context
 			await invalidateAll();
 		} catch {
-			toast.error('Failed to switch organization');
+			toast.error(i18n.t('Failed to switch organization'));
 		} finally {
 			isSwitching = false;
 		}
@@ -90,7 +91,7 @@
 	}
 
 	function getRoleLabel(role: string): string {
-		return role.charAt(0).toUpperCase() + role.slice(1);
+		return i18n.t(role.charAt(0).toUpperCase() + role.slice(1), undefined, 'role');
 	}
 
 	function getOrganizationLogo(org: SidebarOrganization | undefined): string | null {
@@ -151,7 +152,7 @@
 							>
 								<span class="text-muted-foreground text-xs">?</span>
 							</div>
-							<span class="text-muted-foreground">No organization</span>
+							<span class="text-muted-foreground">{i18n.t('No organization')}</span>
 						{/if}
 						<svg
 							xmlns="http://www.w3.org/2000/svg"
@@ -177,7 +178,9 @@
 				side={sidebar.isMobile ? 'bottom' : 'right'}
 				sideOffset={4}
 			>
-				<DropdownMenuLabel class="text-muted-foreground text-xs">Organizations</DropdownMenuLabel>
+				<DropdownMenuLabel class="text-muted-foreground text-xs"
+					>{i18n.t('Organizations')}</DropdownMenuLabel
+				>
 				<div class="p-1">
 					{#each orgs as org (org.id)}
 						{@const isActive = org.id === activeOrganization?.id}
@@ -246,7 +249,7 @@
 													d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"
 												/><circle cx="12" cy="12" r="3" /></svg
 											>
-											Settings
+											{i18n.t('Settings')}
 										</a>
 										<a
 											href="/admin/settings/members"
@@ -276,7 +279,7 @@
 													y2="11"
 												/></svg
 											>
-											Invite members
+											{i18n.t('Invite members')}
 										</a>
 									</div>
 								{/if}
@@ -306,7 +309,7 @@
 								<path d="M12 5v14" />
 							</svg>
 						</div>
-						<span class="text-muted-foreground font-medium">Create organization</span>
+						<span class="text-muted-foreground font-medium">{i18n.t('Create organization')}</span>
 					</DropdownMenuItem>
 				{/if}
 			</DropdownMenuContent>

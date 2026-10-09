@@ -51,7 +51,8 @@
 	import type { Organization } from '../types/organization';
 	import { getOrderingsForSchema } from '../utils/default-orderings';
 	import { cmsLogger } from '../utils/logger';
-	import { pluralize } from '../utils/pluralize';
+	import { pluralize as __cmsPluralize } from '../utils/pluralize';
+	const pluralize = (title: string) => i18n.plural(title, __cmsPluralize);
 	import { toast } from 'svelte-sonner';
 	import { setPermissionsContext } from '../permissions-context.svelte';
 
@@ -678,7 +679,7 @@
 					organizationsMap = map;
 				}
 			} catch {
-				toast.error('Failed to fetch organizations');
+				toast.error(i18n.t('Failed to fetch organizations'));
 			}
 		}
 
@@ -1103,8 +1104,8 @@
 				throw new Error(result.error || 'Failed to fetch document');
 			}
 		} catch (err) {
-			toast.error(err instanceof Error ? err.message : 'Failed to load document');
-			error = err instanceof Error ? err.message : 'Failed to load document';
+			toast.error(err instanceof Error ? err.message : i18n.t('Failed to load document'));
+			error = err instanceof Error ? err.message : i18n.t('Failed to load document');
 			await goto('/admin', { replaceState: true });
 		} finally {
 			loading = false;
@@ -1183,8 +1184,8 @@
 				throw new Error(result.error || 'Failed to fetch documents');
 			}
 		} catch (err) {
-			toast.error(err instanceof Error ? err.message : 'Failed to load documents');
-			error = err instanceof Error ? err.message : 'Failed to load documents';
+			toast.error(err instanceof Error ? err.message : i18n.t('Failed to load documents'));
+			error = err instanceof Error ? err.message : i18n.t('Failed to load documents');
 			documentsList = [];
 		} finally {
 			loading = false;
@@ -1258,7 +1259,7 @@
 								d="M15 19l-7-7 7-7"
 							/>
 						</svg>
-						Content
+						{i18n.t('Content')}
 					</button>
 					<span class="text-muted-foreground mx-2">/</span>
 					<span class="text-sm font-medium">
@@ -1286,10 +1287,10 @@
 						{selectedDocumentType
 							? documentTypes.find((t) => t.name === selectedDocumentType)?.title ||
 								selectedDocumentType
-							: 'Document'}
+							: i18n.t('Document')}
 					</span>
 				{:else}
-					<span class="text-sm font-medium">Content</span>
+					<span class="text-sm font-medium">{i18n.t('Content')}</span>
 				{/if}
 			</div>
 		</div>
@@ -1307,7 +1308,7 @@
 									documentTypes.find((t) => t.name === selectedDocumentType)?.title ||
 										selectedDocumentType
 								)
-							: 'Content'}
+							: i18n.t('Content')}
 					</h1>
 				{/if}
 				{#key `${currentView}-${selectedDocumentType}`}
@@ -1327,7 +1328,7 @@
 												d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.704-.833-2.464 0L4.35 16.5c-.77.833.192 2.5 1.732 2.5z"
 											/>
 										</svg>
-										<AlertTitle>Schema Validation Error</AlertTitle>
+										<AlertTitle>{i18n.t('Schema Validation Error')}</AlertTitle>
 										<AlertDescription class="whitespace-pre-line">
 											{schemaError.message}
 										</AlertDescription>
@@ -1349,13 +1350,13 @@
 									<button
 										onclick={() => setActiveEditor(-1)}
 										class="hover:bg-muted/30 flex h-full w-full cursor-pointer flex-col transition-colors"
-										title="Click to expand content types"
+										title={i18n.t('Click to expand content types')}
 									>
 										<div class="flex flex-1 items-start justify-center p-2 pt-8 text-left">
 											<div
 												class="text-foreground -mt-2 text-sm font-medium whitespace-nowrap [writing-mode:vertical-rl]"
 											>
-												Content
+												{i18n.t('Content')}
 											</div>
 										</div>
 									</button>
@@ -1365,7 +1366,7 @@
 											<h2
 												class="text-muted-foreground border-rule mt-2 mb-3 hidden px-2 pb-3 text-sm font-medium sm:block sm:border-b"
 											>
-												Content
+												{i18n.t('Content')}
 											</h2>
 											{#each groupedDocumentTypes as bucket (bucket.name ?? '__ungrouped__')}
 												{#if bucket.name}
@@ -1424,12 +1425,13 @@
 												>
 													<FileText class="text-muted-foreground h-8 w-8" />
 												</div>
-												<h3 class="mb-2 font-medium">No content types found</h3>
+												<h3 class="mb-2 font-medium">{i18n.t('No content types found')}</h3>
 												<p class="text-muted-foreground mb-4 text-sm">
-													Get started by defining your first schema type
+													{i18n.t('Get started by defining your first schema type')}
 												</p>
 												<p class="text-muted-foreground text-xs">
-													Add schemas in <code class="bg-muted rounded px-1.5 py-0.5 text-xs"
+													{i18n.t('Add schemas in')}
+													<code class="bg-muted rounded px-1.5 py-0.5 text-xs"
 														>src/lib/schemaTypes/</code
 													>
 												</p>
@@ -1455,7 +1457,7 @@
 										<button
 											onclick={() => setActiveEditor(-2)}
 											class="hover:bg-muted/30 flex h-full w-full cursor-pointer flex-col transition-colors"
-											title="Click to expand documents list"
+											title={i18n.t('Click to expand documents list')}
 										>
 											<div class="flex flex-1 items-start justify-center p-2 pt-8 text-left">
 												<div
@@ -1491,7 +1493,7 @@
 															{pluralize(currentDocType?.title || selectedDocumentType)}
 														</h2>
 														<p class="text-muted-foreground text-xs">
-															{docTotalDocs} document{docTotalDocs !== 1 ? 's' : ''}
+															{i18n.tn(docTotalDocs, '{count} document', '{count} documents')}
 														</p>
 													</div>
 												</div>
@@ -1501,7 +1503,7 @@
 														variant="ghost"
 														onclick={toggleDocSearch}
 														class="h-8 w-8 p-0 {docSearchOpen || docSearchQuery ? 'bg-muted' : ''}"
-														title="Search documents"
+														title={i18n.t('Search documents')}
 													>
 														<Search class="h-4 w-4" />
 													</Button>
@@ -1549,7 +1551,7 @@
 																	size="sm"
 																	variant="ghost"
 																	class="h-8 w-8 cursor-pointer p-0"
-																	title="Sort documents"
+																	title={i18n.t('Sort documents')}
 																>
 																	<Ellipsis class="h-4 w-4" />
 																</Button>
@@ -1557,7 +1559,7 @@
 														</Popover.Trigger>
 														<Popover.Content class="w-60 p-2">
 															<div class="text-muted-foreground mb-2 px-2 text-xs font-semibold">
-																Sort by
+																{i18n.t('Sort by')}
 															</div>
 															<div class="flex flex-col gap-0.5">
 																{#each availableOrderings as ordering (ordering.name)}
@@ -1609,7 +1611,8 @@
 																			: ''}"
 																	>
 																		<span class={isActive ? 'font-medium' : ''}>
-																			{ordering.title
+																			{i18n
+																				.label(ordering.title)
 																				.replace(' (A-Z)', '')
 																				.replace(' (Z-A)', '')
 																				.replace(' (Newest)', '')
@@ -1654,9 +1657,12 @@
 													/>
 													<Input
 														bind:ref={docSearchInputEl}
-														placeholder="Search {pluralize(
-															currentDocType?.title || selectedDocumentType
-														).toLowerCase()}"
+														placeholder={i18n.t('Search {pluralLower}', {
+															plural: pluralize(currentDocType?.title || selectedDocumentType),
+															pluralLower: pluralize(
+																currentDocType?.title || selectedDocumentType
+															).toLowerCase()
+														})}
 														class="h-8 pl-8 text-sm {docSearchQuery ? 'pr-8' : ''}"
 														value={docSearchQuery}
 														oninput={(e) =>
@@ -1669,7 +1675,7 @@
 														<button
 															onclick={() => handleDocSearchInput('')}
 															class="text-muted-foreground hover:text-foreground absolute top-1/2 right-2.5 -translate-y-1/2"
-															title="Clear search"
+															title={i18n.t('Clear search')}
 														>
 															<X class="h-3.5 w-3.5" />
 														</button>
@@ -1719,7 +1725,18 @@
 																		{organizationsMap.get(doc.organizationId)?.name}
 																	</p>
 																{/if}
-																<h3 class="truncate text-sm font-medium">{doc.title}</h3>
+																<div class="flex min-w-0 items-center gap-2">
+																	<h3 class="truncate text-sm font-medium">{doc.title}</h3>
+																	{#if doc.badge}
+																		<span
+																			class="border-border text-muted-foreground shrink-0 rounded border px-1.5 text-[10px] font-medium tracking-wide uppercase"
+																			title={doc.badge.description}
+																			>{doc.badge.label}<span class="sr-only"
+																				>: {doc.badge.description}</span
+																			></span
+																		>
+																	{/if}
+																</div>
 																{#if doc.subtitle}
 																	<p class="text-muted-foreground truncate text-xs">
 																		{doc.subtitle}
@@ -1731,29 +1748,29 @@
 														</div>
 														<div class="flex items-center gap-2">
 															<span class="text-muted-foreground text-xs">
-																{doc.updatedAt?.toLocaleDateString() || ''}
+																{doc.updatedAt?.toLocaleDateString(i18n.locale()) || ''}
 															</span>
 															<div class="flex items-center gap-1">
 																{#if doc.status === 'published'}
 																	{#if doc.hasChanges}
 																		<span
 																			class="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500"
-																			title="Unpublished changes"
+																			title={i18n.t('Unpublished changes')}
 																		></span>
 																	{/if}
 																	<span
 																		class="h-1.5 w-1.5 shrink-0 rounded-full bg-green-500"
-																		title="Published"
+																		title={i18n.t('Published')}
 																	></span>
 																{:else if doc.status === 'unpublished'}
 																	<span
 																		class="bg-muted-foreground/60 h-1.5 w-1.5 shrink-0 rounded-full"
-																		title="Unpublished"
+																		title={i18n.t('Unpublished')}
 																	></span>
 																{:else}
 																	<span
 																		class="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500"
-																		title="Draft"
+																		title={i18n.t('Draft')}
 																	></span>
 																{/if}
 															</div>
@@ -1816,10 +1833,11 @@
 														<ChevronLeft class="h-4 w-4" />
 													</Button>
 													<span class="text-muted-foreground text-xs">
-														{(docCurrentPage - 1) * docPageSize + 1}–{Math.min(
-															docCurrentPage * docPageSize,
-															docTotalDocs
-														)} of {docTotalDocs}
+														{i18n.t('{from}–{to} of {total}', {
+															from: (docCurrentPage - 1) * docPageSize + 1,
+															to: Math.min(docCurrentPage * docPageSize, docTotalDocs),
+															total: docTotalDocs
+														})}
 													</span>
 													<Button
 														size="sm"
@@ -1846,13 +1864,16 @@
 													}}
 												>
 													<Select.Trigger size="sm" class="h-7 border-none text-xs shadow-none">
-														{docPageSize} / page
+														{i18n.t('{count} / page', { count: docPageSize })}
 													</Select.Trigger>
 													<Select.Content>
 														<Select.Group>
 															{#each PAGE_SIZE_OPTIONS as size}
-																<Select.Item value={String(size)} label="{size} / page">
-																	{size} / page
+																<Select.Item
+																	value={String(size)}
+																	label={i18n.t('{count} / page', { count: size })}
+																>
+																	{i18n.t('{count} / page', { count: size })}
 																</Select.Item>
 															{/each}
 														</Select.Group>
@@ -1989,7 +2010,9 @@
 									<button
 										onclick={() => setActiveEditor(0)}
 										class="border-rule hover:bg-muted/50 flex h-full w-[60px] cursor-pointer flex-col border-l transition-colors"
-										title="Click to expand {typeLabel(selectedDocumentType)}"
+										title={i18n.t('Click to expand {value}', {
+											value: typeLabel(selectedDocumentType)
+										})}
 									>
 										<div class="flex flex-1 items-start justify-center p-2 pt-8 text-left">
 											<div
@@ -2025,7 +2048,9 @@
 									<button
 										onclick={() => setActiveEditor(1)}
 										class="border-rule hover:bg-muted/50 flex h-full w-[60px] cursor-pointer flex-col border-l transition-colors"
-										title="Click to expand {typeLabel(currentRef.documentType)}"
+										title={i18n.t('Click to expand {value}', {
+											value: typeLabel(currentRef.documentType)
+										})}
 									>
 										<div class="flex h-full flex-1 items-start justify-center p-2 pt-8 text-left">
 											<div
@@ -2150,7 +2175,7 @@
 		isCreating={currentRef.isCreating}
 		organizationId={currentOrgId}
 		onBack={handleStackedEditorBack}
-		backLabel="Back"
+		backLabel={i18n.t('Back')}
 		onOpenReference={handleOpenReference}
 		onOpenVersionHistory={handleOpenVersionHistory}
 		externalVersionPreview={versionPanelDocId === currentRef.documentId ? versionPreviewData : null}

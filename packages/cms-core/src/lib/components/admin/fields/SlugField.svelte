@@ -1,4 +1,5 @@
 <script lang="ts">
+	import * as i18n from '../../../i18n/index';
 	import { Input } from '@aphexcms/ui/shadcn/input';
 	import { Button } from '@aphexcms/ui/shadcn/button';
 	import type { SlugField } from '../../../types/schemas';
@@ -70,20 +71,23 @@
 			disabled={!sourceValue || readonly}
 			class="shrink-0"
 		>
-			Generate
+			{i18n.t('Generate')}
 		</Button>
 	</div>
 	{#if readonly}
 		<!-- No hint: the Generate button above is disabled, so there is nothing to click. -->
 	{:else if sourceValue}
 		<p class="text-muted-foreground text-xs">
-			Click "Generate" to create slug from {sourceField}: "{sourceValue}"
+			{i18n.t('Click "Generate" to create slug from {sourceField}: "{sourceValue}"', {
+				sourceField,
+				sourceValue
+			})}
 		</p>
 	{:else if field.source}
 		<p class="text-muted-foreground text-xs">
-			Enter a {sourceField} first to generate a slug automatically
+			{i18n.t('Enter a {sourceField} first to generate a slug automatically', { sourceField })}
 		</p>
 	{:else}
-		<p class="text-muted-foreground text-xs">Click "Generate" or enter a custom slug</p>
+		<p class="text-muted-foreground text-xs">{i18n.t('Click "Generate" or enter a custom slug')}</p>
 	{/if}
 </div>

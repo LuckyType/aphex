@@ -1,4 +1,5 @@
 <script lang="ts">
+	import * as i18n from '../../../i18n/index';
 	import { goto } from '$app/navigation';
 	import {
 		SidebarMenu,
@@ -79,17 +80,17 @@
 				sideOffset={4}
 			>
 				<div class="px-2 py-1.5 text-sm">
-					<p class="font-medium">{user.name || 'User'}</p>
+					<p class="font-medium">{user.name || i18n.t('User')}</p>
 					<p class="text-muted-foreground text-xs">{user.email}</p>
 				</div>
 				<DropdownMenuSeparator />
 				<DropdownMenuItem class="cursor-pointer" onclick={() => goto('/admin/settings/account')}>
 					<Settings class="mr-2 h-4 w-4" />
-					<span>Account Settings</span>
+					<span>{i18n.t('Account Settings')}</span>
 				</DropdownMenuItem>
 				<DropdownMenuItem class="cursor-pointer" onclick={() => goto('/invitations')}>
 					<Mail class="mr-2 h-4 w-4" />
-					<span>Invitations</span>
+					<span>{i18n.t('Invitations')}</span>
 				</DropdownMenuItem>
 				{#if user.role === 'super_admin'}
 					<DropdownMenuItem class="cursor-pointer" onclick={() => goto('/god-mode')}>
@@ -100,7 +101,7 @@
 				<DropdownMenuSeparator />
 				<DropdownMenuItem class="text-destructive cursor-pointer" onclick={handleSignOut}>
 					<LogOut class="mr-2 h-4 w-4" />
-					<span>Sign Out</span>
+					<span>{i18n.t('Sign Out')}</span>
 				</DropdownMenuItem>
 			</DropdownMenuContent>
 		</DropdownMenu>
