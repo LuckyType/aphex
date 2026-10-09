@@ -43,3 +43,28 @@ export function resolveConfirmDialog(value: boolean) {
 	confirmDialogState.open = false;
 	r?.(value);
 }
+
+/**
+ * Mounted hosts, oldest first. All of them would render the same shared state,
+ * so an app that mounts its own `ConfirmDialogHost` beside the admin's would
+ * show every dialog twice. Only the oldest live host renders; when it unmounts,
+ * the next one takes over.
+ */
+const confirmDialogHosts = $state<{ ids: symbol[] }>({ ids: [] });
+
+/** Register a mounted host. Pair with `releaseConfirmDialogHost` on destroy. */
+export function claimConfirmDialogHost(): symbol {
+	const id = Symbol('confirm-dialog-host');
+	confirmDialogHosts.ids.push(id);
+	return id;
+}
+
+export function releaseConfirmDialogHost(id: symbol) {
+	const index = confirmDialogHosts.ids.indexOf(id);
+	if (index !== -1) confirmDialogHosts.ids.splice(index, 1);
+}
+
+/** Whether this host is the one that renders the dialog. */
+export function isActiveConfirmDialogHost(id: symbol): boolean {
+	return confirmDialogHosts.ids[0] === id;
+}
