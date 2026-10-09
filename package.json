@@ -1,0 +1,49 @@
+{
+  "name": "@aphexcms/visual-editing",
+  "version": "0.3.1",
+  "description": "Visual editing overlay for AphexCMS — add click-to-edit overlays to your frontend",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/IcelandicIcecream/aphex.git",
+    "directory": "packages/visual-editing"
+  },
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "svelte": "./dist/index.js",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "svelte": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "devDependencies": {
+    "@sveltejs/kit": "^2.70.2",
+    "@sveltejs/package": "^2.5.6",
+    "svelte": "^5.0.0",
+    "svelte-check": "^4.0.0",
+    "typescript": "^5.9.3"
+  },
+  "peerDependencies": {
+    "@sveltejs/kit": "^2.0.0",
+    "svelte": "^5.0.0"
+  },
+  "dependencies": {
+    "@vercel/stega": "^1.1.0"
+  },
+  "scripts": {
+    "dev": "tsc --watch --preserveWatchOutput",
+    "build": "svelte-package",
+    "check": "svelte-check --tsconfig ./tsconfig.json",
+    "dev:local": "node ../../scripts/swap-package-paths.js ./package.json src lib"
+  }
+}

@@ -1,0 +1,290 @@
+import { stegaDecode } from './stega.js';
+/**
+ * Vanilla JS entry point for Aphex live preview.
+ * Call this once in your frontend (framework-agnostic).
+ * Returns a cleanup function — call it on unmount.
+ *
+ * @example
+ * // SvelteKit
+ * $effect(() => enableAphexPreview({ onData: (doc) => { preview.current = doc; } }));
+ *
+ * // Vanilla / React useEffect
+ * const cleanup = enableAphexPreview({ onData: setPost });
+ * return cleanup;
+ */
+/**
+ * Read the admin theme's `--primary` (shadcn token) from the parent frame. The preview
+ * iframe is the same-origin app, so this reflects the current admin theme + light/dark.
+ * Returns null if the parent is cross-origin (a separate public-site URL) or unset.
+ */
+function readParentPrimary() {
+    try {
+        const doc = window.parent?.document;
+        if (!doc)
+            return null;
+        const v = getComputedStyle(doc.documentElement).getPropertyValue('--primary').trim();
+        return v || null;
+    }
+    catch {
+        return null;
+    }
+}
+/**
+ * Would this element's default click action leave or reload the preview?
+ *
+ * Used to keep the preview iframe put without cancelling every default: only
+ * navigation and form submission are suppressed, so in-page defaults the author
+ * relies on (opening a <details> toggle, ticking a checkbox) still happen.
+ *
+ * `button.type` is checked as a property rather than an attribute selector
+ * because a bare <button> has no type attribute but still defaults to "submit".
+ */
+function navigatesAway(target) {
+    if (target.closest('a[href]'))
+        return true;
+    const button = target.closest('button');
+    if (button && button.type !== 'button')
+        return true;
+    const input = target.closest('input');
+    if (input && (input.type === 'submit' || input.type === 'reset' || input.type === 'image')) {
+        return true;
+    }
+    return false;
+}
+export function enableAphexPreview(options = {}) {
+    const { stega = true, onData, onRefresh } = options;
+    if (typeof window === 'undefined' || window.parent === window)
+        return () => { };
+    // Accent matches the studio's theme. The preview iframe is the same-origin app, so
+    // read the admin's `--primary` (shadcn token, light/dark-aware) straight from the
+    // parent frame — the overlay then tracks the theme instead of a hardcoded hue. Falls
+    // back to a default if the parent is cross-origin (a separate public-site URL) or the
+    // token is missing.
+    const ACCENT = readParentPrimary() ?? 'oklch(0.62 0.14 39.04)';
+    const ACCENT_FADE = `color-mix(in oklab, ${ACCENT} 10%, transparent)`;
+    // Cursor style for all field elements
+    const style = document.createElement('style');
+    style.textContent = '[data-aphex-field] { cursor: pointer !important; }';
+    document.head.appendChild(style);
+    // Floating overlay
+    const overlay = document.createElement('div');
+    const label = document.createElement('span');
+    overlay.style.cssText = [
+        'position:fixed',
+        'pointer-events:none',
+        `border:2px solid ${ACCENT}`,
+        'border-radius:4px',
+        'z-index:2147483647',
+        'display:none',
+        'box-sizing:border-box',
+        'transition:top 60ms,left 60ms,width 60ms,height 60ms'
+    ].join(';');
+    label.style.cssText = [
+        'position:absolute',
+        'top:0',
+        'left:0',
+        'transform:translateY(-100%)',
+        `background:${ACCENT}`,
+        'color:#fff',
+        'font-size:10px',
+        'font-weight:600',
+        'line-height:1',
+        'padding:3px 7px',
+        'border-radius:3px 3px 0 0',
+        'white-space:nowrap',
+        'font-family:ui-monospace,monospace',
+        'text-transform:uppercase',
+        'letter-spacing:0.05em'
+    ].join(';');
+    overlay.appendChild(label);
+    document.body.appendChild(overlay);
+    // Stamp decoded navigation data onto an element (only if not already set, so the
+    // first/outermost source wins and re-scans stay idempotent).
+    function stamp(el, decoded) {
+        if (!el.dataset.aphexField)
+            el.dataset.aphexField = decoded.field;
+        if (decoded.blockIndex != null && !el.dataset.aphexBlockIndex) {
+            el.dataset.aphexBlockIndex = String(decoded.blockIndex);
+        }
+        if (decoded.blockKey && !el.dataset.aphexBlockKey) {
+            el.dataset.aphexBlockKey = decoded.blockKey;
+        }
+        if (decoded.arrayIndex != null && !el.dataset.aphexArrayIndex) {
+            el.dataset.aphexArrayIndex = String(decoded.arrayIndex);
+        }
+        if (decoded.objectPath && !el.dataset.aphexObjectPath) {
+            el.dataset.aphexObjectPath = decoded.objectPath;
+        }
+        if (decoded.documentId && !el.dataset.aphexDocumentId) {
+            el.dataset.aphexDocumentId = decoded.documentId;
+        }
+        if (decoded.documentType && !el.dataset.aphexDocumentType) {
+            el.dataset.aphexDocumentType = decoded.documentType;
+        }
+    }
+    // Stega rides in two places: text node content, and a few attributes carrying human
+    // text. Images have no text node, so they become click-to-edit via their `alt`; dates
+    // via `datetime`; otherwise-textless elements via `aria-label`.
+    const ATTR_TARGETS = [
+        ['img[alt]', 'alt'],
+        ['time[datetime]', 'datetime'],
+        ['[aria-label]', 'aria-label']
+    ];
+    // Walk text nodes + scan attributes for stega markers and stamp navigation data.
+    function scanStega() {
+        if (!stega)
+            return;
+        const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+        let node;
+        while ((node = walker.nextNode())) {
+            const decoded = stegaDecode(node.textContent ?? '');
+            if (decoded?.field && node.parentElement)
+                stamp(node.parentElement, decoded);
+        }
+        for (const [selector, attr] of ATTR_TARGETS) {
+            document.querySelectorAll(selector).forEach((el) => {
+                const decoded = stegaDecode(el.getAttribute(attr) ?? '');
+                if (decoded?.field)
+                    stamp(el, decoded);
+            });
+        }
+    }
+    scanStega();
+    let editMode = true;
+    let activeEl = null;
+    function positionOn(el) {
+        const r = el.getBoundingClientRect();
+        overlay.style.left = `${r.left - 2}px`;
+        overlay.style.top = `${r.top - 2}px`;
+        overlay.style.width = `${r.width + 4}px`;
+        overlay.style.height = `${r.height + 4}px`;
+    }
+    function showOn(el) {
+        activeEl = el;
+        // Show the row number for a list entry — several rows of one list otherwise all
+        // hover as the same bare field name, with nothing to say which slot is which.
+        const idx = el.dataset.aphexArrayIndex;
+        // Inside an element marked as a block, the label names the block, and the
+        // CMS is told its path so it can light the block's row in the editor.
+        const block = el.closest('[data-aphex-block-label]');
+        label.textContent = block
+            ? (block.dataset.aphexBlockLabel ?? '')
+            : (el.dataset.aphexField ?? '') + (idx != null ? `[${idx}]` : '');
+        postBlockHover(block?.dataset.aphexBlockPath ?? null);
+        positionOn(el);
+        overlay.style.display = 'block';
+    }
+    let hoveredBlockPath = null;
+    function postBlockHover(path) {
+        if (path === hoveredBlockPath)
+            return;
+        hoveredBlockPath = path;
+        window.parent.postMessage({ type: 'aphex:block-hover', path }, '*');
+    }
+    function hide() {
+        activeEl = null;
+        overlay.style.display = 'none';
+        postBlockHover(null);
+    }
+    const onMouseOver = (e) => {
+        if (!editMode)
+            return;
+        const el = e.target.closest('[data-aphex-field]');
+        if (el)
+            showOn(el);
+        else
+            hide();
+    };
+    const onClick = (e) => {
+        // Only cancel defaults that would take the preview somewhere else. A blanket
+        // preventDefault() here also cancels benign in-page defaults — <details>/<summary>
+        // toggling, checkboxes, radios — which authors expect to work while previewing
+        // (a collapsed toggle can't be read if it can never open).
+        const target = e.target;
+        if (navigatesAway(target))
+            e.preventDefault();
+        // A click inside `data-aphex-no-edit` (a drag handle, say) opens no field.
+        if (target.closest('[data-aphex-no-edit]'))
+            return;
+        if (!editMode)
+            return;
+        const el = target.closest('[data-aphex-field]');
+        if (el?.dataset.aphexField) {
+            e.stopPropagation();
+            const d = el.dataset;
+            // If the click landed on (or inside) a link, pass its href so the editor
+            // can drop the cursor inside that link and open the link editor instead
+            // of just focusing the block.
+            const anchor = e.target.closest('a');
+            const linkHref = anchor?.getAttribute('href') ?? undefined;
+            window.parent.postMessage({
+                type: 'aphex:field-click',
+                fieldPath: d.aphexField,
+                blockIndex: d.aphexBlockIndex != null ? parseInt(d.aphexBlockIndex, 10) : undefined,
+                blockKey: d.aphexBlockKey ?? undefined,
+                arrayIndex: d.aphexArrayIndex != null ? parseInt(d.aphexArrayIndex, 10) : undefined,
+                objectPath: d.aphexObjectPath ?? undefined,
+                linkHref,
+                documentId: d.aphexDocumentId ?? undefined,
+                documentType: d.aphexDocumentType ?? undefined
+            }, '*');
+        }
+    };
+    const onScroll = () => {
+        if (activeEl)
+            positionOn(activeEl);
+    };
+    const onMessage = (e) => {
+        if (!e.data || typeof e.data !== 'object')
+            return;
+        const { type, fieldPath, document: doc, documentType, documentId } = e.data;
+        if (type === 'aphex:edit-mode') {
+            editMode = e.data.enabled;
+            if (!editMode) {
+                hide();
+                style.textContent = '';
+            }
+            else {
+                style.textContent = '[data-aphex-field] { cursor: pointer !important; }';
+            }
+        }
+        else if (type === 'aphex:data' && doc) {
+            onData?.(doc, { documentType, documentId });
+            // Re-scan after the framework re-renders with the new stega-encoded values
+            requestAnimationFrame(scanStega);
+        }
+        else if (type === 'aphex:refresh') {
+            // Re-fetch server-loaded data (a different document changed). Prefer the
+            // app's invalidate hook; otherwise hard-reload the preview.
+            if (onRefresh)
+                onRefresh();
+            else
+                location.reload();
+        }
+        else if (type === 'aphex:field-focus' && fieldPath) {
+            const el = document.querySelector(`[data-aphex-field="${fieldPath}"]`);
+            if (!el)
+                return;
+            el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            showOn(el);
+            el.animate([
+                { outline: `3px solid ${ACCENT}`, outlineOffset: '4px' },
+                { outline: `3px solid ${ACCENT_FADE}`, outlineOffset: '8px' }
+            ], { duration: 1200, easing: 'ease-out', fill: 'none' });
+            setTimeout(hide, 1200);
+        }
+    };
+    document.addEventListener('mouseover', onMouseOver);
+    document.addEventListener('click', onClick, true);
+    window.addEventListener('scroll', onScroll, true);
+    window.addEventListener('message', onMessage);
+    window.parent.postMessage({ type: 'aphex:ready', stega }, '*');
+    return () => {
+        document.removeEventListener('mouseover', onMouseOver);
+        document.removeEventListener('click', onClick, true);
+        window.removeEventListener('scroll', onScroll, true);
+        window.removeEventListener('message', onMessage);
+        overlay.remove();
+        style.remove();
+    };
+}
