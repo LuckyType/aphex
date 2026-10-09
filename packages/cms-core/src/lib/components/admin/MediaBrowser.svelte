@@ -1,4 +1,5 @@
 <script lang="ts">
+	import * as i18n from '../../i18n/index';
 	import { Button } from '@aphexcms/ui/shadcn/button';
 	import { Input } from '@aphexcms/ui/shadcn/input';
 	import { Label } from '@aphexcms/ui/shadcn/label';
@@ -1083,13 +1084,15 @@
 	 */
 	function uploadErrorMessage(err: unknown): string {
 		if (err instanceof ApiError) {
+			// An app's own wording (configureApiErrorMessage) wins over the server's.
+			if (err.message !== err.detail) return err.message;
 			const serverMessage = err.response?.error;
 			if (typeof serverMessage === 'string' && serverMessage) return serverMessage;
-			if (err.status === 413) return 'File is too large for this server’s upload limit';
-			return `Upload failed (${err.status})`;
+			if (err.status === 413) return i18n.t('File is too large for this server’s upload limit');
+			return i18n.t('Upload failed ({status})', { status: err.status });
 		}
 		if (err instanceof Error && err.message) return err.message;
-		return 'Upload failed';
+		return i18n.t('Upload failed');
 	}
 
 	// Drag and drop
@@ -1941,11 +1944,11 @@
 		     assets fit on a page matters far less than whether they can tell one
 		     thumbnail from another. Grid only; the list view has a fixed row. -->
 		{#if viewMode === 'grid'}
-			<div class="bg-muted hidden items-center rounded-md p-0.5 sm:flex">
-				{#each [{ id: 'compact' as const, label: 'Compact' }, { id: 'default' as const, label: 'Default' }, { id: 'large' as const, label: 'Large' }] as option (option.id)}
+			<div class="bg-muted studio-track hidden items-center rounded-md p-0.5 sm:flex">
+				{#each [{ id: 'compact' as const, label: i18n.t('Compact') }, { id: 'default' as const, label: i18n.t('Default') }, { id: 'large' as const, label: i18n.t('Large') }] as option (option.id)}
 					<button
 						onclick={() => (gridDensity = option.id)}
-						title="{option.label} thumbnails"
+						title={i18n.t('{label} thumbnails', { label: option.label })}
 						aria-pressed={gridDensity === option.id}
 						class="rounded px-2 py-1 text-xs transition-colors {gridDensity === option.id
 							? 'bg-background text-foreground shadow-sm'
@@ -1958,7 +1961,7 @@
 		{/if}
 
 		<!-- View toggle -->
-		<div class="bg-muted flex items-center rounded-md p-0.5">
+		<div class="bg-muted studio-track flex items-center rounded-md p-0.5">
 			<button
 				onclick={() => (viewMode = 'grid')}
 				class="rounded p-1.5 {viewMode === 'grid'

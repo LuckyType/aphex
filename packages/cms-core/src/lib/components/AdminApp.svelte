@@ -1,4 +1,6 @@
 <script lang="ts">
+	import * as i18n from '../i18n/index';
+	import { studioExtensions } from '../studio-extensions';
 	/**
 	 * AdminApp - Complete CMS Admin Interface
 	 * A packaged, reusable Sanity-style admin UI
@@ -42,6 +44,7 @@
 		ArrowDownUp,
 		ChevronLeft,
 		ChevronRight,
+		Plus,
 		Search,
 		X
 	} from '@lucide/svelte';
@@ -57,6 +60,7 @@
 		documentTypes: Array<{ name: string; title: string; description?: string }>;
 		schemaError?: { message: string } | null;
 		title?: string;
+		tabTitle?: string;
 		graphqlSettings?: { endpoint: string; enableGraphiQL: boolean } | null;
 		isReadOnly?: boolean;
 		/**
@@ -89,6 +93,7 @@
 		documentTypes: documentTypesFromServer,
 		schemaError = null,
 		title = 'Aphex CMS',
+		tabTitle = undefined,
 		graphqlSettings = null,
 		isReadOnly = false,
 		capabilities = [],
@@ -594,6 +599,11 @@
 
 		if (windowWidth < 620) {
 			return mobileView === 'types' ? 'w-full' : 'hidden';
+		}
+
+		// A space with a single type needs no types column beside its list.
+		if (documentTypes.length === 1 && selectedDocumentType === documentTypes[0]?.name) {
+			return 'hidden';
 		}
 
 		return layoutConfig.typesExpanded ? 'w-[350px]' : 'w-[60px]';
@@ -1147,6 +1157,7 @@
 
 					const title = resolvePreviewTitle(doc, schema);
 					const subtitle = resolvePreviewSubtitle(doc, schema) ?? undefined;
+					const badge = studioExtensions().listBadge?.(docType, doc.id) ?? null;
 
 					// Metadata is in _meta field (from LocalAPI transformation)
 					const meta = doc._meta || {};
@@ -1155,6 +1166,8 @@
 						id: doc.id,
 						title,
 						subtitle,
+						slug: doc.slug,
+						badge,
 						status: meta.status || 'draft',
 						publishedAt: meta.publishedAt ? new Date(meta.publishedAt) : null,
 						updatedAt: meta.updatedAt ? new Date(meta.updatedAt) : null,
@@ -1209,11 +1222,12 @@
 
 <svelte:head>
 	<title
-		>{activeTab.value === 'structure'
-			? 'Content'
-			: activeTab.value === 'media'
-				? 'Media'
-				: 'Vision'} - {title}</title
+		>{tabTitle ??
+			(activeTab.value === 'structure'
+				? i18n.t('Content')
+				: activeTab.value === 'media'
+					? i18n.t('Media')
+					: 'Vision')}{tabTitle ? '' : ` - ${title}`}</title
 	>
 </svelte:head>
 
@@ -1285,9 +1299,8 @@
 	<div class="flex-1 overflow-hidden">
 		<Tabs.Root value={activeTab.value} onValueChange={handleTabChange} class="h-full">
 			<Tabs.Content value="structure" class="h-full overflow-hidden">
-				<!-- The editor renders its own h1 (the document title), so only the list and
-				     dashboard views need one here. -->
-				{#if currentView !== 'editor' && !currentTypeIsSingleton}
+				<!-- One h1 per view, for screen reader navigation. -->
+				{#if !currentTypeIsSingleton}
 					<h1 class="sr-only">
 						{selectedDocumentType
 							? pluralize(
@@ -1367,7 +1380,7 @@
 														onclick={() => navigateToDocumentType(docType.name)}
 														class="hover:bg-muted/50 group flex w-full cursor-pointer items-center justify-between rounded-md px-2 py-2.5 text-left transition-colors {selectedDocumentType ===
 														docType.name
-															? 'bg-muted/50'
+															? 'bg-muted/50 studio-selected-row'
 															: ''}"
 														title={docType.description || ''}
 													>
@@ -1493,27 +1506,38 @@
 														<Search class="h-4 w-4" />
 													</Button>
 													{#if perms.can('document.create') && !schemas.find((s) => s.name === selectedDocumentType)?.singleton}
-														<Button
-															size="sm"
-															variant="ghost"
-															onclick={() => navigateToCreateDocument(selectedDocumentType!)}
-															class="h-8 w-8 p-0"
-															title="Create new document"
-														>
-															<svg
-																class="h-4 w-4"
-																fill="none"
-																viewBox="0 0 24 24"
-																stroke="currentColor"
+														{#if studioExtensions().createLabel?.(selectedDocumentType)}
+															<Button
+																size="sm"
+																onclick={() => navigateToCreateDocument(selectedDocumentType!)}
+																class="h-8 gap-1.5 px-3"
 															>
-																<path
-																	stroke-linecap="round"
-																	stroke-linejoin="round"
-																	stroke-width="2"
-																	d="M12 4v16m8-8H4"
-																/>
-															</svg>
-														</Button>
+																<Plus class="h-3.5 w-3.5" aria-hidden="true" />
+																{studioExtensions().createLabel?.(selectedDocumentType)}
+															</Button>
+														{:else}
+															<Button
+																size="sm"
+																variant="ghost"
+																onclick={() => navigateToCreateDocument(selectedDocumentType!)}
+																class="h-8 w-8 p-0"
+																title={i18n.t('Create new document')}
+															>
+																<svg
+																	class="h-4 w-4"
+																	fill="none"
+																	viewBox="0 0 24 24"
+																	stroke="currentColor"
+																>
+																	<path
+																		stroke-linecap="round"
+																		stroke-linejoin="round"
+																		stroke-width="2"
+																		d="M12 4v16m8-8H4"
+																	/>
+																</svg>
+															</Button>
+														{/if}
 													{/if}
 
 													<!-- Sorting Menu Popover -->
@@ -1663,13 +1687,21 @@
 												</div>
 											{:else if loading}
 												<DocumentsSkeleton />
+											{:else if documentsList.length > 0 && selectedDocumentType && studioExtensions().documentLists?.[selectedDocumentType]}
+												{@const DocumentList =
+													studioExtensions().documentLists![selectedDocumentType]}
+												<DocumentList
+													rows={documentsList}
+													activeId={editingDocumentId}
+													onselect={(id) => navigateToEditDocument(id, selectedDocumentType!)}
+												/>
 											{:else if documentsList.length > 0}
 												{#each documentsList as doc, index (index)}
 													{@const isActive = editingDocumentId === doc.id}
 													<button
 														onclick={() => navigateToEditDocument(doc.id, selectedDocumentType!)}
 														class="hover:bg-muted/50 border-border group flex w-full cursor-pointer items-center justify-between border-b p-3 text-left transition-colors {isActive
-															? 'bg-muted/50'
+															? 'bg-muted/50 studio-selected-row'
 															: ''}"
 													>
 														<div class="flex min-w-0 flex-1 items-center gap-3">
@@ -1741,14 +1773,24 @@
 														{/if}
 													</div>
 													{#if docSearchQuery}
-														<h3 class="mb-2 font-medium">No matching documents</h3>
+														<h3 class="mb-2 font-medium">{i18n.t('No matching documents')}</h3>
 														<p class="text-muted-foreground text-sm">
-															No results for "{docSearchQuery}". Try a different search.
+															{i18n.t('No results for "{query}". Try a different search.', {
+																query: docSearchQuery
+															})}
 														</p>
 													{:else}
-														<h3 class="mb-2 font-medium">No documents found</h3>
+														<h3 class="mb-2 font-medium">{i18n.t('No documents found')}</h3>
 														<p class="text-muted-foreground text-sm">
-															Create your first {selectedDocumentType} document using the + button above
+															{(selectedDocumentType &&
+																studioExtensions().emptyListText?.(selectedDocumentType)) ||
+																i18n.t(
+																	'Create your first {type} document using the + button above',
+																	{
+																		type: selectedDocumentType,
+																		typeLabel: typeLabel(selectedDocumentType)
+																	}
+																)}
 														</p>
 													{/if}
 												</div>
