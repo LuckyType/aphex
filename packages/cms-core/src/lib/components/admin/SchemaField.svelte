@@ -44,6 +44,8 @@
 		 * Defaults to `documentData`, which makes the root case a no-op for callers.
 		 */
 		siblingData?: Record<string, any>;
+		/** The schema fields `siblingData` is shaped by, for labels that name a sibling. */
+		siblingFields?: Field[];
 		onUpdate: (value: any) => void;
 		onOpenReference?: (documentId: string, documentType: string) => void;
 		doValidation?: () => void;
@@ -65,6 +67,7 @@
 		value,
 		documentData,
 		siblingData,
+		siblingFields,
 		onUpdate,
 		onOpenReference,
 		doValidation,
@@ -255,6 +258,7 @@
 							value={value?.[subField.name]}
 							{documentData}
 							siblingData={value ?? {}}
+							siblingFields={field.fields}
 							onUpdate={(subValue) => onUpdate({ ...value, [subField.name]: subValue })}
 							{doValidation}
 							{schemaType}
@@ -287,6 +291,7 @@
 					{validationClasses}
 					{documentData}
 					siblingData={scope}
+					{siblingFields}
 					{schemaType}
 					{fieldPath}
 					{organizationId}
