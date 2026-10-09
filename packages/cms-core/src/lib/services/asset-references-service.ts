@@ -1,4 +1,5 @@
 import type { DatabaseAdapter } from '../db/interfaces/index';
+import type { Document } from '../types/document';
 import { collectAssetReferences, collectAssetIdsUnstructured } from '../utils/asset-reference-walk';
 import { cmsLogger } from '../utils/logger';
 
@@ -182,7 +183,7 @@ export class AssetReferencesService {
 								doc.id,
 								type,
 								doc.draftData,
-								doc.publishedData
+								publishedPlane(doc)
 							);
 							indexed++;
 							missed += this.reportWalkerGaps(doc.id, type, doc.draftData, doc.publishedData);
@@ -224,4 +225,35 @@ export class AssetReferencesService {
 			throw err;
 		}
 	}
+}
+
+/**
+ * Re-syncs one document's rows from its stored state, for the writes that
+ * change a plane without a draft save: publish, unpublish and a version
+ * restore. Without it the media library's in-use badges and Unused filter show
+ * the planes as of the last draft save.
+ * Call it on the transaction handle of that write so the rows commit with it.
+ */
+export async function syncDocumentAssetReferences(
+	db: DatabaseAdapter,
+	organizationId: string,
+	document: Document
+): Promise<void> {
+	await new AssetReferencesService(db).syncAssetReferencesFor(
+		db,
+		organizationId,
+		document.id,
+		document.type,
+		document.draftData,
+		publishedPlane(document)
+	);
+}
+
+/**
+ * An unpublish keeps `published_data` and only sets
+ * `status`, so that data is on no Published document and counts for nothing
+ * in the published plane.
+ */
+export function publishedPlane(document: Pick<Document, 'status' | 'publishedData'>): unknown {
+	return document.status === 'published' ? (document.publishedData ?? null) : null;
 }
