@@ -166,6 +166,7 @@
 							value={(value ?? {})[field.name]}
 							{documentData}
 							siblingData={value ?? {}}
+							siblingFields={schema.fields}
 							onUpdate={(newValue) => {
 								onUpdate({ ...value, [field.name]: newValue });
 							}}
