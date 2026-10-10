@@ -490,6 +490,18 @@ export interface DocumentType {
 	/** Reject-only checks run before a publish, unpublish or delete. See {@link DocumentPolicies}. */
 	policies?: DocumentPolicies;
 	/**
+	 * What a write carrying a key the schema does not declare gets.
+	 *
+	 * `'reject'` (default) refuses it as a structural error on every path, so
+	 * an invented field name never reaches the row. `'strip'` drops such keys
+	 * before validation, at every depth the schema describes (inline objects,
+	 * array items of a declared or registered type), and stores the rest: for
+	 * a type whose documents outlive the fields they were written with, so a
+	 * retired field needs no `hidden: () => true` to keep old rows savable.
+	 * Keys starting with `_` are structure, never stripped.
+	 */
+	unknownFields?: 'reject' | 'strip';
+	/**
 	 * URL (or resolver) for the live preview iframe in presentation mode.
 	 * A string is used as-is (good for singletons like '/about').
 	 * A function receives the current draft data and should return a URL

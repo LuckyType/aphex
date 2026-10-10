@@ -145,6 +145,11 @@ export interface DocumentValidationContext {
 	depth?: number;
 	/** The root document, for cross-field rules. Set once by the top-level caller. */
 	document?: Record<string, any>;
+	/**
+	 * The document type's `unknownFields`. Under `'strip'` an undeclared key
+	 * is no error here, because the write path drops it before the row.
+	 */
+	unknownFields?: 'reject' | 'strip';
 	[key: string]: unknown;
 }
 
@@ -734,7 +739,12 @@ export async function validateDocumentData(
 		dataForValidation
 	});
 
-	const validationErrors = await validateFieldSet(schema.fields, dataForValidation, context);
+	const unknownFields =
+		'unknownFields' in schema && schema.unknownFields === 'strip' ? 'strip' : context.unknownFields;
+	const validationErrors = await validateFieldSet(schema.fields, dataForValidation, {
+		...context,
+		unknownFields
+	});
 
 	cmsLogger.debug('[validateDocumentData]', 'Final result', {
 		isValid: validationErrors.length === 0,
