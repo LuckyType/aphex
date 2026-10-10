@@ -119,8 +119,12 @@
 	// runs in createCMSConfig, so the editor and the engine agree. The plugins are
 	// already client-side here (we hold them for component parts), so the admin
 	// resolves this itself — no app wiring. Everything downstream references `schemas`.
+	// Labels go through `configureStudioI18n`'s `label` here, at render time, so
+	// the app registers English schemas and never rewrites them per language.
 	const schemas = $derived(
-		partResolver.applySchemaTransforms([...appSchemas, ...partResolver.schemaTypes()])
+		partResolver
+			.applySchemaTransforms([...appSchemas, ...partResolver.schemaTypes()])
+			.map((schema) => i18n.localizeSchema(schema))
 	);
 
 	// Publish plugin field-input widgets so SchemaField can swap them in for a
@@ -220,6 +224,7 @@
 				const schema = schemas.find((s) => s.name === docType.name);
 				return {
 					...docType,
+					title: schema?.title ?? docType.title,
 					icon: schema?.icon,
 					group: schema?.group,
 					access: schema?.access,
