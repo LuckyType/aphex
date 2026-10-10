@@ -2,6 +2,7 @@
 import type { Rule } from '../field-validation/rule';
 import type { Icon as LucideIcon } from '@lucide/svelte';
 import type { OrganizationRole } from './organization';
+import type { DatabaseAdapter } from '../db/interfaces/index';
 
 /**
  * Declarative per-schema access control.
@@ -578,6 +579,12 @@ export interface DocumentPolicyContext<TData = Record<string, unknown>> {
 	publishedData: TData | null;
 	context: { organizationId: string; userId?: string };
 	schema: SchemaType;
+	/**
+	 * The adapter the collection writes through, for a policy that judges the
+	 * document against others (an address another page already serves, a
+	 * parent that still has children). Read only: a policy never writes.
+	 */
+	databaseAdapter: DatabaseAdapter;
 }
 
 /**
