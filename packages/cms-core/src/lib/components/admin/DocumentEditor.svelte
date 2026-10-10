@@ -277,7 +277,7 @@
 		},
 		async validate(data = $state.snapshot(documentData)) {
 			if (!schema) return { isValid: true, errors: [], structuralErrors: [] };
-			return await validateDocumentData(schema, data);
+			return await validateDocumentData(schema, data, { schemas });
 		},
 		async flushSave(_expectedRevision) {
 			return await saveDocument(false);
