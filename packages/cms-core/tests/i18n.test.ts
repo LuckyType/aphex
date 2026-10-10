@@ -3,6 +3,7 @@ import {
 	configureStudioI18n,
 	hour12,
 	label,
+	localizeSchema,
 	locale,
 	plural,
 	t,
@@ -61,5 +62,93 @@ describe('studio i18n', () => {
 		expect(validationMessage('required')).toBe('REQUIRED');
 		expect(plural('Seite', fallback)).toBe('Seiten');
 		expect(hour12()).toBe(false);
+	});
+});
+
+describe('localizeSchema', () => {
+	afterEach(() => configureStudioI18n({}));
+
+	const schema = {
+		type: 'document' as const,
+		name: 'page',
+		title: 'Page',
+		description: 'A page',
+		groups: [{ name: 'seo', title: 'SEO' }],
+		orderings: [{ name: 'byTitle', title: 'Title', by: [] }],
+		lock: () => null,
+		fields: [
+			{
+				name: 'kind',
+				type: 'string' as const,
+				title: 'Kind',
+				description: 'What it is',
+				list: ['plain', { title: 'Landing', value: 'landing' }],
+				validation: (rule: unknown) => rule
+			},
+			{
+				name: 'tone',
+				type: 'string' as const,
+				title: 'Tone',
+				list: { dependsOn: 'kind', options: { landing: [{ title: 'Loud', value: 'loud' }] } }
+			},
+			{
+				name: 'layout',
+				type: 'array' as const,
+				title: 'Layout',
+				of: [
+					{
+						type: 'hero',
+						title: 'Hero',
+						fields: [{ name: 'heading', type: 'string', title: 'Heading' }]
+					},
+					{
+						type: 'block',
+						styles: [{ title: 'Normal', value: 'normal' }],
+						marks: { decorators: [{ title: 'Bold', value: 'strong' }] }
+					}
+				]
+			}
+		]
+	};
+
+	it('returns the schema itself when no label translator is configured', () => {
+		expect(localizeSchema(schema)).toBe(schema);
+	});
+
+	it('translates every label an editor reads and keeps the rest by reference', () => {
+		const de: Record<string, string> = {
+			Page: 'Seite',
+			'A page': 'Eine Seite',
+			Kind: 'Art',
+			'What it is': 'Was es ist',
+			Landing: 'Einstieg',
+			Loud: 'Laut',
+			Layout: 'Aufbau',
+			Hero: 'Held',
+			Heading: 'Titel',
+			Normal: 'Absatz',
+			Bold: 'Fett',
+			Title: 'Titel'
+		};
+		configureStudioI18n({ label: (text) => de[text] ?? text });
+		const out = localizeSchema(schema);
+		expect(out).not.toBe(schema);
+		expect(out.title).toBe('Seite');
+		expect(out.description).toBe('Eine Seite');
+		expect(out.groups[0]!.title).toBe('SEO');
+		expect(out.orderings[0]!.title).toBe('Titel');
+		expect(out.lock).toBe(schema.lock);
+		const [kind, tone, layout] = out.fields as any[];
+		expect(kind.title).toBe('Art');
+		expect(kind.description).toBe('Was es ist');
+		expect(kind.list).toEqual(['plain', { title: 'Einstieg', value: 'landing' }]);
+		expect(kind.validation).toBe(schema.fields[0]!.validation);
+		expect(tone.list.options.landing[0].title).toBe('Laut');
+		expect(layout.title).toBe('Aufbau');
+		expect(layout.of[0].title).toBe('Held');
+		expect(layout.of[0].fields[0].title).toBe('Titel');
+		expect(layout.of[1].styles[0].title).toBe('Absatz');
+		expect(layout.of[1].marks.decorators[0].title).toBe('Fett');
+		expect(schema.fields[0]!.title).toBe('Kind');
 	});
 });

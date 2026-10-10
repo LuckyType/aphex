@@ -128,3 +128,104 @@ export function tParts(source: string, slot: string, params?: MessageParams): [s
 	const at = text.indexOf(marker);
 	return at < 0 ? [text, ''] : [text.slice(0, at), text.slice(at + marker.length)];
 }
+
+/**
+ * A copy of `schema` with every label an editor reads put through `label()`:
+ * the schema's own `title` and `description`, its groups and orderings, and,
+ * recursively, each field's `title`, `description` and `list` option titles,
+ * the item types of an array (their titles and fields) and a block's styles,
+ * lists and marks. Everything else, functions included, is kept by reference.
+ * Without a configured `label` the schema comes back as it was, so an app
+ * registers its schemas in English once and never rewrites them.
+ */
+export function localizeSchema<T extends SchemaLike>(schema: T): T {
+	if (!current.label) return schema;
+	return localizeType(schema) as T;
+}
+
+/** The subset of a schema or type reference this module reads. */
+interface SchemaLike {
+	title?: string;
+	description?: string;
+	fields?: readonly FieldLike[];
+	groups?: readonly { title: string }[];
+	orderings?: readonly { title: string }[];
+}
+
+interface FieldLike {
+	title?: string;
+	description?: string;
+	fields?: readonly FieldLike[];
+	of?: readonly TypeRefLike[];
+	list?: readonly ListOptionLike[] | { options: Record<string, readonly ListOptionLike[]> };
+}
+
+type ListOptionLike = string | { title: string };
+
+interface TypeRefLike extends SchemaLike {
+	styles?: readonly { title: string }[];
+	lists?: readonly { title: string }[];
+	marks?: {
+		decorators?: readonly { title: string }[];
+		annotations?: readonly { title?: string; fields?: readonly FieldLike[] }[];
+	};
+}
+
+function localizeTitled<T extends { title: string }>(
+	items: readonly T[] | undefined
+): T[] | undefined {
+	return items?.map((item) => ({ ...item, title: label(item.title) }));
+}
+
+function localizeText<T extends { title?: string; description?: string }>(item: T): T {
+	const copy = { ...item };
+	if (typeof item.title === 'string') copy.title = label(item.title);
+	if (typeof item.description === 'string') copy.description = label(item.description);
+	return copy;
+}
+
+function localizeType<T extends SchemaLike>(type: T): T {
+	const copy = localizeText(type);
+	if (type.fields) copy.fields = type.fields.map(localizeField);
+	if (type.groups) copy.groups = localizeTitled(type.groups);
+	if (type.orderings) copy.orderings = localizeTitled(type.orderings);
+	return copy;
+}
+
+function localizeListOption(option: ListOptionLike): ListOptionLike {
+	return typeof option === 'string' ? option : { ...option, title: label(option.title) };
+}
+
+function localizeField<T extends FieldLike>(field: T): T {
+	const copy = localizeText(field);
+	if (field.fields) copy.fields = field.fields.map(localizeField);
+	if (field.of) copy.of = field.of.map(localizeTypeRef);
+	if (Array.isArray(field.list)) {
+		copy.list = field.list.map(localizeListOption);
+	} else if (field.list && typeof field.list === 'object' && 'options' in field.list) {
+		copy.list = {
+			...field.list,
+			options: Object.fromEntries(
+				Object.entries(field.list.options).map(([key, options]) => [
+					key,
+					options.map(localizeListOption)
+				])
+			)
+		};
+	}
+	return copy;
+}
+
+function localizeTypeRef<T extends TypeRefLike>(ref: T): T {
+	const copy = localizeType(ref);
+	if (ref.styles) copy.styles = localizeTitled(ref.styles);
+	if (ref.lists) copy.lists = localizeTitled(ref.lists);
+	if (ref.marks) {
+		copy.marks = {
+			...ref.marks,
+			decorators: localizeTitled(ref.marks.decorators),
+			annotations: ref.marks.annotations?.map(localizeType)
+		};
+	}
+	return copy;
+}
