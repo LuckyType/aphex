@@ -95,6 +95,37 @@ describe('document policies', () => {
 		});
 	});
 
+	it('hands a policy the adapter, so it can judge the document against the others', async () => {
+		const store = fakeStore();
+		const pages = fakeCollection(
+			{
+				...page,
+				policies: {
+					beforePublish: [
+						async ({ data, documentId, databaseAdapter, context }) => {
+							const holder = await databaseAdapter.findByDocIdAdvanced(
+								context.organizationId,
+								'doc-1'
+							);
+							return holder && holder.id !== documentId && holder.draftData?.slug === data.slug
+								? `"${data.slug}" is already served`
+								: undefined;
+						}
+					]
+				}
+			},
+			store
+		);
+		const first = await pages.create(systemCtx, { title: 'A', slug: '/about' });
+		expect(first.document.id).toBe('doc-1');
+		await expect(pages.publish(systemCtx, first.document.id)).resolves.toBeTruthy();
+
+		const second = await pages.create(systemCtx, { title: 'B', slug: '/about' });
+		await expect(pages.publish(systemCtx, second.document.id)).rejects.toThrow(
+			'"/about" is already served'
+		);
+	});
+
 	it('enforces the schema lock on update and delete, for any caller', async () => {
 		const store = fakeStore();
 		const pages = fakeCollection(page, store);

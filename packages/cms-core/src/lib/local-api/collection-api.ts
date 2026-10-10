@@ -263,7 +263,7 @@ export class CollectionAPI<T = Document> {
 	): Promise<void> {
 		await runDocumentPolicies(
 			[this.configPolicies, this._schema.policies],
-			policyContext(operation, this._schema, document, context, data)
+			policyContext(operation, this._schema, document, context, this.databaseAdapter, data)
 		);
 	}
 
