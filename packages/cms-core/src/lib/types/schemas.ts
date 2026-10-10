@@ -445,10 +445,16 @@ export interface DocumentType {
 	/**
 	 * Locks a document against deletion and the listed fields against edits,
 	 * with the reason shown in their place (a home page whose slug routing
-	 * depends on, say). Return null to leave the document open. Studio only:
-	 * the server enforces nothing from this, so pair it with a hook.
+	 * depends on, say). Return null to leave the document open. The Studio
+	 * disables the controls, and the Local API refuses an update that changes
+	 * a locked field or a delete of a locked document with
+	 * `DocumentPolicyError`, so REST, GraphQL, MCP and jobs obey the lock too.
+	 * `document` is the current draft in the API's document shape
+	 * (`{ id, ...fields, _meta }`), or null while a document is being created.
 	 */
 	lock?: (documentId: string | null, document: unknown) => DocumentLock | null;
+	/** Reject-only checks run before a publish, unpublish or delete. See {@link DocumentPolicies}. */
+	policies?: DocumentPolicies;
 	/**
 	 * URL (or resolver) for the live preview iframe in presentation mode.
 	 * A string is used as-is (good for singletons like '/about').
@@ -562,6 +568,44 @@ export interface SchemaHooks<TData = Record<string, unknown>> {
 	beforeValidate?: DocumentHook<TData>[];
 }
 
+/** What a policy sees of the document it judges. */
+export interface DocumentPolicyContext<TData = Record<string, unknown>> {
+	operation: 'publish' | 'unpublish' | 'delete';
+	documentId: string;
+	/** The draft about to be published, or the current draft for unpublish and delete. */
+	data: TData;
+	/** What is published right now, or null when nothing is. */
+	publishedData: TData | null;
+	context: { organizationId: string; userId?: string };
+	schema: SchemaType;
+}
+
+/**
+ * A reject-only check: return nothing to allow the operation, or a string
+ * naming why it is refused. A refusal surfaces as `DocumentPolicyError`
+ * (409 over REST). A policy never changes data; that is a hook's job.
+ */
+export type DocumentPolicy<TData = Record<string, unknown>> = (
+	ctx: DocumentPolicyContext<TData>
+) => string | void | undefined | Promise<string | void | undefined>;
+
+/**
+ * Checks that run before a document changes state, on every write path
+ * (Local API, REST, GraphQL, MCP, scheduled jobs), after permissions and
+ * validation and before the transaction. Declared on a schema for one type,
+ * or on `CMSConfig.policies` for every type; the config's run first.
+ *
+ * They complete the three-way split the hooks keep: hooks **transform**,
+ * validation **rejects** a field, a policy **rejects** a transition the
+ * document as a whole is not allowed to make (publishing a page whose address
+ * another page already serves, deleting the one the site routes to).
+ */
+export interface DocumentPolicies<TData = Record<string, unknown>> {
+	beforePublish?: DocumentPolicy<TData>[];
+	beforeUnpublish?: DocumentPolicy<TData>[];
+	beforeDelete?: DocumentPolicy<TData>[];
+}
+
 // From db/types.ts
 /**
  * Schema type - represents document and object type definitions stored in the DB
@@ -590,6 +634,8 @@ export interface SchemaType {
 	hidden?: boolean;
 	/** See DocumentType.lock for full docs. */
 	lock?: (documentId: string | null, document: unknown) => DocumentLock | null;
+	/** See DocumentType.policies for full docs. */
+	policies?: DocumentPolicies;
 	/** See DocumentType.previewUrl for full docs. */
 	previewUrl?:
 		| string
