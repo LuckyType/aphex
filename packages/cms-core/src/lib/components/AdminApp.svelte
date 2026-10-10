@@ -3,6 +3,7 @@
 	import {
 		orderedGroups,
 		orderedListPage,
+		studioDocumentTree,
 		studioExtensions,
 		studioDocumentList,
 		studioListOrderings
@@ -27,7 +28,7 @@
 	import type { AdminArea } from '../admin/types';
 	import { setAdminNav } from '../admin/nav.svelte';
 	import type { Component } from 'svelte';
-	import { tick } from 'svelte';
+	import { tick, untrack } from 'svelte';
 	import { setFieldComponents, setFieldViews } from '../admin/field-components.svelte';
 	import { setBlockPreviews, type BlockPreviewProps } from '../admin/block-previews.svelte';
 	import AdminSlot from './admin/AdminSlot.svelte';
@@ -269,6 +270,12 @@
 	// Client-side routing state
 	let currentView = $state<'dashboard' | 'documents' | 'editor'>('dashboard');
 	let selectedDocumentType = $state<string | null>(null);
+	// The app's tree for the open type, which takes the list pane's place.
+	const currentTree = $derived(studioDocumentTree(selectedDocumentType));
+	// Goes up on every write the editor makes, so the tree can re-read.
+	let treeChanges = $state(0);
+	// Goes up when the tree wrote the open document, so the editor re-reads it.
+	let editorReloads = $state(0);
 
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	let documentsList = $state<any[]>([]);
@@ -1081,6 +1088,7 @@
 	let versionPanelRef = $state<{ refresh: () => void } | null>(null);
 
 	function handleAutoSave(documentId: string, title: string) {
+		if (currentTree) treeChanges++;
 		if (documentsList.length > 0) {
 			documentsList = documentsList.map((doc) =>
 				doc.id === documentId ? { ...doc, title: title } : doc
@@ -1188,6 +1196,12 @@
 		// type is selected). Bail quietly rather than hitting the API and toasting
 		// "Document type is required".
 		if (!docType) return;
+		// A tree reads its own documents: tell it to re-read instead of
+		// listing the type. Untracked, as this runs inside the URL effect.
+		if (studioDocumentTree(docType)) {
+			untrack(() => treeChanges++);
+			return;
+		}
 		selectListOrdering(docType);
 		const appOrdering = studioListOrderings(docType).find(
 			(ordering) => ordering.name === currentSortName
@@ -1456,7 +1470,8 @@
 													<button
 														onclick={() => navigateToDocumentType(docType.name)}
 														class="hover:bg-muted/50 group flex w-full cursor-pointer items-center justify-between rounded-md px-2 py-2.5 text-left transition-colors {selectedDocumentType ===
-														docType.name
+															docType.name ||
+														(currentTree !== null && currentTree.types[0] === docType.name)
 															? 'bg-muted/50 studio-selected-row'
 															: ''}"
 														title={docType.description || ''}
@@ -1546,6 +1561,18 @@
 												</div>
 											</div>
 										</button>
+									{:else if currentTree}
+										{@const DocumentTree = currentTree.component}
+										<DocumentTree
+											activeType={selectedDocumentType}
+											activeId={editingDocumentId}
+											onselect={(id, type) => navigateToEditDocument(id, type)}
+											changes={treeChanges}
+											onwritten={(id) => {
+												if (id === editingDocumentId) editorReloads++;
+											}}
+											{isReadOnly}
+										/>
 									{:else}
 										{@const currentDocType = documentTypes.find(
 											(t) => t.name === selectedDocumentType
@@ -2014,6 +2041,7 @@
 										onTogglePresentation={togglePresentationMode}
 										hideActionBar={presentationModeOn && editorStack.length > 0}
 										refreshToken={baseRefreshToken}
+										reloadToken={editorReloads}
 										organizationId={currentOrgId}
 										onBack={navigateBack}
 										onOpenReference={handleOpenReference}
