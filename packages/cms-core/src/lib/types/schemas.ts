@@ -393,6 +393,14 @@ export interface Ordering {
 	by: OrderingItem[];
 }
 
+/** What `DocumentType.lock` returns for a locked document. */
+export interface DocumentLock {
+	/** Shown in place of each locked field's description. */
+	reason: string;
+	/** Top-level field names that cannot be edited. */
+	fields: readonly string[];
+}
+
 export interface DocumentType {
 	id?: string;
 	type: 'document';
@@ -420,6 +428,13 @@ export interface DocumentType {
 	 * and the admin UI hides Create/Delete affordances. Ignored on object types.
 	 */
 	singleton?: boolean;
+	/**
+	 * Locks a document against deletion and the listed fields against edits,
+	 * with the reason shown in their place (a home page whose slug routing
+	 * depends on, say). Return null to leave the document open. Studio only:
+	 * the server enforces nothing from this, so pair it with a hook.
+	 */
+	lock?: (documentId: string | null, document: unknown) => DocumentLock | null;
 	/**
 	 * URL (or resolver) for the live preview iframe in presentation mode.
 	 * A string is used as-is (good for singletons like '/about').
@@ -557,6 +572,8 @@ export interface SchemaType {
 	hooks?: SchemaHooks;
 	/** Document-only: single global instance with id === name. */
 	singleton?: boolean;
+	/** See DocumentType.lock for full docs. */
+	lock?: (documentId: string | null, document: unknown) => DocumentLock | null;
 	/** See DocumentType.previewUrl for full docs. */
 	previewUrl?:
 		| string
