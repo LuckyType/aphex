@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
+import { requireSessionAuth } from '../require-session';
 import { cmsLogger } from '../../../utils/logger';
 import {
 	updateUserRequest,
@@ -158,6 +159,8 @@ async function discardAvatarAsset(
 export const userRouter: Hono<AphexEnv> = new Hono<AphexEnv>()
 	.patch(
 		'/',
+		// Session before body: an anonymous caller gets 401, not a 400 about the body.
+		requireSessionAuth,
 		zValidator('json', updateUserRequest, (result, c) => {
 			if (!result.success) {
 				return c.json(
