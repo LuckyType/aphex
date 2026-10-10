@@ -2,7 +2,7 @@
 	import { Label } from '@aphexcms/ui/shadcn/label';
 	import * as Alert from '@aphexcms/ui/shadcn/alert';
 	import * as Tooltip from '@aphexcms/ui/shadcn/tooltip';
-	import { Info } from '@lucide/svelte';
+	import { CircleAlert, Info } from '@lucide/svelte';
 	import type {
 		Field,
 		DateField as DateFieldType,
@@ -198,7 +198,7 @@
 			</div>
 
 			{#if hasErrors}
-				<span class="text-destructive text-sm">🚨</span>
+				<CircleAlert class="text-destructive size-4 shrink-0" aria-hidden="true" />
 			{/if}
 		</div>
 
