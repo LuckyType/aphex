@@ -27,6 +27,7 @@ import {
 import { runDocumentHooks } from './hooks';
 import { collectReferenceIds } from '../utils/reference-walk';
 import { emitDocumentPublished } from '../events/emit';
+import { actorOf } from './auth-helpers';
 import type { AppendEventInput, Job } from '../types/events';
 import { DOCUMENT_PUBLISH_JOB, DOCUMENT_UNPUBLISH_JOB } from '../jobs/document-jobs';
 import {
@@ -720,10 +721,18 @@ export class CollectionAPI<T = Document> {
 				// from publishTx, the non-versioned path via emitDocumentPublished here.
 				let published: Document | null;
 				if (versionService) {
-					published = await versionService.publishTx(tx, context.organizationId, document.id);
+					published = await versionService.publishTx(
+						tx,
+						context.organizationId,
+						document.id,
+						undefined,
+						actorOf(context)
+					);
 				} else {
 					published = await tx.publishDoc(context.organizationId, document.id);
-					if (published) await emitDocumentPublished(tx, context.organizationId, published);
+					if (published) {
+						await emitDocumentPublished(tx, context.organizationId, published, actorOf(context));
+					}
 				}
 
 				// Both reference indexes commit with the document. They used to run
@@ -976,9 +985,16 @@ export class CollectionAPI<T = Document> {
 					? await this.versionService.publishWithVersion(
 							this.databaseAdapter,
 							context.organizationId,
-							document.id
+							document.id,
+							undefined,
+							actorOf(context)
 						)
-					: await this.publishWithoutVersion(context.organizationId, document.id);
+					: await this.publishWithoutVersion(
+							context.organizationId,
+							document.id,
+							undefined,
+							actorOf(context)
+						);
 			if (published) {
 				// Invalidate cache
 				if (this.documentCache) {
@@ -1061,12 +1077,13 @@ export class CollectionAPI<T = Document> {
 	private async publishWithoutVersion(
 		organizationId: string,
 		id: string,
-		expectedRevision?: number
+		expectedRevision?: number,
+		actorId?: string | null
 	): Promise<Document | null> {
 		return this.databaseAdapter.withTransaction(async (tx) => {
 			const published = await tx.publishDoc(organizationId, id, expectedRevision);
 			if (published) {
-				await emitDocumentPublished(tx, organizationId, published);
+				await emitDocumentPublished(tx, organizationId, published, actorId);
 				await syncDocumentAssetReferences(tx, organizationId, published);
 			}
 			return published;
@@ -1125,9 +1142,15 @@ export class CollectionAPI<T = Document> {
 					this.databaseAdapter,
 					context.organizationId,
 					id,
-					options?.expectedRevision
+					options?.expectedRevision,
+					actorOf(context)
 				)
-			: await this.publishWithoutVersion(context.organizationId, id, options?.expectedRevision);
+			: await this.publishWithoutVersion(
+					context.organizationId,
+					id,
+					options?.expectedRevision,
+					actorOf(context)
+				);
 		if (!publishedDocument) {
 			return null;
 		}
