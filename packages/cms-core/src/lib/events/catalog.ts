@@ -15,6 +15,31 @@ export const documentPublished = defineEvent(
 	})
 );
 
+/** The identifiers every document lifecycle event carries. */
+const documentRef = z.object({
+	documentId: z.string(),
+	documentType: z.string()
+});
+
+/** Emitted when a document row is created, inside the creating transaction. */
+export const documentCreated = defineEvent('document.created', documentRef);
+
+/**
+ * Emitted on every draft write, inside the writing transaction: an editor's
+ * autosave, a Local API update, a version restore. `revision` is the draft
+ * revision after the write, so a consumer can order saves and spot a gap.
+ */
+export const documentDraftSaved = defineEvent(
+	'document.draft_saved',
+	documentRef.extend({ revision: z.number().nullable() })
+);
+
+/** Emitted when the published copy is withdrawn, inside the unpublish transaction. */
+export const documentUnpublished = defineEvent('document.unpublished', documentRef);
+
+/** Emitted when a document row is deleted, inside the deleting transaction. */
+export const documentDeleted = defineEvent('document.deleted', documentRef);
+
 /**
  * Emitted when a user account is deleted, once per organization they belonged to — the
  * erasure fan-out point. Consumers react by removing whatever that user left behind in
