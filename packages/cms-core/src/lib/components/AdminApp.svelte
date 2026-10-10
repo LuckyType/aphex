@@ -601,6 +601,11 @@
 			return mobileView === 'types' ? 'w-full' : 'hidden';
 		}
 
+		// A space with a single type needs no types column beside its list.
+		if (documentTypes.length === 1 && selectedDocumentType === documentTypes[0]?.name) {
+			return 'hidden';
+		}
+
 		return layoutConfig.typesExpanded ? 'w-[350px]' : 'w-[60px]';
 	});
 
