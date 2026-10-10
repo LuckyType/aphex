@@ -11,7 +11,9 @@ import {
 	configureStudio,
 	orderedGroups,
 	studioDocumentList,
-	studioScriptNonce
+	studioDocumentTree,
+	studioScriptNonce,
+	type StudioDocumentTree
 } from '../src/lib/studio-extensions';
 
 afterEach(() => configureStudio({}));
@@ -82,5 +84,28 @@ describe('studioDocumentList', () => {
 		expect(studioDocumentList('page').emptyText).toBeUndefined();
 		expect(studioDocumentList('product').component).toBeUndefined();
 		expect(studioDocumentList('product').emptyText?.()).toBe('No products yet');
+	});
+});
+
+describe('studioDocumentTree', () => {
+	const component = (() => {}) as unknown as StudioDocumentTree['component'];
+	const menu: StudioDocumentTree = { types: ['menu', 'section', 'dish'], component };
+
+	it('is null for every type when the app set no tree', () => {
+		expect(studioDocumentTree('menu')).toBeNull();
+		expect(studioDocumentTree(null)).toBeNull();
+	});
+
+	it('finds the tree for each of its types and none for another', () => {
+		configureStudio({ documentTrees: [menu] });
+		expect(studioDocumentTree('menu')).toBe(menu);
+		expect(studioDocumentTree('dish')).toBe(menu);
+		expect(studioDocumentTree('page')).toBeNull();
+	});
+
+	it('gives a type named by two trees to the first', () => {
+		const other: StudioDocumentTree = { types: ['dish'], component };
+		configureStudio({ documentTrees: [menu, other] });
+		expect(studioDocumentTree('dish')).toBe(menu);
 	});
 });

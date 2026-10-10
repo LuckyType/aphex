@@ -72,6 +72,43 @@ export interface StudioDocumentListProps {
 	onselect: (id: string) => void;
 }
 
+export interface StudioDocumentTreeProps {
+	/** The type of the document open beside the tree, or the type whose list was opened. */
+	activeType: string | null;
+	/** The id of the document open beside the tree, if any. */
+	activeId: string | null;
+	/** Opens a document of any of the tree's types in the editor beside the tree. */
+	onselect: (id: string, type: string) => void;
+	/**
+	 * Goes up by one on every write the editor beside the tree makes (autosave,
+	 * publish, unpublish, restore, delete), so the tree can re-read the
+	 * documents it shows.
+	 */
+	changes: number;
+	/**
+	 * Call after the tree itself wrote a document (moved, reordered or renamed
+	 * it), so the editor re-reads it when it is the one open and its next
+	 * save does not carry the old values back.
+	 */
+	onwritten: (id: string) => void;
+	/** True when the signed-in user may not edit, as the editor reads it. */
+	isReadOnly: boolean;
+}
+
+/**
+ * A parent/child tree of several document types (say, menus, their sections
+ * and their dishes) that takes the place of the document list for each of
+ * them. Selecting a node opens that document in the ordinary editor beside
+ * the tree, so the form is the schema's and only the hierarchy (order,
+ * nesting, moving) is the app's.
+ */
+export interface StudioDocumentTree {
+	/** The types the tree shows, the one the sidebar lists first. */
+	types: readonly string[];
+	/** Renders the tree. It reads and writes documents itself. */
+	component: Component<StudioDocumentTreeProps>;
+}
+
 /**
  * An order the app works out itself, for an order no stored field holds
  * (say, the order a site's menu lists the documents in). Offered in the
@@ -97,6 +134,12 @@ export interface StudioExtensions {
 	 * around it. A bare component is the list with the generic words.
 	 */
 	documentLists?: Readonly<Record<string, Component<StudioDocumentListProps> | StudioDocumentList>>;
+	/**
+	 * Trees that replace the whole document list pane (header, search and
+	 * paging included) for every type they name. A type belongs to at most
+	 * one tree; the first that names it wins.
+	 */
+	documentTrees?: readonly StudioDocumentTree[];
 	/**
 	 * Orders the app adds to a type's list. The first one is selected when
 	 * the list for that type opens.
@@ -207,4 +250,10 @@ export function orderedListPage<Row extends StudioDocumentListRow>(
 		total: sorted.length,
 		totalPages: Math.max(1, Math.ceil(sorted.length / pageSize))
 	};
+}
+
+/** The tree that shows `type`, or null when the type has its ordinary list. */
+export function studioDocumentTree(type: string | null | undefined): StudioDocumentTree | null {
+	if (!type) return null;
+	return current.documentTrees?.find((tree) => tree.types.includes(type)) ?? null;
 }

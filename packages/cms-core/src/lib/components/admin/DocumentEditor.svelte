@@ -2,7 +2,7 @@
 	import * as i18n from '../../i18n/index';
 	import { studioExtensions, type StudioPublishRefusal } from '../../studio-extensions';
 	import { isFieldVisible } from '../../schema-utils/visibility';
-	import { tick } from 'svelte';
+	import { tick, untrack } from 'svelte';
 	import { Button } from '@aphexcms/ui/shadcn/button';
 	import { Badge } from '@aphexcms/ui/shadcn/badge';
 	import { documents } from '../../api/documents';
@@ -100,6 +100,12 @@
 		 * document — e.g. one this page renders in a list — was edited elsewhere.
 		 */
 		refreshToken?: number;
+		/**
+		 * Bump this to re-read the open document after something other than this
+		 * editor wrote it (a tree beside it moving or reordering it). Unsaved
+		 * edits in the form give way to the stored document.
+		 */
+		reloadToken?: number;
 		/** Toggle host-driven presentation mode. Omit to hide the button entirely. */
 		onTogglePresentation?: () => void;
 		/** Organization ID from the host context — used as fallback for new docs that haven't been saved yet. */
@@ -130,6 +136,7 @@
 		onToggleFocus,
 		presentationMode = false,
 		refreshToken = 0,
+		reloadToken = 0,
 		onTogglePresentation,
 		organizationId = null,
 		plugins = []
@@ -543,6 +550,14 @@
 			if (iframeRef?.contentWindow) postPreviewData(iframeRef.contentWindow);
 		}, 100);
 		return () => clearTimeout(timer);
+	});
+
+	// Host bumped reloadToken: the open document was written elsewhere.
+	$effect(() => {
+		if (reloadToken === 0) return; // initial value — the load effect already read it
+		untrack(() => {
+			if (!isCreating && documentId) loadDocumentData();
+		});
 	});
 
 	// Host bumped refreshToken (a different document changed) — ask the preview to
