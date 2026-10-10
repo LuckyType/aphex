@@ -1299,9 +1299,8 @@
 	<div class="flex-1 overflow-hidden">
 		<Tabs.Root value={activeTab.value} onValueChange={handleTabChange} class="h-full">
 			<Tabs.Content value="structure" class="h-full overflow-hidden">
-				<!-- The editor renders its own h1 (the document title), so only the list and
-				     dashboard views need one here. -->
-				{#if currentView !== 'editor' && !currentTypeIsSingleton}
+				<!-- One h1 per view, for screen reader navigation. -->
+				{#if !currentTypeIsSingleton}
 					<h1 class="sr-only">
 						{selectedDocumentType
 							? pluralize(
