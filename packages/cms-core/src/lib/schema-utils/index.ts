@@ -7,4 +7,5 @@ export * from './utils';
 export * from './validator';
 export * from './visibility';
 export * from './view-fields';
+export * from './unknown-fields';
 export * from './singleton';
