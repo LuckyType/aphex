@@ -129,6 +129,41 @@ export function validateValueShape(field: Field, value: unknown): string | null 
 }
 
 /**
+ * How many nested object or array-item levels a document may carry below its
+ * top-level fields when the array declares no `maxDepth` of its own. Deep enough
+ * for any layout an editor builds by hand, shallow enough that a self-referencing
+ * type cannot be fed an unbounded payload.
+ */
+export const DEFAULT_MAX_NESTING_DEPTH = 10;
+
+/** The validation context's view of the schema registry and the current nesting level. */
+export interface ValidationContext {
+	/** Every registered schema, so a named `of` type resolves to its fields. */
+	schemas?: readonly SchemaType[];
+	/** Nesting level of the fields being validated; 0 at the document root. */
+	depth?: number;
+	/** The root document, for cross-field rules. Set once by the top-level caller. */
+	document?: Record<string, any>;
+	[key: string]: unknown;
+}
+
+function nestingDepth(context: ValidationContext | undefined): number {
+	return typeof context?.depth === 'number' ? context.depth : 0;
+}
+
+function deeper(context: ValidationContext | undefined): ValidationContext {
+	return { ...context, depth: nestingDepth(context) + 1 };
+}
+
+/** A registered type by name, for an `of` entry that names one instead of inlining `fields`. */
+function resolveNamedType(
+	typeName: string,
+	context: ValidationContext | undefined
+): SchemaType | undefined {
+	return context?.schemas?.find((schema) => schema.name === typeName);
+}
+
+/**
  * Find which `of` entry an array item belongs to. Mirrors ArrayField.svelte's own
  * resolution (`ref.name === item._type || ref.type === item._type`). An item
  * carrying an explicit `_type` must match one of the declared entries — an
@@ -267,10 +302,17 @@ interface ItemError {
  * so a mistyped or malformed array item (wrong `_type`, missing required nested
  * fields) passed validation silently regardless of whether `of` was well-formed.
  *
- * Named types in `of` that aren't inline objects (`fields` absent) — i.e. a
- * reference to another registered schema by name — aren't resolvable here: this
- * module has no schema registry. Those items are left unvalidated, same as
- * before this fix, rather than guessed at.
+ * Named types in `of` that aren't inline objects (`fields` absent) — a reference
+ * to another registered object type by name — are resolved through
+ * `context.schemas`, the registry every server caller threads in. That is what
+ * lets an object type contain an array of itself (a container block holding
+ * container blocks). Without a registry in the context those items are left
+ * unvalidated rather than guessed at.
+ *
+ * Recursion is bounded: each nested object or array-item level counts one
+ * towards `context.depth`, and an item that would sit deeper than the array's
+ * `maxDepth` (or `DEFAULT_MAX_NESTING_DEPTH`) is a structural error instead of
+ * another level of recursion.
  */
 async function validateArrayItems(
 	field: ArrayField,
@@ -325,7 +367,18 @@ async function validateArrayItems(
 			continue;
 		}
 
-		if (typeRef.fields) {
+		const fields = typeRef.fields ?? resolveNamedType(typeRef.type, context)?.fields;
+		if (fields) {
+			const depth = nestingDepth(context);
+			const limit = field.maxDepth ?? DEFAULT_MAX_NESTING_DEPTH;
+			if (depth >= limit) {
+				results.push({
+					field: itemPath,
+					errors: [`nests deeper than the allowed depth of ${limit}`],
+					kind: 'structural'
+				});
+				continue;
+			}
 			if (!isPlainObject(item)) {
 				results.push({
 					field: itemPath,
@@ -334,7 +387,7 @@ async function validateArrayItems(
 				});
 				continue;
 			}
-			const nested = await validateFieldSet(typeRef.fields, item, context);
+			const nested = await validateFieldSet(fields, item, deeper(context));
 			for (const err of nested) {
 				for (const rawMessage of err.errors) {
 					const { path, reason } = splitFieldMessage(rawMessage);
@@ -388,7 +441,7 @@ export async function validateField(
 	// confirms the value IS an object, so a required field nested inside one was
 	// silently unenforced and an undeclared key inside one was never seen.
 	if (field.type === 'object' && isPlainObject(value) && Array.isArray(field.fields)) {
-		const nested = await validateFieldSet(field.fields, value, context);
+		const nested = await validateFieldSet(field.fields, value, deeper(context));
 		for (const err of nested) {
 			allErrors.push({
 				level: 'error',
@@ -635,13 +688,14 @@ async function validateFieldSet(
  *
  * @param schema - The schema type containing field definitions
  * @param data - The document data to validate
- * @param context - Optional context to pass to field validators
+ * @param context - Passed to field validators. `schemas` is the registry, so an
+ *   array item naming a registered object type is validated against its fields.
  * @returns Validation result with isValid flag, errors, and normalized data
  */
 export async function validateDocumentData(
 	schema: SchemaType,
 	data: Record<string, any>,
-	context: any = {}
+	context: ValidationContext = {}
 ): Promise<DocumentValidationResult> {
 	cmsLogger.debug('[validateDocumentData]', 'Starting validation', {
 		schemaName: schema.name,
