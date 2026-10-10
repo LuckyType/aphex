@@ -1,5 +1,6 @@
 <script lang="ts">
 	import * as i18n from '../../i18n/index';
+	import { isFieldVisible } from '../../schema-utils/visibility';
 	import { tick } from 'svelte';
 	import { Button } from '@aphexcms/ui/shadcn/button';
 	import { Badge } from '@aphexcms/ui/shadcn/badge';
@@ -1241,7 +1242,7 @@
 				schemaFields.forEach((fieldComponent, index) => {
 					const field = schema?.fields[index];
 					if (fieldComponent && field) {
-						fieldComponent.performValidation(documentData[field.name], documentData);
+						fieldComponent.performValidation(documentData[field.name]);
 					}
 				});
 			} else {
@@ -1500,7 +1501,7 @@
 				schemaFields.forEach((fieldComponent, index) => {
 					const field = schema?.fields[index];
 					if (fieldComponent && field) {
-						fieldComponent.performValidation(documentData[field.name], {});
+						fieldComponent.performValidation(documentData[field.name]);
 					}
 				}); // Notify parent of autosave with current title
 				if (onAutoSaved && documentId) {
@@ -1750,7 +1751,11 @@
 
 		const invalid: Array<{ name: string; title: string; messages: string[] }> = [];
 
-		for (const field of schema.fields) {
+		// Hidden fields are skipped, as the form and the server's own validation
+		// skip them: a required field nobody can see would block the publish.
+		for (const field of schema.fields.filter((f) =>
+			isFieldVisible(f, documentData, documentData)
+		)) {
 			if (field.validation) {
 				try {
 					const validationFunctions = Array.isArray(field.validation)
