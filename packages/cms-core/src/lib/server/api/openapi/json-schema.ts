@@ -22,6 +22,7 @@
  * its own decision.)
  */
 import type { Field, SchemaType } from '../../../types/schemas';
+import { storedFields } from '../../../schema-utils/view-fields';
 import { isFieldRequired } from '../../../field-validation/utils';
 
 /** A JSON Schema object, loose enough for the subset OpenAPI 3.1 accepts. */
@@ -198,7 +199,7 @@ export function fieldsToJsonSchema(
 ): JsonSchema {
 	const properties: Record<string, JsonSchema> = {};
 	const required: string[] = [];
-	for (const field of fields) {
+	for (const field of storedFields(fields)) {
 		properties[field.name] = fieldToJsonSchema(field, schemaMap, seen);
 		if (isFieldRequired(field)) required.push(field.name);
 	}

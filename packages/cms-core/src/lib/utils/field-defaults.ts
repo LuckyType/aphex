@@ -7,6 +7,9 @@ import type { Field, FieldType } from '../types/schemas';
  */
 export function getDefaultValueForFieldType(fieldType: FieldType): any {
 	switch (fieldType) {
+		case 'view':
+			// A display slot never holds a value.
+			return undefined;
 		case 'boolean':
 			return false;
 		case 'array':
@@ -35,6 +38,7 @@ export function newArrayItem(
 ): Record<string, unknown> {
 	const item: Record<string, unknown> = { _type: typeName, _key: generateKey() };
 	for (const field of schema.fields ?? []) {
+		if (field.type === 'view') continue;
 		const initial = 'initialValue' in field ? field.initialValue : undefined;
 		item[field.name] =
 			initial !== undefined && typeof initial !== 'function'

@@ -12,6 +12,7 @@ import type {
 	DocumentActionPart,
 	EventConsumerPart,
 	FieldComponentPart,
+	FieldViewPart,
 	PartKind,
 	PluginPart,
 	ServerRoutePart,
@@ -53,6 +54,8 @@ export interface PartResolver {
 	adminTools(args?: { capabilities?: string[]; overrideAccess?: boolean }): AdminToolPart[];
 	/** The field component registered for a given `input` key, if any. */
 	fieldComponent(input: string): FieldComponentPart | undefined;
+	/** The view part registered for a `view` field's `input` key, if any. */
+	fieldView(input: string): FieldViewPart | undefined;
 	/** All plugin settings declarations, in registration order. */
 	settingsDeclarations(): SettingsPart[];
 	/** The settings declaration for a given plugin id, if any. */
@@ -171,6 +174,7 @@ export function createPartResolver(plugins: CMSPlugin[] = []): PartResolver {
 				.filter((t) => hasCaps(t.requiredCapabilities, capabilities, overrideAccess))
 				.sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
 		fieldComponent: (input) => getParts('aphex/field/component').find((f) => f.input === input),
+		fieldView: (input) => getParts('aphex/field/view').find((f) => f.input === input),
 		settingsDeclarations: () => getParts('aphex/settings'),
 		settingsDeclaration: (pluginId) =>
 			getParts('aphex/settings').find((s) => s.pluginId === pluginId),
