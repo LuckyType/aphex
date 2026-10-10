@@ -429,6 +429,12 @@ export interface DocumentType {
 	 */
 	singleton?: boolean;
 	/**
+	 * When true, the Studio leaves the type out of its sidebar. Documents of the
+	 * type stay reachable by link, through the API and through references; this
+	 * only hides the entry, for a type an app opens from its own screen.
+	 */
+	hidden?: boolean;
+	/**
 	 * Locks a document against deletion and the listed fields against edits,
 	 * with the reason shown in their place (a home page whose slug routing
 	 * depends on, say). Return null to leave the document open. Studio only:
@@ -572,6 +578,8 @@ export interface SchemaType {
 	hooks?: SchemaHooks;
 	/** Document-only: single global instance with id === name. */
 	singleton?: boolean;
+	/** Document-only: left out of the Studio sidebar. See DocumentType.hidden. */
+	hidden?: boolean;
 	/** See DocumentType.lock for full docs. */
 	lock?: (documentId: string | null, document: unknown) => DocumentLock | null;
 	/** See DocumentType.previewUrl for full docs. */
