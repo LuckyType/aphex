@@ -7,7 +7,7 @@
 	import { Badge } from '@aphexcms/ui/shadcn/badge';
 	import { documents } from '../../api/documents';
 	import { assets } from '../../api/assets';
-	import { ApiError } from '../../api/client';
+	import { ApiError, isRevisionConflict } from '../../api/client';
 	import SchemaField from './SchemaField.svelte';
 	import { findOrphanedFields, type OrphanedField } from '../../schema-utils/cleanup';
 	import type { SchemaType } from '../../types/schemas.js';
@@ -1461,7 +1461,7 @@
 			// since we last read it — surface that distinctly rather than a generic
 			// error, and never retry with a blind overwrite. The caller must reload to
 			// see the other writer's change before saving again.
-			if (err instanceof ApiError && err.status === 409) {
+			if (isRevisionConflict(err)) {
 				return {
 					success: false,
 					conflict: true,
@@ -1662,7 +1662,7 @@
 				throw new Error(response.error || i18n.t('Failed to publish document'));
 			}
 		} catch (err) {
-			if (err instanceof ApiError && err.status === 409) {
+			if (isRevisionConflict(err)) {
 				toast.error(
 					i18n.t('This document was changed elsewhere. Reload to see the latest version.')
 				);
@@ -1768,7 +1768,7 @@
 			if (showVersionHistory) loadVersions();
 			toast.success(i18n.t('Changes discarded'));
 		} catch (err) {
-			if (err instanceof ApiError && err.status === 409) {
+			if (isRevisionConflict(err)) {
 				toast.error(
 					i18n.t('This document was changed elsewhere. Reload to see the latest version.')
 				);
@@ -1835,7 +1835,7 @@
 				throw new Error(response.error || 'Failed to unpublish');
 			}
 		} catch (err) {
-			if (err instanceof ApiError && err.status === 409) {
+			if (isRevisionConflict(err)) {
 				toast.error(
 					i18n.t('This document was changed elsewhere. Reload to see the latest version.')
 				);
@@ -2776,7 +2776,7 @@
 									onRestored(documentId);
 								}
 							} catch (err) {
-								if (err instanceof ApiError && err.status === 409) {
+								if (isRevisionConflict(err)) {
 									toast.error(
 										i18n.t('This document was changed elsewhere. Reload to see the latest version.')
 									);
