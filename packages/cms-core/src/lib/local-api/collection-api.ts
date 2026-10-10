@@ -27,7 +27,13 @@ import {
 } from '../field-validation/utils';
 import { runDocumentHooks } from './hooks';
 import { collectReferenceIds } from '../utils/reference-walk';
-import { emitDocumentPublished } from '../events/emit';
+import {
+	emitDocumentCreated,
+	emitDocumentDeleted,
+	emitDocumentDraftSaved,
+	emitDocumentPublished,
+	emitDocumentUnpublished
+} from '../events/emit';
 import { actorOf } from './auth-helpers';
 import type { AppendEventInput, Job } from '../types/events';
 import { DOCUMENT_PUBLISH_JOB, DOCUMENT_UNPUBLISH_JOB } from '../jobs/document-jobs';
@@ -721,6 +727,7 @@ export class CollectionAPI<T = Document> {
 					createdBy: context.user?.id,
 					id: options?.id
 				});
+				await emitDocumentCreated(tx, context.organizationId, document, actorOf(context));
 				if (versionService) {
 					await versionService.snapshotTx(
 						tx,
@@ -824,6 +831,7 @@ export class CollectionAPI<T = Document> {
 				createdBy: context.user?.id,
 				id: options?.id
 			});
+			await emitDocumentCreated(tx, context.organizationId, document, actorOf(context));
 
 			await this.syncReferences(
 				tx,
@@ -946,7 +954,10 @@ export class CollectionAPI<T = Document> {
 		// instead of silently overwriting a change made after it read the document.
 		// Both indexes are refreshed inside whichever transaction does the write, so
 		// a saved draft can never disagree with the record of what it references.
+		// `document.draft_saved` goes in the same transaction, so the fact exists
+		// exactly when the write committed.
 		const indexInTx = async (tx: DatabaseAdapter, saved: Document) => {
+			await emitDocumentDraftSaved(tx, context.organizationId, saved, actorOf(context));
 			await this.syncReferences(tx, context.organizationId, id, validationResult.normalizedData);
 			// The published plane is whatever is currently live — untouched by a draft save.
 			await this.syncAssetReferences(
@@ -1064,7 +1075,15 @@ export class CollectionAPI<T = Document> {
 
 		await this.permissions.canDelete(context, this.collectionName, existing);
 
-		const result = await this.databaseAdapter.deleteDocById(context.organizationId, id);
+		// The row and its `document.deleted` fact go together: a consumer that
+		// cleans up after a document must never hear of a deletion that rolled back.
+		const result = await this.databaseAdapter.withTransaction(async (tx) => {
+			const deleted = await tx.deleteDocById(context.organizationId, id);
+			if (deleted) {
+				await emitDocumentDeleted(tx, context.organizationId, existing, actorOf(context));
+			}
+			return deleted;
+		});
 
 		// Invalidate cache for deleted document
 		if (result && this.documentCache) {
@@ -1219,7 +1238,10 @@ export class CollectionAPI<T = Document> {
 				id,
 				options?.expectedRevision
 			);
-			if (unpublished) await syncDocumentAssetReferences(tx, context.organizationId, unpublished);
+			if (unpublished) {
+				await emitDocumentUnpublished(tx, context.organizationId, unpublished, actorOf(context));
+				await syncDocumentAssetReferences(tx, context.organizationId, unpublished);
+			}
 			return unpublished;
 		});
 		if (!document) {

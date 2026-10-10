@@ -3,7 +3,14 @@
 // event is a property of *publishing*, not of any one code path that happens to publish.
 import type { DatabaseAdapter } from '../db/interfaces/index';
 import type { Document } from '../types/document';
-import { documentPublished, userDeleted } from './catalog';
+import {
+	documentCreated,
+	documentDeleted,
+	documentDraftSaved,
+	documentPublished,
+	documentUnpublished,
+	userDeleted
+} from './catalog';
 
 /**
  * Emit `document.published` (and its outbox row) for a freshly published document. MUST be
@@ -30,6 +37,73 @@ export async function emitDocumentPublished(
 		// `actorId` is who performed the publish (the caller, or the person a scheduled
 		// job runs for). Without it the fact falls back to the document's last editor,
 		// which is only right when the editor is also the publisher.
+		createdBy: actorId ?? doc.updatedBy
+	});
+}
+
+/**
+ * The other document lifecycle facts, each with the same contract as
+ * {@link emitDocumentPublished}: called on a TRANSACTION handle, in the same
+ * transaction as the change it describes, so a consumer (an audit trail, a
+ * cache, a search index) sees every write and never one that rolled back.
+ * `actorId` is the caller; it falls back to the document's last editor.
+ */
+export async function emitDocumentCreated(
+	tx: DatabaseAdapter,
+	organizationId: string,
+	doc: Document,
+	actorId?: string | null
+): Promise<void> {
+	await tx.appendEvent({
+		organizationId,
+		type: documentCreated.type,
+		payload: documentCreated.parse({ documentId: doc.id, documentType: doc.type }),
+		createdBy: actorId ?? doc.updatedBy ?? doc.createdBy
+	});
+}
+
+export async function emitDocumentDraftSaved(
+	tx: DatabaseAdapter,
+	organizationId: string,
+	doc: Document,
+	actorId?: string | null
+): Promise<void> {
+	await tx.appendEvent({
+		organizationId,
+		type: documentDraftSaved.type,
+		payload: documentDraftSaved.parse({
+			documentId: doc.id,
+			documentType: doc.type,
+			revision: typeof doc.revision === 'number' ? doc.revision : null
+		}),
+		createdBy: actorId ?? doc.updatedBy
+	});
+}
+
+export async function emitDocumentUnpublished(
+	tx: DatabaseAdapter,
+	organizationId: string,
+	doc: Document,
+	actorId?: string | null
+): Promise<void> {
+	await tx.appendEvent({
+		organizationId,
+		type: documentUnpublished.type,
+		payload: documentUnpublished.parse({ documentId: doc.id, documentType: doc.type }),
+		createdBy: actorId ?? doc.updatedBy
+	});
+}
+
+export async function emitDocumentDeleted(
+	tx: DatabaseAdapter,
+	organizationId: string,
+	doc: Pick<Document, 'id' | 'type' | 'updatedBy'>,
+	actorId?: string | null
+): Promise<void> {
+	await tx.appendEvent({
+		organizationId,
+		type: documentDeleted.type,
+		payload: documentDeleted.parse({ documentId: doc.id, documentType: doc.type }),
 		createdBy: actorId ?? doc.updatedBy
 	});
 }
