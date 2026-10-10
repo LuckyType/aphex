@@ -1,8 +1,8 @@
 name: Fork release
 
 # A fork cannot publish under the @aphexcms names on npm, so a tag builds
-# cms-core and visual-editing and attaches their packed tarballs to a GitHub
-# Release. An app depends on the asset URL, e.g.
+# cms-core, visual-editing and nodemailer-adapter and attaches their packed
+# tarballs to a GitHub Release. An app depends on the asset URL, e.g.
 #   https://github.com/<owner>/aphex/releases/download/<tag>/aphexcms-cms-core-<version>.tgz
 #
 # Run it by pushing a `fork-v*` tag, or by hand with the tag to create on the
@@ -42,7 +42,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build
-        run: pnpm turbo run build --filter=@aphexcms/cms-core --filter=@aphexcms/visual-editing
+        run: pnpm turbo run build --filter=@aphexcms/cms-core --filter=@aphexcms/visual-editing --filter=@aphexcms/nodemailer-adapter
 
       - name: Test cms-core
         run: pnpm -F @aphexcms/cms-core test
@@ -51,7 +51,7 @@ jobs:
       - name: Pack
         run: |
           mkdir -p release
-          pnpm -F @aphexcms/cms-core -F @aphexcms/visual-editing exec pnpm pack --pack-destination "$GITHUB_WORKSPACE/release"
+          pnpm -F @aphexcms/cms-core -F @aphexcms/visual-editing -F @aphexcms/nodemailer-adapter exec pnpm pack --pack-destination "$GITHUB_WORKSPACE/release"
           ls -l release
 
       - name: Create the release
