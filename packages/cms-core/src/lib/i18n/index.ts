@@ -29,7 +29,10 @@ export interface StudioI18n {
 	messages?: Readonly<Record<string, Message>>;
 	/** A label taken from a schema at render time, such as a group or type title. */
 	label?: (text: string) => string;
-	/** A validation message written by the rule engine. */
+	/**
+	 * A message the app's rules write at run time: a validation message, or a
+	 * schema `lock`'s reason shown on the locked field.
+	 */
 	validationMessage?: (text: string) => string;
 	/** A document type's plural for list headings; `fallback` is the English one. */
 	plural?: (title: string, fallback: (title: string) => string) => string;
@@ -106,6 +109,12 @@ export function hour12(): boolean | undefined {
 	return current.hourCycle === undefined ? undefined : current.hourCycle === 12;
 }
 
+/**
+ * `text` as the configured `label` translates it, or unchanged. Schema code
+ * calls it as `studioLabel` for a label it writes itself at render time, such
+ * as a `preview.prepare` fallback ("Untitled item"), which `localizeSchema`
+ * cannot reach because it is mixed with document data.
+ */
 export function label(text: string): string {
 	return current.label ? current.label(text) : text;
 }
@@ -131,7 +140,8 @@ export function tParts(source: string, slot: string, params?: MessageParams): [s
 
 /**
  * A copy of `schema` with every label an editor reads put through `label()`:
- * the schema's own `title` and `description`, its groups and orderings, and,
+ * the schema's own `title`, `description` and literal `preview.title` (a
+ * singleton's heading), its groups and orderings, and,
  * recursively, each field's `title`, `description` and `list` option titles,
  * the item types of an array (their titles and fields) and a block's styles,
  * lists and marks. Everything else, functions included, is kept by reference.
@@ -150,6 +160,7 @@ interface SchemaLike {
 	fields?: readonly FieldLike[];
 	groups?: readonly { title: string }[];
 	orderings?: readonly { title: string }[];
+	preview?: { title?: unknown };
 }
 
 interface FieldLike {
@@ -189,6 +200,9 @@ function localizeType<T extends SchemaLike>(type: T): T {
 	if (type.fields) copy.fields = type.fields.map(localizeField);
 	if (type.groups) copy.groups = localizeTitled(type.groups);
 	if (type.orderings) copy.orderings = localizeTitled(type.orderings);
+	if (typeof type.preview?.title === 'string') {
+		copy.preview = { ...type.preview, title: label(type.preview.title) };
+	}
 	return copy;
 }
 
