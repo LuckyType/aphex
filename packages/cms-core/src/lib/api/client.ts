@@ -37,6 +37,16 @@ export class ApiError extends Error {
 	}
 }
 
+/**
+ * True when `error` is a revision conflict: the document changed after the
+ * caller read it, and reloading is the remedy. A 409 can also be a refusal
+ * with a reason of its own (a document policy, unpublished references),
+ * which is shown as that reason rather than as a conflict.
+ */
+export function isRevisionConflict(error: unknown): error is ApiError {
+	return error instanceof ApiError && error.status === 409 && error.response?.error === 'Conflict';
+}
+
 export class ApiClient {
 	private baseUrl: string;
 	private timeout: number;
