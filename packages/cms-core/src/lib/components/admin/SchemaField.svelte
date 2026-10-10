@@ -18,7 +18,7 @@
 	} from '../../field-validation/utils';
 	import { isFieldVisible } from '../../schema-utils/visibility';
 	import { cmsLogger } from '../../utils/logger';
-	import { useFieldComponents } from '../../admin/field-components.svelte';
+	import { useFieldComponents, useFieldViews } from '../../admin/field-components.svelte';
 	import {
 		convertDateToUserFormat,
 		convertDateTimeToUserFormat
@@ -96,12 +96,18 @@
 	const fieldComponents = useFieldComponents();
 	const CustomInput = $derived(field.input ? fieldComponents(field.input) : undefined);
 
+	// A `view` field is a display slot drawn by its `aphex/field/view` part: no
+	// value, no update, and nothing to validate.
+	const fieldViews = useFieldViews();
+	const ViewSlot = $derived(field.type === 'view' ? fieldViews(field.input) : undefined);
+
 	// Validation state for the wrapper (displays errors and status)
 	let validationErrors = $state<ValidationError[]>([]);
 
 	// Real-time validation for wrapper display
 	export async function performValidation(currentValue: any) {
 		validationErrors = []; // Clear previous errors
+		if (field.type === 'view') return;
 		// The context the publish check (validateDocumentData) gives, so a rule that
 		// reads `context.document` flags its field while editing too, not only on publish.
 		const context = { document: documentData ?? {} };
@@ -254,7 +260,23 @@
 					error
 				)}
 		>
-			{#if field.type === 'object' && field.fields && !CustomInput}
+			{#if field.type === 'view'}
+				{#if ViewSlot}
+					<ViewSlot
+						{field}
+						{documentData}
+						siblingData={scope}
+						{parentData}
+						{fieldPath}
+						{schemaType}
+						{readonly}
+					/>
+				{:else}
+					<p class="text-muted-foreground text-sm">
+						{i18n.t('No view registered for "{input}"', { input: field.input })}
+					</p>
+				{/if}
+			{:else if field.type === 'object' && field.fields && !CustomInput}
 				<!-- Object container: recurse. A custom `input` widget would override this.
 			     The field's title is already shown by the <Label> above, so the card is
 			     just a bordered group — no repeated heading. -->
