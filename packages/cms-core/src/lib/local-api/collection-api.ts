@@ -160,6 +160,28 @@ export class SingletonOperationError extends Error {
  * `errors` so a handler (or an agent) can name the offending fields without
  * parsing prose.
  */
+/** One document a publish was refused over: it is referenced but not itself published. */
+export interface UnpublishedReference {
+	id: string;
+	type: string;
+	title: string;
+}
+
+/**
+ * Thrown by `publish` when the draft references a document that is not
+ * published. Typed so a route can answer 409 (the caller's conflict, not a
+ * server failure) and a client can list the blockers without parsing prose.
+ */
+export class UnpublishedReferenceError extends Error {
+	constructor(readonly references: UnpublishedReference[]) {
+		const names = references.map((d) => `"${d.title}" (${d.type})`).join(', ');
+		super(
+			`Cannot publish — ${references.length} referenced document(s) are not published: ${names}`
+		);
+		this.name = 'UnpublishedReferenceError';
+	}
+}
+
 export class DocumentValidationError extends Error {
 	constructor(
 		message: string,
@@ -1078,7 +1100,7 @@ export class CollectionAPI<T = Document> {
 		// Guard: block publish if any referenced document is not published
 		const refIds = collectReferenceIds(document.draftData);
 		if (refIds.length > 0) {
-			const unpublished: Array<{ id: string; type: string; title: string }> = [];
+			const unpublished: UnpublishedReference[] = [];
 			for (const refId of refIds) {
 				const refDoc = await this.databaseAdapter.findByDocIdAdvanced(
 					context.organizationId,
@@ -1091,10 +1113,7 @@ export class CollectionAPI<T = Document> {
 				}
 			}
 			if (unpublished.length > 0) {
-				const names = unpublished.map((d) => `"${d.title}" (${d.type})`).join(', ');
-				throw new Error(
-					`Cannot publish — ${unpublished.length} referenced document(s) are not published: ${names}`
-				);
+				throw new UnpublishedReferenceError(unpublished);
 			}
 		}
 

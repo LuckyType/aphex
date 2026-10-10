@@ -112,6 +112,7 @@ export {
 	CollectionAPI,
 	SingletonOperationError,
 	DocumentValidationError,
+	UnpublishedReferenceError,
 	PermissionChecker,
 	PermissionError,
 	authToContext,

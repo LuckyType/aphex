@@ -371,6 +371,8 @@ export {
 	CollectionAPI,
 	SingletonOperationError,
 	DocumentValidationError,
+	UnpublishedReferenceError,
+	type UnpublishedReference,
 	type DocumentResult,
 	type SingletonCollection
 } from './collection-api';
