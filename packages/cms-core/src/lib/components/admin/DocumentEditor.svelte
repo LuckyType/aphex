@@ -173,6 +173,12 @@
 	let fullDocument = $state<any>(null); // Store full document with publishedHash
 	let saving = $state(false);
 	let saveError = $state<string | null>(null);
+	// The refusal `describePublishRefusal` described for the current `saveError`,
+	// handed to the app's ErrorBox whole; null once the error is any other text.
+	let describedRefusal = $state<StudioPublishRefusal | null>(null);
+	const shownRefusal = $derived(
+		describedRefusal && describedRefusal.text === saveError ? describedRefusal : null
+	);
 	let lastSaved = $state<Date | null>(null);
 	let publishSuccess = $state<Date | null>(null);
 
@@ -1676,6 +1682,7 @@
 				(refusal =
 					studioExtensions().describePublishRefusal?.(err.detail, documentData, schema) ?? null)
 			) {
+				describedRefusal = refusal;
 				saveError = refusal.text;
 				toast.error(refusal.heading);
 			} else {
@@ -2406,7 +2413,7 @@
 						<div class="bg-destructive/10 border-destructive/20 rounded-md border p-3">
 							{#if studioExtensions().ErrorBox}
 								{@const ErrorBox = studioExtensions().ErrorBox!}
-								<ErrorBox message={saveError} />
+								<ErrorBox message={saveError} refusal={shownRefusal} />
 							{:else}
 								<p class="text-destructive text-sm">{saveError}</p>
 							{/if}
