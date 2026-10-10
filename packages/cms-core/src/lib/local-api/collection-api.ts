@@ -23,7 +23,7 @@ import {
 	validateDocumentData,
 	type DocumentValidationResult,
 	type FieldErrors,
-	type ValidationContext
+	type DocumentValidationContext
 } from '../field-validation/utils';
 import { runDocumentHooks } from './hooks';
 import {
@@ -246,7 +246,7 @@ export class CollectionAPI<T = Document> {
 	 * registered object type is validated against that type's fields instead of
 	 * being skipped.
 	 */
-	private validationContext(): ValidationContext {
+	private validationContext(): DocumentValidationContext {
 		return { schemas: this.schemaRegistry ?? [] };
 	}
 
