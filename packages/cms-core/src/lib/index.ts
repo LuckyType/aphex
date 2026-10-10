@@ -55,6 +55,7 @@ export * from './auth/invitation-status';
 // Svelte imports are type-only), safe for the universal barrel.
 export {
 	configureStudioI18n,
+	label as studioLabel,
 	type StudioI18n,
 	type Message,
 	type MessageParams

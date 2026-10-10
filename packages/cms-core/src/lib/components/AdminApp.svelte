@@ -1405,7 +1405,7 @@
 													<div
 														class="text-muted-foreground mt-3 mb-1 px-2 text-xs font-semibold tracking-wide uppercase first:mt-0"
 													>
-														{bucket.name}
+														{i18n.label(bucket.name)}
 													</div>
 												{/if}
 												{#each bucket.items as docType (docType.name)}

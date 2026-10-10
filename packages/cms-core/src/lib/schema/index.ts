@@ -13,3 +13,7 @@ export * from '../utils/initial-value-helpers';
 
 // Schema utilities
 export * from '../schema-utils/index';
+
+// A label a schema writes at render time (a `preview.prepare` fallback), in
+// the Studio's language. Plain TS, no Svelte.
+export { label as studioLabel } from '../i18n/index';
