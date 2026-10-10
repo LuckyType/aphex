@@ -329,6 +329,7 @@
 	);
 	function isFieldReadonly(fieldName: string): boolean {
 		const field = schema?.fields.find((f) => f.name === fieldName);
+		if (lock?.fields.includes(fieldName)) return true;
 		// In create mode, collection-level write ability is document.create;
 		// in edit mode it's document.update. Per-field `access.update` still
 		// wins as an additional restriction when the user IS able to write.
@@ -1066,6 +1067,9 @@
 		hasUnpublishedChanges(documentData, fullDocument?._meta?.publishedHash || null)
 	);
 	const isUnpublished = $derived(fullDocument?._meta?.status === 'unpublished');
+	// A schema's `lock` can hold a document against deletion and some fields
+	// against edits (DocumentType.lock).
+	const lock = $derived(schema?.lock?.(documentId ?? null, fullDocument) ?? null);
 	const canPublish = $derived(
 		(hasUnpublishedContent || isUnpublished) && !saving && documentId && !hasValidationErrors
 	);
@@ -2376,7 +2380,9 @@
 										: ''}"
 								>
 									<SchemaField
-										{field}
+										field={lock?.fields.includes(field.name)
+											? { ...field, description: lock.reason }
+											: field}
 										value={viewData[field.name]}
 										documentData={viewData}
 										onUpdate={(newValue) => {
@@ -2737,7 +2743,7 @@
 							<Badge variant="secondary" class="text-xs">{i18n.t('Read Only')}</Badge>
 						{/if}
 
-						{#if canDelete && !schema?.singleton}
+						{#if canDelete && !schema?.singleton && !lock}
 							<Button
 								variant="ghost"
 								size="icon"
