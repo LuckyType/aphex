@@ -26,6 +26,13 @@ import {
 	type ValidationContext
 } from '../field-validation/utils';
 import { runDocumentHooks } from './hooks';
+import {
+	lockedFieldChanges,
+	policyContext,
+	runDocumentPolicies,
+	DocumentPolicyError
+} from './policies';
+import type { DocumentPolicies } from '../types/schemas';
 import { collectReferenceIds } from '../utils/reference-walk';
 import {
 	emitDocumentCreated,
@@ -226,7 +233,9 @@ export class CollectionAPI<T = Document> {
 		private hierarchyService?: HierarchyService,
 		private versionService?: VersionService,
 		private referencesService?: ReferencesService,
-		private schemaRegistry?: SchemaType[]
+		private schemaRegistry?: SchemaType[],
+		/** `CMSConfig.policies`, run before the schema's own on every transition. */
+		private configPolicies?: DocumentPolicies
 	) {
 		// Validate collection exists
 		this.permissions.validateCollection(collectionName);
@@ -239,6 +248,28 @@ export class CollectionAPI<T = Document> {
 	 */
 	private validationContext(): ValidationContext {
 		return { schemas: this.schemaRegistry ?? [] };
+	}
+
+	/**
+	 * The reject-only seam: config policies, then the schema's, for one
+	 * transition. Runs after permissions and validation and before the
+	 * transaction, on every path, since every path bottoms out here.
+	 */
+	private async enforcePolicies(
+		operation: 'publish' | 'unpublish' | 'delete',
+		document: Pick<Document, 'id' | 'draftData' | 'publishedData'>,
+		context: LocalAPIContext,
+		data?: Record<string, unknown>
+	): Promise<void> {
+		await runDocumentPolicies(
+			[this.configPolicies, this._schema.policies],
+			policyContext(operation, this._schema, document, context, data)
+		);
+	}
+
+	/** The schema's lock for a stored document, judged on the draft the Studio would show. */
+	private lockFor(document: Document) {
+		return this._schema.lock?.(document.id, transformDocument(document, 'draft')) ?? null;
 	}
 
 	/**
@@ -707,6 +738,11 @@ export class CollectionAPI<T = Document> {
 					.join('; ');
 				throw new Error(`Cannot publish: validation errors - ${errorMessage}`);
 			}
+			await this.enforcePolicies(
+				'publish',
+				{ id: options?.id ?? '', draftData: validationResult.normalizedData, publishedData: null },
+				context
+			);
 		}
 
 		// versionService present unless the caller opted out of versioning; capturing it
@@ -947,6 +983,22 @@ export class CollectionAPI<T = Document> {
 		);
 		this.assertStructurallyValid(validationResult);
 
+		// The schema's lock holds here as it does in the Studio: a locked field
+		// keeps its stored value whoever the caller is.
+		const lock = this.lockFor(existingDoc);
+		const lockedChanges = lockedFieldChanges(
+			lock,
+			existingDoc.draftData as Record<string, unknown> | null,
+			validationResult.normalizedData
+		);
+		if (lock && lockedChanges.length > 0) {
+			throw new DocumentPolicyError(
+				'update',
+				`Cannot change locked field(s) ${lockedChanges.map((f) => `"${f}"`).join(', ')}: ${lock.reason}`,
+				lockedChanges
+			);
+		}
+
 		// Update draft with normalized data (dates in ISO format)
 		// Use VersionService for atomic save + version creation if available
 		// RevisionConflictError propagates un-swallowed — a stale caller (a second
@@ -1008,6 +1060,7 @@ export class CollectionAPI<T = Document> {
 					.join('; ');
 				throw new Error(`Cannot publish: validation errors - ${errorMessage}`);
 			}
+			await this.enforcePolicies('publish', document, context, validationResult.normalizedData);
 
 			const published =
 				this.versionService && !options?.skipVersioning
@@ -1074,6 +1127,12 @@ export class CollectionAPI<T = Document> {
 		if (!existing) return false;
 
 		await this.permissions.canDelete(context, this.collectionName, existing);
+
+		const lock = this.lockFor(existing);
+		if (lock) {
+			throw new DocumentPolicyError('delete', `Cannot delete a locked document: ${lock.reason}`);
+		}
+		await this.enforcePolicies('delete', existing, context);
 
 		// The row and its `document.deleted` fact go together: a consumer that
 		// cleans up after a document must never hear of a deletion that rolled back.
@@ -1175,6 +1234,8 @@ export class CollectionAPI<T = Document> {
 			}
 		}
 
+		await this.enforcePolicies('publish', document, context);
+
 		// Validation passed - proceed with publish (with version if service available). Either
 		// branch emits `document.published`: the versioned path from publishTx, the non-versioned
 		// path from publishWithoutVersion.
@@ -1230,6 +1291,8 @@ export class CollectionAPI<T = Document> {
 		if (!existing) return null;
 
 		await this.permissions.canUnpublish(context, this.collectionName, existing);
+
+		await this.enforcePolicies('unpublish', existing, context);
 
 		// In a transaction, so the asset rows commit with the unpublish.
 		const document = await this.databaseAdapter.withTransaction(async (tx) => {
