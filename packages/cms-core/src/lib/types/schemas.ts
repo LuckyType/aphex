@@ -123,7 +123,7 @@ export interface BaseField {
 	 * apply to one branch of a choice (a link's target document when the link is
 	 * internal, a hero's alignment when the hero is text).
 	 *
-	 * Receives `{ siblingData, documentData }`. Reach for `siblingData`: it is the
+	 * Receives `{ siblingData, documentData, parentData, app }`. Reach for `siblingData`: it is the
 	 * object the field belongs to, so repeated array items each resolve against
 	 * their own values instead of all following the first row.
 	 *
@@ -148,6 +148,21 @@ export interface BaseField {
 export interface FieldVisibilityContext {
 	siblingData: Record<string, unknown>;
 	documentData: Record<string, unknown>;
+	/**
+	 * The object one level above `siblingData`: the object or document that
+	 * holds the array or inline object this field's owner sits in. Undefined
+	 * at the top level. Lets a nested field hide by a choice made on its
+	 * parent (a column's option by the row's layout) without walking
+	 * `documentData` by hand.
+	 */
+	parentData?: Record<string, unknown>;
+	/**
+	 * Facts the app hands every condition through `configureFieldConditions`
+	 * (the site's segment, a feature switch, the signed-in role). Empty when
+	 * the app set none. Read on the server and in the Studio alike, so the
+	 * same predicate hides a field for the editor and skips it in validation.
+	 */
+	app: Record<string, unknown>;
 }
 
 /** Returns true to hide the field. See `BaseField.hidden`. */
