@@ -13,7 +13,7 @@
 	import AppSidebar from './sidebar/AppSidebar.svelte';
 	import { usePermissions } from '../../permissions-context.svelte';
 	import { setAdminSlots } from '../../admin/slots.svelte';
-	import { studioExtensions } from '../../studio-extensions';
+	import { studioScriptNonce } from '../../studio-extensions';
 	import type { AdminArea } from '../../admin/types';
 	import type { CMSPlugin, AdminToolPart } from '../../plugins/types';
 	import AgentChat from '../admin/AgentChat.svelte';
@@ -89,7 +89,7 @@
 	const canSeeMedia = $derived(perms.can('asset.read'));
 </script>
 
-<ModeWatcher nonce={studioExtensions().scriptNonce} />
+<ModeWatcher nonce={studioScriptNonce()} />
 <Toaster closeButton />
 <SidebarProvider class="h-screen">
 	<AppSidebar {data} {onSignOut} {sidebarTools} onSelectTool={(id) => switchTab(`plugin:${id}`)} />
