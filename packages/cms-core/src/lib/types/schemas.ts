@@ -305,6 +305,14 @@ export function isBlockArray(field: ArrayField): boolean {
 export interface ArrayField extends BaseField {
 	type: 'array';
 	of: TypeReference[];
+	/**
+	 * Deepest nesting level an item of this array may sit at, counted in nested
+	 * object and array-item levels below the document root (a top-level array's
+	 * items sit at level 1). Lets an object type hold an array of itself without
+	 * accepting an unbounded payload; the validator refuses a deeper item as a
+	 * structural error. Defaults to `DEFAULT_MAX_NESTING_DEPTH` (10).
+	 */
+	maxDepth?: number;
 	initialValue?: any[] | (() => any[] | Promise<any[]>);
 	options?: {
 		layout?: 'grid' | 'list';
