@@ -22,7 +22,8 @@ import { resolveSearchPaths, buildSearchText } from '../schema-utils/utils';
 import {
 	validateDocumentData,
 	type DocumentValidationResult,
-	type FieldErrors
+	type FieldErrors,
+	type ValidationContext
 } from '../field-validation/utils';
 import { runDocumentHooks } from './hooks';
 import { collectReferenceIds } from '../utils/reference-walk';
@@ -223,6 +224,15 @@ export class CollectionAPI<T = Document> {
 	) {
 		// Validate collection exists
 		this.permissions.validateCollection(collectionName);
+	}
+
+	/**
+	 * The registry goes into every validation, so an `of` entry that names a
+	 * registered object type is validated against that type's fields instead of
+	 * being skipped.
+	 */
+	private validationContext(): ValidationContext {
+		return { schemas: this.schemaRegistry ?? [] };
 	}
 
 	/**
@@ -674,7 +684,11 @@ export class CollectionAPI<T = Document> {
 
 		// Validate and normalize data (dates converted to ISO). The document context
 		// for cross-field validators is built inside validateDocumentData.
-		const validationResult = await validateDocumentData(this._schema, hookedData);
+		const validationResult = await validateDocumentData(
+			this._schema,
+			hookedData,
+			this.validationContext()
+		);
 		this.assertStructurallyValid(validationResult);
 
 		if (options?.publish) {
@@ -918,7 +932,11 @@ export class CollectionAPI<T = Document> {
 		});
 
 		// Validate and normalize the merged data
-		const validationResult = await validateDocumentData(this._schema, hookedData);
+		const validationResult = await validateDocumentData(
+			this._schema,
+			hookedData,
+			this.validationContext()
+		);
 		this.assertStructurallyValid(validationResult);
 
 		// Update draft with normalized data (dates in ISO format)
@@ -1105,7 +1123,11 @@ export class CollectionAPI<T = Document> {
 		await this.permissions.canPublish(context, this.collectionName, document);
 
 		// Validate draft data (dates already in ISO, will be converted for validation)
-		const validationResult = await validateDocumentData(this._schema, document.draftData);
+		const validationResult = await validateDocumentData(
+			this._schema,
+			document.draftData,
+			this.validationContext()
+		);
 
 		if (!validationResult.isValid) {
 			const errorMessage = validationResult.errors
