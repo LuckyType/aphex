@@ -387,7 +387,10 @@ async function validateArrayItems(
 				});
 				continue;
 			}
-			const nested = await validateFieldSet(fields, item, deeper(context));
+			const nested = await validateFieldSet(fields, item, {
+				...deeper(context),
+				parent: context.siblings
+			});
 			for (const err of nested) {
 				for (const rawMessage of err.errors) {
 					const { path, reason } = splitFieldMessage(rawMessage);
@@ -441,7 +444,10 @@ export async function validateField(
 	// confirms the value IS an object, so a required field nested inside one was
 	// silently unenforced and an undeclared key inside one was never seen.
 	if (field.type === 'object' && isPlainObject(value) && Array.isArray(field.fields)) {
-		const nested = await validateFieldSet(field.fields, value, deeper(context));
+		const nested = await validateFieldSet(field.fields, value, {
+			...deeper(context),
+			parent: context.siblings
+		});
 		for (const err of nested) {
 			allErrors.push({
 				level: 'error',
@@ -637,7 +643,9 @@ async function validateFieldSet(
 	 * implementations of "is this field on?" drift into "won't save, won't say
 	 * why".
 	 */
-	const visible = fields.filter((field) => isFieldVisible(field, data, context?.document ?? data));
+	const visible = fields.filter((field) =>
+		isFieldVisible(field, data, context?.document ?? data, { parentData: context?.parent })
+	);
 
 	const declared = new Set(fields.map((field) => field.name));
 	for (const key of Object.keys(data ?? {})) {
@@ -655,7 +663,9 @@ async function validateFieldSet(
 
 		const result = await validateField(field, value, {
 			...context,
-			document: context.document !== undefined ? context.document : data
+			document: context.document !== undefined ? context.document : data,
+			// The object this field sits in, which a nested level reads as its parent.
+			siblings: data
 		});
 
 		if (!result.isValid) {

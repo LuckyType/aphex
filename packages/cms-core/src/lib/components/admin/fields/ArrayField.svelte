@@ -52,6 +52,11 @@
 		 * never resolved anywhere inside an array.
 		 */
 		documentData?: Record<string, any>;
+		/**
+		 * The object this array is a field of, which an item's fields see as
+		 * `parentData` in their `hidden` conditions.
+		 */
+		siblingData?: Record<string, any>;
 	}
 
 	let {
@@ -61,7 +66,8 @@
 		onOpenReference,
 		readonly = false,
 		organizationId,
-		documentData
+		documentData,
+		siblingData
 	}: Props = $props();
 
 	const schemas = getSchemaContext();
@@ -1097,6 +1103,7 @@
 		{readonly}
 		{organizationId}
 		{documentData}
+		parentData={siblingData}
 	/>
 {/if}
 
