@@ -9,7 +9,7 @@ import type { AIProviderAdapter } from '../ai/index';
 import type { GraphQLConfig } from '../graphql/index';
 import type { AphexEnv } from '../server/api/index';
 import type { Asset } from './asset';
-import type { SchemaType } from './schemas';
+import type { DocumentPolicies, SchemaType } from './schemas';
 import type { Logger } from '../utils/logger';
 import type { CMSPlugin } from '../plugins/types';
 import type { Auth } from './auth';
@@ -260,6 +260,12 @@ export interface CMSConfig {
 	 * worker endpoint (`POST /api/internal/workers/run`) and any self-hosted worker loop
 	 * both call. Events and scheduling work without this; only *executing* jobs needs it.
 	 */
+	/**
+	 * Reject-only checks run before any document of any type is published,
+	 * unpublished or deleted, ahead of the schema's own `policies`. See
+	 * {@link DocumentPolicies}.
+	 */
+	policies?: DocumentPolicies;
 	jobs?: {
 		/**
 		 * Map of job `type` → handler. A claimed job whose type has no handler is

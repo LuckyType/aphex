@@ -113,6 +113,7 @@ export {
 	SingletonOperationError,
 	DocumentValidationError,
 	UnpublishedReferenceError,
+	DocumentPolicyError,
 	PermissionChecker,
 	PermissionError,
 	authToContext,

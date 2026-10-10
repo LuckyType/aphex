@@ -119,7 +119,8 @@ export class LocalAPI {
 					this.hierarchyService,
 					this.versionService,
 					this.referencesService,
-					this.config.schemaTypes
+					this.config.schemaTypes,
+					this.config.policies
 				),
 				{
 					get: (target, prop) => {
@@ -147,7 +148,8 @@ export class LocalAPI {
 									this.hierarchyService,
 									this.versionService,
 									new ReferencesService(adapter),
-									this.config.schemaTypes
+									this.config.schemaTypes,
+									this.config.policies
 								);
 
 								// Call the method on the new instance
@@ -377,5 +379,6 @@ export {
 	type SingletonCollection
 } from './collection-api';
 export { PermissionChecker, PermissionError } from './permissions';
+export { DocumentPolicyError, runDocumentPolicies, lockedFieldChanges } from './policies';
 export type { LocalAPIContext, CreateOptions, UpdateOptions } from './types';
 export { authToContext, requireAuth, systemContext, actorOf } from './auth-helpers';
