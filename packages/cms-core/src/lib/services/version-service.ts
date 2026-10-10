@@ -1,7 +1,7 @@
 import type { DatabaseAdapter } from '../db/index';
 import type { Document } from '../types/document';
 import type { DocumentVersion, DocumentVersionList } from '../types/version';
-import { emitDocumentPublished } from '../events/emit';
+import { emitDocumentDraftSaved, emitDocumentPublished } from '../events/emit';
 import { syncDocumentAssetReferences } from './asset-references-service';
 
 /**
@@ -232,7 +232,10 @@ export class VersionService {
 					userId,
 					expectedRevision
 				);
-				if (result) await syncDocumentAssetReferences(txAdapter, organizationId, result);
+				if (result) {
+					await emitDocumentDraftSaved(txAdapter, organizationId, result, userId);
+					await syncDocumentAssetReferences(txAdapter, organizationId, result);
+				}
 				return result;
 			});
 		}
@@ -246,6 +249,7 @@ export class VersionService {
 				expectedRevision
 			);
 			if (result) {
+				await emitDocumentDraftSaved(txAdapter, organizationId, result, userId);
 				await this.snapshotTx(txAdapter, organizationId, documentId, 'draft', version.data, userId);
 				await syncDocumentAssetReferences(txAdapter, organizationId, result);
 			}
