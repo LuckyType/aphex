@@ -1,6 +1,11 @@
 <script lang="ts">
 	import * as i18n from '../i18n/index';
-	import { orderedListPage, studioExtensions, studioListOrderings } from '../studio-extensions';
+	import {
+		orderedGroups,
+		orderedListPage,
+		studioExtensions,
+		studioListOrderings
+	} from '../studio-extensions';
 	/**
 	 * AdminApp - Complete CMS Admin Interface
 	 * A packaged, reusable Sanity-style admin UI
@@ -218,7 +223,8 @@
 					icon: schema?.icon,
 					group: schema?.group,
 					access: schema?.access,
-					singleton: schema?.singleton ?? false
+					singleton: schema?.singleton ?? false,
+					hidden: schema?.hidden ?? false
 				};
 			})
 			.filter((docType) => {
@@ -234,19 +240,23 @@
 
 	const hasDocumentTypes = $derived(documentTypes.length > 0);
 
-	// Bucket document types by their `group` property. Ungrouped types sit in a
-	// leading null bucket; named groups follow in first-seen order.
+	// Bucket the sidebar's document types (a `hidden` type is left out, but stays in
+	// `documentTypes` so an open document of it still has its title) by their `group`
+	// property. Ungrouped types sit in a leading null bucket; named groups follow in
+	// the app's `groupOrder`, then first-seen order.
 	const groupedDocumentTypes = $derived.by(() => {
 		const buckets = new Map<string | null, typeof documentTypes>();
 		buckets.set(null, []);
 		for (const dt of documentTypes) {
+			if (dt.hidden) continue;
 			const key = dt.group ?? null;
 			if (!buckets.has(key)) buckets.set(key, []);
 			buckets.get(key)!.push(dt);
 		}
-		return Array.from(buckets.entries())
+		const groups = Array.from(buckets.entries())
 			.filter(([, items]) => items.length > 0)
 			.map(([name, items]) => ({ name, items }));
+		return orderedGroups(groups, studioExtensions().groupOrder);
 	});
 
 	// Client-side routing state
