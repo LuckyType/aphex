@@ -2482,7 +2482,7 @@
 						</div>
 
 						<!-- Viewport switcher -->
-						<div class="bg-muted flex items-center gap-0.5 rounded p-0.5">
+						<div class="bg-muted studio-track flex items-center gap-0.5 rounded p-0.5">
 							{#each [{ v: 'desktop', Icon: Monitor, label: 'Desktop' }, { v: 'tablet', Icon: Tablet, label: 'Tablet' }, { v: 'mobile', Icon: Smartphone, label: i18n.t('Mobile') }] as { v, Icon, label } (v)}
 								<button
 									onclick={() => (previewViewport = v as typeof previewViewport)}

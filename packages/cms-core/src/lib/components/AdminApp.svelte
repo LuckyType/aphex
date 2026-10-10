@@ -1368,7 +1368,7 @@
 														onclick={() => navigateToDocumentType(docType.name)}
 														class="hover:bg-muted/50 group flex w-full cursor-pointer items-center justify-between rounded-md px-2 py-2.5 text-left transition-colors {selectedDocumentType ===
 														docType.name
-															? 'bg-muted/50'
+															? 'bg-muted/50 studio-selected-row'
 															: ''}"
 														title={docType.description || ''}
 													>
@@ -1670,7 +1670,7 @@
 													<button
 														onclick={() => navigateToEditDocument(doc.id, selectedDocumentType!)}
 														class="hover:bg-muted/50 border-border group flex w-full cursor-pointer items-center justify-between border-b p-3 text-left transition-colors {isActive
-															? 'bg-muted/50'
+															? 'bg-muted/50 studio-selected-row'
 															: ''}"
 													>
 														<div class="flex min-w-0 flex-1 items-center gap-3">

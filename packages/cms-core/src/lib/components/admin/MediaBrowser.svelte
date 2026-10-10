@@ -1942,7 +1942,7 @@
 		     assets fit on a page matters far less than whether they can tell one
 		     thumbnail from another. Grid only; the list view has a fixed row. -->
 		{#if viewMode === 'grid'}
-			<div class="bg-muted hidden items-center rounded-md p-0.5 sm:flex">
+			<div class="bg-muted studio-track hidden items-center rounded-md p-0.5 sm:flex">
 				{#each [{ id: 'compact' as const, label: i18n.t('Compact') }, { id: 'default' as const, label: i18n.t('Default') }, { id: 'large' as const, label: i18n.t('Large') }] as option (option.id)}
 					<button
 						onclick={() => (gridDensity = option.id)}
@@ -1959,7 +1959,7 @@
 		{/if}
 
 		<!-- View toggle -->
-		<div class="bg-muted flex items-center rounded-md p-0.5">
+		<div class="bg-muted studio-track flex items-center rounded-md p-0.5">
 			<button
 				onclick={() => (viewMode = 'grid')}
 				class="rounded p-1.5 {viewMode === 'grid'
