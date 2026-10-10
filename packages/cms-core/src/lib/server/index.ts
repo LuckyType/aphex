@@ -118,6 +118,7 @@ export {
 	authToContext,
 	requireAuth,
 	systemContext,
+	actorOf,
 	type Collections,
 	type SingletonCollection,
 	type LocalAPIContext,

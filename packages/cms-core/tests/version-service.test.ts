@@ -73,6 +73,16 @@ describe('VersionService.publishTx (transactional outbox)', () => {
 		});
 	});
 
+	it('attributes the snapshot and the event to the acting user, not the last editor', async () => {
+		const svc = new VersionService();
+		const { tx, events, versions } = fakeTx();
+
+		await svc.publishTx(tx, 'org-1', 'doc-1', undefined, 'scheduler-7');
+
+		expect((versions[0] as { createdBy?: string | null })?.createdBy).toBe('scheduler-7');
+		expect(events[0]?.createdBy).toBe('scheduler-7');
+	});
+
 	it('emits nothing when publishDoc is a no-op (document not found)', async () => {
 		const svc = new VersionService();
 		const { tx, events, versions } = fakeTx({ publishDoc: async () => null });

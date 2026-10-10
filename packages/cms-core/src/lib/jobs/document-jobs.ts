@@ -4,6 +4,7 @@
 import { z } from 'zod';
 import type { LocalAPI } from '../local-api/index';
 import { systemContext } from '../local-api/auth-helpers';
+import type { Job } from '../types/events';
 import type { JobHandlerMap } from './types';
 
 /** Reserved built-in job types. Scheduling uses these; the worker maps them to the handlers below. */
@@ -25,12 +26,21 @@ export interface DocumentJobDeps {
  * Built-in handlers for scheduled publish/unpublish.
  *
  * Runs as the system (override access) — the permission check already happened when the
- * job was scheduled. Publish routes through `CollectionAPI.publish`, so it re-runs
+ * job was scheduled — attributed to the person who scheduled it. Publish routes through `CollectionAPI.publish`, so it re-runs
  * validation + reference guards + cache invalidation and emits `document.published`
  * inside the publish transaction, exactly like a manual publish. A handler throw is a
  * job failure: the runner retries with backoff or dead-letters it (e.g. a doc whose
  * references became unpublished before the scheduled time fails validation and retries).
  */
+/**
+ * The context a scheduled publish runs under: the system (the permission check happened
+ * at schedule time), attributed to the person who scheduled it, so the version snapshot
+ * and `document.published` name them rather than the document's last editor.
+ */
+function jobContext(job: Job) {
+	return systemContext(job.organizationId, { actorId: job.createdBy });
+}
+
 export function createDocumentJobHandlers(deps: DocumentJobDeps): JobHandlerMap {
 	const { localAPI } = deps;
 	return {
@@ -38,13 +48,13 @@ export function createDocumentJobHandlers(deps: DocumentJobDeps): JobHandlerMap 
 			const { documentId, documentType } = documentJobPayload.parse(job.payload);
 			const collection = localAPI.getCollection(documentType);
 			if (!collection) throw new Error(`Unknown collection "${documentType}" for job ${job.id}`);
-			await collection.publish(systemContext(job.organizationId), documentId);
+			await collection.publish(jobContext(job), documentId);
 		},
 		[DOCUMENT_UNPUBLISH_JOB]: async ({ job }) => {
 			const { documentId, documentType } = documentJobPayload.parse(job.payload);
 			const collection = localAPI.getCollection(documentType);
 			if (!collection) throw new Error(`Unknown collection "${documentType}" for job ${job.id}`);
-			await collection.unpublish(systemContext(job.organizationId), documentId);
+			await collection.unpublish(jobContext(job), documentId);
 		}
 	};
 }

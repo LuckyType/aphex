@@ -10,12 +10,14 @@ import { documentPublished, userDeleted } from './catalog';
  * called on a TRANSACTION handle (from `withTransaction`) so the event commits atomically with
  * the publish it describes — the transactional-outbox guarantee. Shared by every publish path,
  * versioned and non-versioned alike, so the fact fires whenever a publish happens regardless of
- * whether a version snapshot was taken.
+ * whether a version snapshot was taken. `actorId` names who published; it defaults to the
+ * document's last editor when the caller has no user of its own.
  */
 export async function emitDocumentPublished(
 	tx: DatabaseAdapter,
 	organizationId: string,
-	doc: Document
+	doc: Document,
+	actorId?: string | null
 ): Promise<void> {
 	await tx.appendEvent({
 		organizationId,
@@ -25,7 +27,10 @@ export async function emitDocumentPublished(
 			documentType: doc.type,
 			publishedHash: doc.publishedHash ?? null
 		}),
-		createdBy: doc.updatedBy
+		// `actorId` is who performed the publish (the caller, or the person a scheduled
+		// job runs for). Without it the fact falls back to the document's last editor,
+		// which is only right when the editor is also the publisher.
+		createdBy: actorId ?? doc.updatedBy
 	});
 }
 

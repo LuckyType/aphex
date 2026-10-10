@@ -87,6 +87,7 @@ export function requireAuth(auth: Auth | null | undefined): LocalAPIContext {
  * Use this for seed scripts, cron jobs, migrations, and other system-level operations
  *
  * @param organizationId - Organization ID for the operation
+ * @param options.actorId - who the writes are attributed to (a job acting for its scheduler)
  * @returns LocalAPIContext with overrideAccess: true
  *
  * @example
@@ -103,9 +104,21 @@ export function requireAuth(auth: Auth | null | undefined): LocalAPIContext {
  * });
  * ```
  */
-export function systemContext(organizationId: string): LocalAPIContext {
+export function systemContext(
+	organizationId: string,
+	options?: { actorId?: string | null }
+): LocalAPIContext {
 	return {
 		organizationId,
-		overrideAccess: true
+		overrideAccess: true,
+		...(options?.actorId ? { actorId: options.actorId } : {})
 	};
+}
+
+/**
+ * The id a write performed under `context` is attributed to: the signed-in user, else the
+ * `actorId` a system context carries (the person a scheduled job runs for), else nothing.
+ */
+export function actorOf(context: LocalAPIContext): string | undefined {
+	return context.user?.id ?? context.actorId ?? undefined;
 }

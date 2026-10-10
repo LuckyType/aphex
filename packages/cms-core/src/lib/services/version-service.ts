@@ -74,23 +74,26 @@ export class VersionService {
 		tx: DatabaseAdapter,
 		organizationId: string,
 		documentId: string,
-		expectedRevision?: number
+		expectedRevision?: number,
+		actorId?: string | null
 	): Promise<Document | null> {
 		const result = await tx.publishDoc(organizationId, documentId, expectedRevision);
 		if (result) {
+			// The snapshot and the event name who published: the acting user when the
+			// caller has one, else the document's last editor.
 			await this.snapshotTx(
 				tx,
 				organizationId,
 				documentId,
 				'publish',
 				result.publishedData,
-				result.updatedBy
+				actorId ?? result.updatedBy
 			);
 			// Transactional outbox: record the durable fact in the same tx as the publish, so
 			// the event and the state change commit (or roll back) together — a consumer can
 			// never see a publish that didn't happen, nor miss one that did. The non-versioned
 			// publish path (collection-api) emits the same event via the same helper.
-			await emitDocumentPublished(tx, organizationId, result);
+			await emitDocumentPublished(tx, organizationId, result, actorId);
 			await syncDocumentAssetReferences(tx, organizationId, result);
 		}
 		return result;
@@ -176,7 +179,8 @@ export class VersionService {
 		db: DatabaseAdapter,
 		organizationId: string,
 		documentId: string,
-		expectedRevision?: number
+		expectedRevision?: number,
+		actorId?: string | null
 	): Promise<Document | null> {
 		// Publish + version snapshot must commit together: a crash between them
 		// would leave a published document with no 'publish' version row. Mirror
@@ -193,7 +197,7 @@ export class VersionService {
 		}
 
 		const published = await db.withTransaction((txAdapter) =>
-			this.publishTx(txAdapter, organizationId, documentId, expectedRevision)
+			this.publishTx(txAdapter, organizationId, documentId, expectedRevision, actorId)
 		);
 		if (published) await this.enforceRetention(db, documentId, organizationId);
 		return published;
