@@ -31,6 +31,8 @@
 		 * either a field of the object or a field of the document.
 		 */
 		documentData?: Record<string, any>;
+		/** The object holding the edited item, read by its fields' `hidden` conditions as `parentData`. */
+		parentData?: Record<string, any>;
 	}
 
 	let {
@@ -42,7 +44,8 @@
 		onOpenReference,
 		readonly = false,
 		organizationId,
-		documentData
+		documentData,
+		parentData
 	}: Props = $props();
 
 	let myDepth = $state(0);
@@ -167,6 +170,7 @@
 							{documentData}
 							siblingData={value ?? {}}
 							siblingFields={schema.fields}
+							{parentData}
 							onUpdate={(newValue) => {
 								onUpdate({ ...value, [field.name]: newValue });
 							}}
