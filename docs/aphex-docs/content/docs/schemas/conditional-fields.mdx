@@ -65,12 +65,14 @@ register and no string DSL to learn.
 
 ## The two scopes
 
-A predicate receives `{ siblingData, documentData }`.
+A predicate receives `{ siblingData, documentData, parentData, app }`.
 
 | Scope          | What it is                                                                                                    |
 | -------------- | ------------------------------------------------------------------------------------------------------------- |
 | `siblingData`  | The object the field belongs to — the array item, the inline object, or the document itself at the top level. |
 | `documentData` | The whole document, at any nesting depth.                                                                     |
+| `parentData`   | The object one level above `siblingData` (undefined at the top level).                                        |
+| `app`          | Facts the app registered with `configureFieldConditions` (empty when it set none).                            |
 
 **Reach for `siblingData`.** A condition almost always means "my neighbour's value", and
 inside a repeated array item the distinction is the entire point:
@@ -86,6 +88,36 @@ row one is set to.
 
 `documentData` is there for the genuine cases — a field on a block that depends on something
 at the top of the document, like a page-wide layout switch.
+
+## Parent and app facts
+
+Two more scopes cover what neither object holds.
+
+`parentData` is the object one level up: for a field of an array item it is the object that
+holds the array, for a field of an inline object the object that holds it. A column that only
+makes sense for one row layout reads the row's choice without walking `documentData` by path:
+
+```ts
+hidden: ({ parentData }) => parentData?.layout !== 'columns';
+```
+
+`app` carries facts no document holds, such as which segment a site serves or which features
+are switched on. The app registers them once per side, because the validator on the server and
+the renderer in the Studio each read their own module instance:
+
+```ts
+import { configureFieldConditions } from '@aphexcms/cms-core';
+
+// At server boot, and again where the Studio mounts:
+configureFieldConditions({ context: () => ({ segment: site.segment }) });
+```
+
+```ts
+hidden: ({ app }) => app.segment !== 'restaurant';
+```
+
+`context` is called on every evaluation, so it can answer from a per-request store. A context
+that throws counts as empty, and a field whose predicate throws stays visible, as before.
 
 ## Hidden fields are not validated
 

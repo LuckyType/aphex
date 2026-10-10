@@ -46,6 +46,12 @@
 		siblingData?: Record<string, any>;
 		/** The schema fields `siblingData` is shaped by, for labels that name a sibling. */
 		siblingFields?: Field[];
+		/**
+		 * The object holding `siblingData`'s owner (the document for a field of an
+		 * inline object or array item at the top level), for a `hidden` condition
+		 * that reads `parentData`. Undefined at the root.
+		 */
+		parentData?: Record<string, any>;
 		onUpdate: (value: any) => void;
 		onOpenReference?: (documentId: string, documentType: string) => void;
 		doValidation?: () => void;
@@ -68,6 +74,7 @@
 		documentData,
 		siblingData,
 		siblingFields,
+		parentData,
 		onUpdate,
 		onOpenReference,
 		doValidation,
@@ -161,7 +168,7 @@
 	 * field is skipped by validation too and a required control on the inactive
 	 * branch can't block a save with an error nobody can see.
 	 */
-	const visible = $derived(isFieldVisible(field, scope, documentData));
+	const visible = $derived(isFieldVisible(field, scope, documentData, { parentData }));
 
 	// Validate once focus leaves the field, not only on load and after save, so a
 	// required field an editor tabs through is flagged immediately rather than
@@ -259,6 +266,7 @@
 							{documentData}
 							siblingData={value ?? {}}
 							siblingFields={field.fields}
+							parentData={scope}
 							onUpdate={(subValue) => onUpdate({ ...value, [subField.name]: subValue })}
 							{doValidation}
 							{schemaType}
@@ -280,6 +288,7 @@
 					{readonly}
 					{organizationId}
 					{documentData}
+					siblingData={scope}
 				/>
 			{:else}
 				<!-- Leaf / reference / custom-input fields — resolved uniformly. -->
