@@ -7,7 +7,12 @@
  * Run: pnpm -F @aphexcms/cms-core test
  */
 import { afterEach, describe, expect, it } from 'vitest';
-import { configureStudio, orderedGroups, studioScriptNonce } from '../src/lib/studio-extensions';
+import {
+	configureStudio,
+	orderedGroups,
+	studioDocumentList,
+	studioScriptNonce
+} from '../src/lib/studio-extensions';
 
 afterEach(() => configureStudio({}));
 
@@ -48,5 +53,34 @@ describe('orderedGroups', () => {
 			'Content',
 			'Settings'
 		]);
+	});
+});
+
+describe('studioDocumentList', () => {
+	const List = (() => null) as never;
+
+	it('is empty for a type the app did not name', () => {
+		configureStudio({ documentLists: { page: List } });
+		expect(studioDocumentList('product')).toEqual({});
+		expect(studioDocumentList(null)).toEqual({});
+	});
+
+	it('reads a bare component as the list with the generic words', () => {
+		configureStudio({ documentLists: { page: List } });
+		expect(studioDocumentList('page')).toEqual({ component: List });
+	});
+
+	it('keeps the words an app sets beside its list, with or without a component', () => {
+		configureStudio({
+			documentLists: {
+				page: { component: List, createLabel: () => 'New page' },
+				product: { emptyText: () => 'No products yet' }
+			}
+		});
+		expect(studioDocumentList('page').component).toBe(List);
+		expect(studioDocumentList('page').createLabel?.()).toBe('New page');
+		expect(studioDocumentList('page').emptyText).toBeUndefined();
+		expect(studioDocumentList('product').component).toBeUndefined();
+		expect(studioDocumentList('product').emptyText?.()).toBe('No products yet');
 	});
 });
