@@ -4,6 +4,7 @@
 		orderedGroups,
 		orderedListPage,
 		studioExtensions,
+		studioDocumentList,
 		studioListOrderings
 	} from '../studio-extensions';
 	/**
@@ -1583,14 +1584,14 @@
 														<Search class="h-4 w-4" />
 													</Button>
 													{#if perms.can('document.create') && !schemas.find((s) => s.name === selectedDocumentType)?.singleton}
-														{#if studioExtensions().createLabel?.(selectedDocumentType)}
+														{#if studioDocumentList(selectedDocumentType).createLabel}
 															<Button
 																size="sm"
 																onclick={() => navigateToCreateDocument(selectedDocumentType!)}
 																class="h-8 gap-1.5 px-3"
 															>
 																<Plus class="h-3.5 w-3.5" aria-hidden="true" />
-																{studioExtensions().createLabel?.(selectedDocumentType)}
+																{studioDocumentList(selectedDocumentType).createLabel?.()}
 															</Button>
 														{:else}
 															<Button
@@ -1788,9 +1789,8 @@
 												</div>
 											{:else if loading}
 												<DocumentsSkeleton />
-											{:else if documentsList.length > 0 && selectedDocumentType && studioExtensions().documentLists?.[selectedDocumentType]}
-												{@const DocumentList =
-													studioExtensions().documentLists![selectedDocumentType]}
+											{:else if documentsList.length > 0 && selectedDocumentType && studioDocumentList(selectedDocumentType).component}
+												{@const DocumentList = studioDocumentList(selectedDocumentType).component!}
 												<DocumentList
 													rows={documentsList}
 													activeId={editingDocumentId}
@@ -1894,8 +1894,7 @@
 													{:else}
 														<h3 class="mb-2 font-medium">{i18n.t('No documents found')}</h3>
 														<p class="text-muted-foreground text-sm">
-															{(selectedDocumentType &&
-																studioExtensions().emptyListText?.(selectedDocumentType)) ||
+															{studioDocumentList(selectedDocumentType).emptyText?.() ||
 																i18n.t(
 																	'Create your first {type} document using the + button above',
 																	{
