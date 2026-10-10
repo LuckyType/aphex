@@ -2,7 +2,10 @@ import { Hono } from 'hono';
 import { authToContext } from '../../../local-api/auth-helpers';
 import { PermissionError } from '../../../local-api/permissions';
 import { RevisionConflictError } from '../../../db/interfaces/index';
-import { DocumentValidationError } from '../../../local-api/collection-api';
+import {
+	DocumentValidationError,
+	UnpublishedReferenceError
+} from '../../../local-api/collection-api';
 import { cmsLogger } from '../../../utils/logger';
 import {
 	scheduleDocumentRequest,
@@ -215,6 +218,19 @@ export const documentsPublishRouter: Hono<AphexEnv> = new Hono<AphexEnv>()
 						error: 'Conflict',
 						message: error.message,
 						currentRevision: error.currentRevision
+					},
+					409
+				);
+			}
+			// A referenced document that is not published is the caller's conflict to
+			// resolve (publish it first), not a server failure.
+			if (error instanceof UnpublishedReferenceError) {
+				return c.json(
+					{
+						success: false,
+						error: 'Unpublished references',
+						message: error.message,
+						references: error.references
 					},
 					409
 				);
