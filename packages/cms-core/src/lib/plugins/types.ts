@@ -15,7 +15,7 @@
 import type { Component } from 'svelte';
 import type { Context, Hono } from 'hono';
 import type { AphexEnv } from '../server/api/index';
-import type { Field, SettingsField, SchemaType } from '../types/schemas';
+import type { Field, SettingsField, SchemaType, ViewField } from '../types/schemas';
 import type { AdminArea } from '../admin/types';
 import type { CapabilityDefinition } from '../types/capabilities';
 import type { JobHandlerMap } from '../jobs/types';
@@ -34,7 +34,8 @@ export type PartKind =
 	| 'aphex/agent/tool'
 	| 'aphex/document/action'
 	| 'aphex/admin/tool'
-	| 'aphex/field/component';
+	| 'aphex/field/component'
+	| 'aphex/field/view';
 
 // ── Serializable plane ──────────────────────────────────────────────────────
 
@@ -321,6 +322,38 @@ export interface FieldComponentPart {
 	component: Component<FieldComponentProps>;
 }
 
+/**
+ * What an `aphex/field/view` component receives: where it sits, and nothing
+ * to write. A view slot has no value and no `onUpdate`; it reads the document
+ * and its neighbours and draws.
+ */
+export interface FieldViewProps {
+	field: ViewField;
+	/** The whole document's data. */
+	documentData?: Record<string, unknown>;
+	/** The object the slot is a member of (the document at the top level). */
+	siblingData?: Record<string, unknown>;
+	/** The object holding `siblingData`'s owner; undefined at the top level. */
+	parentData?: Record<string, unknown>;
+	/** Dotted path of the slot in the document, e.g. `contact.appearsOn`. */
+	fieldPath?: string;
+	/** The document's type name. */
+	schemaType?: string;
+	readonly?: boolean;
+}
+
+/**
+ * Draws a `view` field: a display slot in the editor that holds no value
+ * (a preview, a usage summary, a generated file). Selected by the field's
+ * `input` key, like `aphex/field/component`, but it never writes.
+ */
+export interface FieldViewPart {
+	implements: 'aphex/field/view';
+	/** Matched against a view field's `input` property. */
+	input: string;
+	component: Component<FieldViewProps>;
+}
+
 export type PluginPart =
 	| SchemaPart
 	| SchemaTransformPart
@@ -332,7 +365,8 @@ export type PluginPart =
 	| AgentToolPart
 	| DocumentActionPart
 	| AdminToolPart
-	| FieldComponentPart;
+	| FieldComponentPart
+	| FieldViewPart;
 
 /** A plugin manifest. Returned by `definePlugin`. */
 export interface CMSPlugin {

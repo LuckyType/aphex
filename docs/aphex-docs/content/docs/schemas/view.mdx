@@ -1,0 +1,39 @@
+---
+title: View
+description: A display slot in the editor that holds no value.
+---
+
+The `view` type draws something between the fields of a form without storing anything: a usage
+summary, a preview of what the neighbouring fields produce, a download of a file generated from
+the Published document.
+
+## Definition
+
+```ts
+import type { ViewField } from '@aphexcms/cms-core';
+```
+
+```ts
+{
+	name: 'appearsOn',
+	type: 'view',
+	title: 'Where it appears',
+	input: 'usage' // the aphex/field/view part that draws it
+}
+```
+
+`input` is required and names an `aphex/field/view` plugin part. The part's component receives
+`FieldViewProps`: `field`, `documentData`, `siblingData`, `parentData`, `fieldPath`, `schemaType`
+and `readonly`. It has no value and no `onUpdate`.
+
+## What a view is not
+
+- **Not data.** The stored document never has a key for it. A write that carries a value under
+  the name is refused as a structural error, the same way an undeclared field is.
+- **Not validated.** `validation` on a view field is ignored, and a hidden condition still applies
+  to the slot's rendering.
+- **Not in the generated types.** `generate:types`, the GraphQL schema and the OpenAPI schema leave
+  it out, and a new document gets no default for it.
+
+See [Add a display slot that holds no value](/plugins#add-a-display-slot-that-holds-no-value) for
+the plugin side.

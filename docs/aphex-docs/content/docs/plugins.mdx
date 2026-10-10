@@ -308,6 +308,29 @@ Swap the editing UI for a field, selected by an `input` key on the schema. The s
 
 Your component receives a stable `FieldComponentProps` contract (`field`, `value`, `onUpdate`, `readonly`) — the same one built-in inputs use, so it's a drop-in.
 
+### Add a display slot that holds no value
+
+A form sometimes needs a line that is not a field: where a document is used, a preview of what
+the neighbouring fields produce, a download of a file generated from the Published document.
+Declare it as a `view` field and draw it with an `aphex/field/view` part:
+
+```ts
+// The plugin part:
+{ implements: 'aphex/field/view', input: 'usage', component: UsageSummary }
+```
+
+```ts
+// In the schema, between ordinary fields:
+{ name: 'appearsOn', type: 'view', title: 'Where it appears', input: 'usage' }
+```
+
+The component receives `FieldViewProps` (`field`, `documentData`, `siblingData`, `parentData`,
+`fieldPath`, `schemaType`, `readonly`) and nothing to write: a view has no value and no
+`onUpdate`. The server treats the name as data the schema never declared, so a write carrying a
+value under it is refused, and the generated types, the GraphQL and OpenAPI schemas and the
+new-document defaults leave it out. Before this part existed, the same slot was a string field
+whose widget never called `onUpdate`, which worked until a validator or a type generator met it.
+
 <Accordions>
 <Accordion title="Going further: register a whole new field type (like `type: 'color'`)">
 

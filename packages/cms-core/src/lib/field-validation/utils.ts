@@ -3,6 +3,7 @@ import { Rule } from './rule';
 import { normalizeDateFields } from './date-utils';
 import { cmsLogger } from '../utils/logger';
 import { isFieldVisible } from '../schema-utils/visibility';
+import { isViewField } from '../schema-utils/view-fields';
 
 export interface ValidationError {
 	level: 'error' | 'warning' | 'info';
@@ -426,6 +427,9 @@ export async function validateField(
 
 	const allErrors: ValidationError[] = [];
 
+	// A view slot has nothing to check; its name in the data is caught by the set above.
+	if (isViewField(field)) return { isValid: true, errors: [] };
+
 	// Structural shape check first: if the value is the wrong JSON shape (e.g. a
 	// slug sent as `{ current }`, or a reference without `_ref`), report that and
 	// stop — the type-assuming auto-rules and user rules below expect the correct
@@ -643,17 +647,27 @@ async function validateFieldSet(
 	 * implementations of "is this field on?" drift into "won't save, won't say
 	 * why".
 	 */
-	const visible = fields.filter((field) =>
-		isFieldVisible(field, data, context?.document ?? data, { parentData: context?.parent })
+	const visible = fields.filter(
+		(field) =>
+			!isViewField(field) &&
+			isFieldVisible(field, data, context?.document ?? data, { parentData: context?.parent })
 	);
 
-	const declared = new Set(fields.map((field) => field.name));
+	// A view slot declares no data: a value sent under its name is as foreign
+	// as one under a name the schema never had, and is refused the same way.
+	const declared = new Set(fields.filter((field) => !isViewField(field)).map((f) => f.name));
+	const views = new Set(fields.filter(isViewField).map((field) => field.name));
 	for (const key of Object.keys(data ?? {})) {
 		if (key.startsWith('_')) continue;
 		if (declared.has(key)) continue;
+		if (context?.unknownFields === 'strip') continue;
 		validationErrors.push({
 			field: key,
-			errors: [`Unknown field "${key}" — not declared in the schema`],
+			errors: [
+				views.has(key)
+					? `is a view field and holds no value`
+					: `Unknown field "${key}" — not declared in the schema`
+			],
 			kind: 'structural'
 		});
 	}
