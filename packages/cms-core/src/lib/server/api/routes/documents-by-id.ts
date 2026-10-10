@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { authToContext } from '../../../local-api/auth-helpers';
 import { PermissionError } from '../../../local-api/permissions';
+import { DocumentPolicyError } from '../../../local-api/policies';
 import {
 	SingletonOperationError,
 	DocumentValidationError
@@ -53,6 +54,18 @@ export const documentsByIdRouter: Hono<AphexEnv> = new Hono<AphexEnv>()
 			cmsLogger.error('Failed to fetch document:', error);
 			if (error instanceof PermissionError) {
 				return c.json({ success: false, error: 'Forbidden', message: error.message }, 403);
+			}
+			if (error instanceof DocumentPolicyError) {
+				return c.json(
+					{
+						success: false,
+						error: 'Refused by policy',
+						message: error.message,
+						operation: error.operation,
+						lockedFields: error.lockedFields
+					},
+					409
+				);
 			}
 			return c.json(
 				{
@@ -130,6 +143,18 @@ export const documentsByIdRouter: Hono<AphexEnv> = new Hono<AphexEnv>()
 				cmsLogger.error('Failed to update document:', error);
 				if (error instanceof PermissionError) {
 					return c.json({ success: false, error: 'Forbidden', message: error.message }, 403);
+				}
+				if (error instanceof DocumentPolicyError) {
+					return c.json(
+						{
+							success: false,
+							error: 'Refused by policy',
+							message: error.message,
+							operation: error.operation,
+							lockedFields: error.lockedFields
+						},
+						409
+					);
 				}
 				if (error instanceof RevisionConflictError) {
 					return c.json(
@@ -246,6 +271,18 @@ export const documentsByIdRouter: Hono<AphexEnv> = new Hono<AphexEnv>()
 			if (error instanceof PermissionError) {
 				return c.json({ success: false, error: 'Forbidden', message: error.message }, 403);
 			}
+			if (error instanceof DocumentPolicyError) {
+				return c.json(
+					{
+						success: false,
+						error: 'Refused by policy',
+						message: error.message,
+						operation: error.operation,
+						lockedFields: error.lockedFields
+					},
+					409
+				);
+			}
 			if (error instanceof RevisionConflictError) {
 				return c.json(
 					{
@@ -316,6 +353,18 @@ export const documentsByIdRouter: Hono<AphexEnv> = new Hono<AphexEnv>()
 			if (error instanceof PermissionError) {
 				return c.json({ success: false, error: 'Forbidden', message: error.message }, 403);
 			}
+			if (error instanceof DocumentPolicyError) {
+				return c.json(
+					{
+						success: false,
+						error: 'Refused by policy',
+						message: error.message,
+						operation: error.operation,
+						lockedFields: error.lockedFields
+					},
+					409
+				);
+			}
 			if (error instanceof SingletonOperationError) {
 				return c.json({ success: false, error: 'Singleton document', message: error.message }, 400);
 			}
@@ -345,6 +394,18 @@ export const documentsByIdRouter: Hono<AphexEnv> = new Hono<AphexEnv>()
 			cmsLogger.error('Failed to fetch back-references:', error);
 			if (error instanceof PermissionError) {
 				return c.json({ success: false, error: 'Forbidden', message: error.message }, 403);
+			}
+			if (error instanceof DocumentPolicyError) {
+				return c.json(
+					{
+						success: false,
+						error: 'Refused by policy',
+						message: error.message,
+						operation: error.operation,
+						lockedFields: error.lockedFields
+					},
+					409
+				);
 			}
 			return c.json(
 				{

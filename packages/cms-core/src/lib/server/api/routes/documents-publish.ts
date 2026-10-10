@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { authToContext } from '../../../local-api/auth-helpers';
 import { PermissionError } from '../../../local-api/permissions';
+import { DocumentPolicyError } from '../../../local-api/policies';
 import { RevisionConflictError } from '../../../db/interfaces/index';
 import {
 	DocumentValidationError,
@@ -65,6 +66,18 @@ export const documentsPublishRouter: Hono<AphexEnv> = new Hono<AphexEnv>()
 			if (error instanceof PermissionError) {
 				return c.json({ success: false, error: 'Forbidden', message: error.message }, 403);
 			}
+			if (error instanceof DocumentPolicyError) {
+				return c.json(
+					{
+						success: false,
+						error: 'Refused by policy',
+						message: error.message,
+						operation: error.operation,
+						lockedFields: error.lockedFields
+					},
+					409
+				);
+			}
 			return c.json(
 				{
 					success: false,
@@ -107,6 +120,18 @@ export const documentsPublishRouter: Hono<AphexEnv> = new Hono<AphexEnv>()
 			if (error instanceof PermissionError) {
 				return c.json({ success: false, error: 'Forbidden', message: error.message }, 403);
 			}
+			if (error instanceof DocumentPolicyError) {
+				return c.json(
+					{
+						success: false,
+						error: 'Refused by policy',
+						message: error.message,
+						operation: error.operation,
+						lockedFields: error.lockedFields
+					},
+					409
+				);
+			}
 			return c.json({ success: false, error: 'Failed to read document schedule' }, 500);
 		}
 	})
@@ -131,6 +156,18 @@ export const documentsPublishRouter: Hono<AphexEnv> = new Hono<AphexEnv>()
 			cmsLogger.error('Failed to cancel document schedule:', error);
 			if (error instanceof PermissionError) {
 				return c.json({ success: false, error: 'Forbidden', message: error.message }, 403);
+			}
+			if (error instanceof DocumentPolicyError) {
+				return c.json(
+					{
+						success: false,
+						error: 'Refused by policy',
+						message: error.message,
+						operation: error.operation,
+						lockedFields: error.lockedFields
+					},
+					409
+				);
 			}
 			return c.json({ success: false, error: 'Failed to cancel document schedule' }, 500);
 		}
@@ -210,6 +247,18 @@ export const documentsPublishRouter: Hono<AphexEnv> = new Hono<AphexEnv>()
 			cmsLogger.error('Failed to publish document:', error);
 			if (error instanceof PermissionError) {
 				return c.json({ success: false, error: 'Forbidden', message: error.message }, 403);
+			}
+			if (error instanceof DocumentPolicyError) {
+				return c.json(
+					{
+						success: false,
+						error: 'Refused by policy',
+						message: error.message,
+						operation: error.operation,
+						lockedFields: error.lockedFields
+					},
+					409
+				);
 			}
 			if (error instanceof RevisionConflictError) {
 				return c.json(
@@ -340,6 +389,18 @@ export const documentsPublishRouter: Hono<AphexEnv> = new Hono<AphexEnv>()
 			cmsLogger.error('Failed to unpublish document:', error);
 			if (error instanceof PermissionError) {
 				return c.json({ success: false, error: 'Forbidden', message: error.message }, 403);
+			}
+			if (error instanceof DocumentPolicyError) {
+				return c.json(
+					{
+						success: false,
+						error: 'Refused by policy',
+						message: error.message,
+						operation: error.operation,
+						lockedFields: error.lockedFields
+					},
+					409
+				);
 			}
 			if (error instanceof RevisionConflictError) {
 				return c.json(
