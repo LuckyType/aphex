@@ -378,4 +378,4 @@ export {
 } from './collection-api';
 export { PermissionChecker, PermissionError } from './permissions';
 export type { LocalAPIContext, CreateOptions, UpdateOptions } from './types';
-export { authToContext, requireAuth, systemContext } from './auth-helpers';
+export { authToContext, requireAuth, systemContext, actorOf } from './auth-helpers';
