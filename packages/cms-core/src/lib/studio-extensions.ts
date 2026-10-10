@@ -94,6 +94,12 @@ export interface StudioExtensions {
 	 * fixed string.
 	 */
 	scriptNonce?: string | (() => string | undefined);
+	/**
+	 * The order of the sidebar's document type groups, by group name. Groups
+	 * not named keep their first-seen order after the named ones; ungrouped
+	 * types always come first.
+	 */
+	groupOrder?: readonly string[];
 }
 
 let current: StudioExtensions = {};
@@ -110,6 +116,25 @@ export function studioExtensions(): Readonly<StudioExtensions> {
 export function studioScriptNonce(): string | undefined {
 	const nonce = current.scriptNonce;
 	return typeof nonce === 'function' ? nonce() : nonce;
+}
+
+/**
+ * `groups` (as the sidebar buckets them, the ungrouped `null` bucket among
+ * them) in the app's `groupOrder`: the ungrouped bucket first, then the named
+ * groups in the order given, then the rest in the order they came.
+ */
+export function orderedGroups<Group extends { name: string | null }>(
+	groups: readonly Group[],
+	order: readonly string[] | undefined
+): Group[] {
+	if (!order?.length) return [...groups];
+	const rank = (group: Group): number => {
+		if (group.name === null) return -1;
+		const index = order.indexOf(group.name);
+		return index === -1 ? order.length : index;
+	};
+	// Array.prototype.sort is stable, so unranked groups keep their first-seen order.
+	return [...groups].sort((a, b) => rank(a) - rank(b));
 }
 
 /** The orderings `listOrderings` adds for `type`, none when it adds none. */
