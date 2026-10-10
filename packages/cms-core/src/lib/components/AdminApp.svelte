@@ -1,5 +1,6 @@
 <script lang="ts">
 	import * as i18n from '../i18n/index';
+	import { studioExtensions } from '../studio-extensions';
 	/**
 	 * AdminApp - Complete CMS Admin Interface
 	 * A packaged, reusable Sanity-style admin UI
@@ -43,6 +44,7 @@
 		ArrowDownUp,
 		ChevronLeft,
 		ChevronRight,
+		Plus,
 		Search,
 		X
 	} from '@lucide/svelte';
@@ -1148,6 +1150,7 @@
 
 					const title = resolvePreviewTitle(doc, schema);
 					const subtitle = resolvePreviewSubtitle(doc, schema) ?? undefined;
+					const badge = studioExtensions().listBadge?.(docType, doc.id) ?? null;
 
 					// Metadata is in _meta field (from LocalAPI transformation)
 					const meta = doc._meta || {};
@@ -1156,6 +1159,8 @@
 						id: doc.id,
 						title,
 						subtitle,
+						slug: doc.slug,
+						badge,
 						status: meta.status || 'draft',
 						publishedAt: meta.publishedAt ? new Date(meta.publishedAt) : null,
 						updatedAt: meta.updatedAt ? new Date(meta.updatedAt) : null,
@@ -1494,27 +1499,38 @@
 														<Search class="h-4 w-4" />
 													</Button>
 													{#if perms.can('document.create') && !schemas.find((s) => s.name === selectedDocumentType)?.singleton}
-														<Button
-															size="sm"
-															variant="ghost"
-															onclick={() => navigateToCreateDocument(selectedDocumentType!)}
-															class="h-8 w-8 p-0"
-															title={i18n.t('Create new document')}
-														>
-															<svg
-																class="h-4 w-4"
-																fill="none"
-																viewBox="0 0 24 24"
-																stroke="currentColor"
+														{#if studioExtensions().createLabel?.(selectedDocumentType)}
+															<Button
+																size="sm"
+																onclick={() => navigateToCreateDocument(selectedDocumentType!)}
+																class="h-8 gap-1.5 px-3"
 															>
-																<path
-																	stroke-linecap="round"
-																	stroke-linejoin="round"
-																	stroke-width="2"
-																	d="M12 4v16m8-8H4"
-																/>
-															</svg>
-														</Button>
+																<Plus class="h-3.5 w-3.5" aria-hidden="true" />
+																{studioExtensions().createLabel?.(selectedDocumentType)}
+															</Button>
+														{:else}
+															<Button
+																size="sm"
+																variant="ghost"
+																onclick={() => navigateToCreateDocument(selectedDocumentType!)}
+																class="h-8 w-8 p-0"
+																title={i18n.t('Create new document')}
+															>
+																<svg
+																	class="h-4 w-4"
+																	fill="none"
+																	viewBox="0 0 24 24"
+																	stroke="currentColor"
+																>
+																	<path
+																		stroke-linecap="round"
+																		stroke-linejoin="round"
+																		stroke-width="2"
+																		d="M12 4v16m8-8H4"
+																	/>
+																</svg>
+															</Button>
+														{/if}
 													{/if}
 
 													<!-- Sorting Menu Popover -->
@@ -1664,6 +1680,14 @@
 												</div>
 											{:else if loading}
 												<DocumentsSkeleton />
+											{:else if documentsList.length > 0 && selectedDocumentType && studioExtensions().documentLists?.[selectedDocumentType]}
+												{@const DocumentList =
+													studioExtensions().documentLists![selectedDocumentType]}
+												<DocumentList
+													rows={documentsList}
+													activeId={editingDocumentId}
+													onselect={(id) => navigateToEditDocument(id, selectedDocumentType!)}
+												/>
 											{:else if documentsList.length > 0}
 												{#each documentsList as doc, index (index)}
 													{@const isActive = editingDocumentId === doc.id}
@@ -1751,13 +1775,15 @@
 													{:else}
 														<h3 class="mb-2 font-medium">{i18n.t('No documents found')}</h3>
 														<p class="text-muted-foreground text-sm">
-															{i18n.t(
-																'Create your first {type} document using the + button above',
-																{
-																	type: selectedDocumentType,
-																	typeLabel: typeLabel(selectedDocumentType)
-																}
-															)}
+															{(selectedDocumentType &&
+																studioExtensions().emptyListText?.(selectedDocumentType)) ||
+																i18n.t(
+																	'Create your first {type} document using the + button above',
+																	{
+																		type: selectedDocumentType,
+																		typeLabel: typeLabel(selectedDocumentType)
+																	}
+																)}
 														</p>
 													{/if}
 												</div>
