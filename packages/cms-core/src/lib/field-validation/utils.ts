@@ -137,7 +137,7 @@ export function validateValueShape(field: Field, value: unknown): string | null 
 export const DEFAULT_MAX_NESTING_DEPTH = 10;
 
 /** The validation context's view of the schema registry and the current nesting level. */
-export interface ValidationContext {
+export interface DocumentValidationContext {
 	/** Every registered schema, so a named `of` type resolves to its fields. */
 	schemas?: readonly SchemaType[];
 	/** Nesting level of the fields being validated; 0 at the document root. */
@@ -147,18 +147,18 @@ export interface ValidationContext {
 	[key: string]: unknown;
 }
 
-function nestingDepth(context: ValidationContext | undefined): number {
+function nestingDepth(context: DocumentValidationContext | undefined): number {
 	return typeof context?.depth === 'number' ? context.depth : 0;
 }
 
-function deeper(context: ValidationContext | undefined): ValidationContext {
+function deeper(context: DocumentValidationContext | undefined): DocumentValidationContext {
 	return { ...context, depth: nestingDepth(context) + 1 };
 }
 
 /** A registered type by name, for an `of` entry that names one instead of inlining `fields`. */
 function resolveNamedType(
 	typeName: string,
-	context: ValidationContext | undefined
+	context: DocumentValidationContext | undefined
 ): SchemaType | undefined {
 	return context?.schemas?.find((schema) => schema.name === typeName);
 }
@@ -695,7 +695,7 @@ async function validateFieldSet(
 export async function validateDocumentData(
 	schema: SchemaType,
 	data: Record<string, any>,
-	context: ValidationContext = {}
+	context: DocumentValidationContext = {}
 ): Promise<DocumentValidationResult> {
 	cmsLogger.debug('[validateDocumentData]', 'Starting validation', {
 		schemaName: schema.name,
