@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
+import { requireSessionAuth } from '../require-session';
 import { cmsLogger } from '../../../utils/logger';
 import { updateUserPreferencesRequest } from '../../../api/schemas/user';
 import type { AphexEnv } from '../index';
@@ -38,6 +39,7 @@ export const userPreferencesRouter: Hono<AphexEnv> = new Hono<AphexEnv>()
 	})
 	.patch(
 		'/cms-preference',
+		requireSessionAuth,
 		zValidator('json', updateUserPreferencesRequest, (result, c) => {
 			if (!result.success) {
 				return c.json(
