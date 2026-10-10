@@ -84,7 +84,17 @@ app.all('*', async (c) => {
 	return response ?? c.body(null, 202);
 });
 
-const handle: RequestHandler = ({ request, locals }) => app.fetch(request, { locals });
+// Every answer is for one authenticated caller and reflects the content as it
+// is now: nothing between the server and the client may keep a copy.
+const NO_STORE = 'no-store';
+
+const handle: RequestHandler = async ({ request, locals }) => {
+	const response = await app.fetch(request, { locals });
+	if (response.headers.has('cache-control')) return response;
+	const headers = new Headers(response.headers);
+	headers.set('cache-control', NO_STORE);
+	return new Response(response.body, { status: response.status, headers });
+};
 
 export const POST = handle;
 export const GET = handle;
