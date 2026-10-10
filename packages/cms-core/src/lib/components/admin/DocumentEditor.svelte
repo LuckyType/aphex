@@ -1,5 +1,6 @@
 <script lang="ts">
 	import * as i18n from '../../i18n/index';
+	import { studioExtensions, type StudioPublishRefusal } from '../../studio-extensions';
 	import { isFieldVisible } from '../../schema-utils/visibility';
 	import { tick } from 'svelte';
 	import { Button } from '@aphexcms/ui/shadcn/button';
@@ -1605,6 +1606,7 @@
 		saving = true;
 		saveError = null;
 
+		let refusal: StudioPublishRefusal | null = null;
 		try {
 			const response = await documents.publish(documentId, {
 				expectedRevision: fullDocument?._meta?.revision as number | undefined
@@ -1643,6 +1645,13 @@
 				saveError = i18n.t(
 					'Conflict: this document was updated by someone else. Reload the page to continue editing.'
 				);
+			} else if (
+				err instanceof ApiError &&
+				(refusal =
+					studioExtensions().describePublishRefusal?.(err.detail, documentData, schema) ?? null)
+			) {
+				saveError = refusal.text;
+				toast.error(refusal.heading);
 			} else {
 				toast.error(err instanceof ApiError ? err.message : i18n.t('Failed to publish document'));
 
@@ -2345,7 +2354,12 @@
 				<div class="flex flex-col gap-8 p-4 lg:p-6">
 					{#if saveError}
 						<div class="bg-destructive/10 border-destructive/20 rounded-md border p-3">
-							<p class="text-destructive text-sm">{saveError}</p>
+							{#if studioExtensions().ErrorBox}
+								{@const ErrorBox = studioExtensions().ErrorBox!}
+								<ErrorBox message={saveError} />
+							{:else}
+								<p class="text-destructive text-sm">{saveError}</p>
+							{/if}
 						</div>
 					{/if}
 
