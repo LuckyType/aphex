@@ -11,12 +11,45 @@ export interface StudioListBadge {
 	description: string;
 }
 
-/** What `describePublishRefusal` turns a refused publish into. */
+/**
+ * What `describePublishRefusal` turns a refused publish into. An app may add
+ * its own keys (the problems told by field, a way to each one): `ErrorBox`
+ * receives the whole object as `refusal`, so nothing has to be re-parsed
+ * from `text`.
+ */
 export interface StudioPublishRefusal {
 	/** The toast's text. */
 	heading: string;
 	/** The editor's error text, which `ErrorBox` receives as `message`. */
 	text: string;
+	[extra: string]: unknown;
+}
+
+/** What `ErrorBox` receives. */
+export interface StudioErrorBoxProps {
+	/** The editor's error text. */
+	message: string;
+	/**
+	 * The refusal `describePublishRefusal` returned for this error, or null
+	 * when the error is not a described refusal (a failed save, a conflict).
+	 */
+	refusal: StudioPublishRefusal | null;
+}
+
+/**
+ * How the Studio lists one document type: the component that replaces the
+ * list, and the words around it. Any part may be left out.
+ */
+export interface StudioDocumentList {
+	/**
+	 * Replaces the document list for the type. The list's header, search and
+	 * paging stay cms-core's.
+	 */
+	component?: Component<StudioDocumentListProps>;
+	/** The label of the create button, in place of the bare plus icon. */
+	createLabel?: () => string;
+	/** The hint the empty list shows, in place of the generic one. */
+	emptyText?: () => string;
 }
 
 /** One document as the document list shows it. */
@@ -60,19 +93,15 @@ export interface StudioExtensions {
 	/** A badge beside a document's title in the document list. */
 	listBadge?: (type: string, id: string) => StudioListBadge | null;
 	/**
-	 * A component that replaces the document list for a type. The list's
-	 * header, search and paging stay cms-core's.
+	 * Per document type, the list that replaces cms-core's and the words
+	 * around it. A bare component is the list with the generic words.
 	 */
-	documentLists?: Readonly<Record<string, Component<StudioDocumentListProps>>>;
+	documentLists?: Readonly<Record<string, Component<StudioDocumentListProps> | StudioDocumentList>>;
 	/**
 	 * Orders the app adds to a type's list. The first one is selected when
 	 * the list for that type opens.
 	 */
 	listOrderings?: (type: string) => readonly StudioListOrdering[] | null;
-	/** The label of the create button for a type, in place of the bare plus icon. */
-	createLabel?: (type: string) => string | null;
-	/** The hint an empty document list shows for a type, in place of the generic one. */
-	emptyListText?: (type: string) => string | null;
 	/**
 	 * Turns the server's refusal of a publish (`ApiError.detail`) into the
 	 * editor's error text, or returns null to show the refusal as it came.
@@ -82,8 +111,11 @@ export interface StudioExtensions {
 		document: unknown,
 		schema: { fields?: readonly Field[] } | null | undefined
 	) => StudioPublishRefusal | null;
-	/** Renders the document editor's error box in place of the plain message. */
-	ErrorBox?: Component<{ message: string }>;
+	/**
+	 * Renders the document editor's error box in place of the plain message,
+	 * with the described refusal beside the text when the error is one.
+	 */
+	ErrorBox?: Component<StudioErrorBoxProps>;
 	/** The text of the error box under a field, in place of the rule engine's message. */
 	fieldErrorText?: (message: string, field: Field, value: unknown) => string;
 	/**
@@ -135,6 +167,19 @@ export function orderedGroups<Group extends { name: string | null }>(
 	};
 	// Array.prototype.sort is stable, so unranked groups keep their first-seen order.
 	return [...groups].sort((a, b) => rank(a) - rank(b));
+}
+
+/**
+ * The app's list for `type`, normalized: a bare component becomes
+ * `{ component }`, and a type the app did not name gets an empty entry.
+ */
+export function studioDocumentList(type: string | null | undefined): StudioDocumentList {
+	const entry = type ? current.documentLists?.[type] : undefined;
+	if (!entry) return {};
+	return typeof entry === 'function' ||
+		!('component' in entry || 'createLabel' in entry || 'emptyText' in entry)
+		? { component: entry as Component<StudioDocumentListProps> }
+		: (entry as StudioDocumentList);
 }
 
 /** The orderings `listOrderings` adds for `type`, none when it adds none. */
