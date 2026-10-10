@@ -109,23 +109,6 @@ export interface StudioDocumentTree {
 	component: Component<StudioDocumentTreeProps>;
 }
 
-/**
- * An order the app works out itself, for an order no stored field holds
- * (say, the order a site's menu lists the documents in). Offered in the
- * list's sort menu above the schema's orderings.
- */
-export interface StudioListOrdering {
-	/** Unique among the type's orderings; must not end in `Asc` or `Desc`. */
-	name: string;
-	/** The menu entry's text, translated like a schema ordering's title. */
-	title: string;
-	/**
-	 * Returns `rows` in this order. It receives every document of the type
-	 * that matches the list's search, so paging follows the order.
-	 */
-	sort: (rows: readonly StudioDocumentListRow[]) => StudioDocumentListRow[];
-}
-
 export interface StudioExtensions {
 	/** A badge beside a document's title in the document list. */
 	listBadge?: (type: string, id: string) => StudioListBadge | null;
@@ -140,11 +123,6 @@ export interface StudioExtensions {
 	 * one tree; the first that names it wins.
 	 */
 	documentTrees?: readonly StudioDocumentTree[];
-	/**
-	 * Orders the app adds to a type's list. The first one is selected when
-	 * the list for that type opens.
-	 */
-	listOrderings?: (type: string) => readonly StudioListOrdering[] | null;
 	/**
 	 * Turns the server's refusal of a publish (`ApiError.detail`) into the
 	 * editor's error text, or returns null to show the refusal as it came.
@@ -223,33 +201,6 @@ export function studioDocumentList(type: string | null | undefined): StudioDocum
 		!('component' in entry || 'createLabel' in entry || 'emptyText' in entry)
 		? { component: entry as Component<StudioDocumentListProps> }
 		: (entry as StudioDocumentList);
-}
-
-/** The orderings `listOrderings` adds for `type`, none when it adds none. */
-export function studioListOrderings(
-	type: string | null | undefined
-): readonly StudioListOrdering[] {
-	return (type && current.listOrderings?.(type)) || [];
-}
-
-/**
- * One page of `rows` in `ordering`'s order, with the paging the list shows
- * for it: the rows are every document, so the app's order runs across
- * pages rather than inside each one.
- */
-export function orderedListPage<Row extends StudioDocumentListRow>(
-	rows: readonly Row[],
-	ordering: StudioListOrdering,
-	page: number,
-	pageSize: number
-): { rows: Row[]; total: number; totalPages: number } {
-	const sorted = ordering.sort(rows) as Row[];
-	const start = (page - 1) * pageSize;
-	return {
-		rows: sorted.slice(start, start + pageSize),
-		total: sorted.length,
-		totalPages: Math.max(1, Math.ceil(sorted.length / pageSize))
-	};
 }
 
 /** The tree that shows `type`, or null when the type has its ordinary list. */
