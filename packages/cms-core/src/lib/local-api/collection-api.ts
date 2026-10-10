@@ -32,6 +32,7 @@ import {
 	runDocumentPolicies,
 	DocumentPolicyError
 } from './policies';
+import { stripUnknownFields } from '../schema-utils/unknown-fields';
 import type { DocumentPolicies } from '../types/schemas';
 import { collectReferenceIds } from '../utils/reference-walk';
 import {
@@ -246,6 +247,16 @@ export class CollectionAPI<T = Document> {
 	 * registered object type is validated against that type's fields instead of
 	 * being skipped.
 	 */
+	/**
+	 * `data` as the type's `unknownFields` wants it: untouched under
+	 * `'reject'` (the validator refuses undeclared keys), without undeclared
+	 * keys under `'strip'`.
+	 */
+	private withKnownFields(data: Record<string, unknown>): Record<string, unknown> {
+		if (!('unknownFields' in this._schema) || this._schema.unknownFields !== 'strip') return data;
+		return stripUnknownFields(this._schema.fields, data, { schemas: this.schemaRegistry ?? [] });
+	}
+
 	private validationContext(): DocumentValidationContext {
 		return { schemas: this.schemaRegistry ?? [] };
 	}
@@ -711,13 +722,15 @@ export class CollectionAPI<T = Document> {
 		) as Omit<T, 'id' | '_meta'>;
 
 		// beforeValidate hooks: normalize/derive input before validation runs.
-		const hookedData = await runDocumentHooks(this._schema.hooks?.beforeValidate, {
-			data: filteredData as Record<string, unknown>,
-			operation: 'create',
-			originalDoc: null,
-			context: { organizationId: context.organizationId, userId: context.user?.id },
-			schema: this._schema
-		});
+		const hookedData = this.withKnownFields(
+			await runDocumentHooks(this._schema.hooks?.beforeValidate, {
+				data: filteredData as Record<string, unknown>,
+				operation: 'create',
+				originalDoc: null,
+				context: { organizationId: context.organizationId, userId: context.user?.id },
+				schema: this._schema
+			})
+		);
 
 		// Validate and normalize data (dates converted to ISO). The document context
 		// for cross-field validators is built inside validateDocumentData.
@@ -967,13 +980,15 @@ export class CollectionAPI<T = Document> {
 		const mergedData = { ...cleanedExisting, ...filteredData };
 
 		// beforeValidate hooks: normalize/derive input before validation runs.
-		const hookedData = await runDocumentHooks(this._schema.hooks?.beforeValidate, {
-			data: mergedData,
-			operation: 'update',
-			originalDoc: existingDoc.draftData ?? null,
-			context: { organizationId: context.organizationId, userId: context.user?.id },
-			schema: this._schema
-		});
+		const hookedData = this.withKnownFields(
+			await runDocumentHooks(this._schema.hooks?.beforeValidate, {
+				data: mergedData,
+				operation: 'update',
+				originalDoc: existingDoc.draftData ?? null,
+				context: { organizationId: context.organizationId, userId: context.user?.id },
+				schema: this._schema
+			})
+		);
 
 		// Validate and normalize the merged data
 		const validationResult = await validateDocumentData(
