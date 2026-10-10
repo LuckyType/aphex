@@ -17,6 +17,8 @@
 		type ValidationError
 	} from '../../field-validation/utils';
 	import { isFieldVisible } from '../../schema-utils/visibility';
+	import { getSchemaContext } from '../../schema-context.svelte';
+	import type { SchemaType } from '../../types/index';
 	import { cmsLogger } from '../../utils/logger';
 	import { useFieldComponents, useFieldViews } from '../../admin/field-components.svelte';
 	import {
@@ -104,13 +106,24 @@
 	// Validation state for the wrapper (displays errors and status)
 	let validationErrors = $state<ValidationError[]>([]);
 
+	// The registered schemas, so an array item naming a registered object type
+	// (a type that holds itself) is validated here as the publish check does.
+	// Only provided inside the editor; elsewhere such items stay unchecked here.
+	let schemas: SchemaType[] | undefined;
+	try {
+		schemas = getSchemaContext();
+	} catch {
+		// No schema context: nothing to resolve named types against.
+	}
+
 	// Real-time validation for wrapper display
 	export async function performValidation(currentValue: any) {
 		validationErrors = []; // Clear previous errors
 		if (field.type === 'view') return;
 		// The context the publish check (validateDocumentData) gives, so a rule that
-		// reads `context.document` flags its field while editing too, not only on publish.
-		const context = { document: documentData ?? {} };
+		// reads `context.document` flags its field while editing too, not only on
+		// publish, and named array item types resolve through the same registry.
+		const context = { document: documentData ?? {}, schemas };
 
 		cmsLogger.debug(
 			'[SchemaField.performValidation]',
