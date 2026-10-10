@@ -60,6 +60,7 @@
 		documentTypes: Array<{ name: string; title: string; description?: string }>;
 		schemaError?: { message: string } | null;
 		title?: string;
+		tabTitle?: string;
 		graphqlSettings?: { endpoint: string; enableGraphiQL: boolean } | null;
 		isReadOnly?: boolean;
 		/**
@@ -92,6 +93,7 @@
 		documentTypes: documentTypesFromServer,
 		schemaError = null,
 		title = 'Aphex CMS',
+		tabTitle = undefined,
 		graphqlSettings = null,
 		isReadOnly = false,
 		capabilities = [],
@@ -1215,11 +1217,12 @@
 
 <svelte:head>
 	<title
-		>{activeTab.value === 'structure'
-			? i18n.t('Content')
-			: activeTab.value === 'media'
-				? i18n.t('Media')
-				: 'Vision'} - {title}</title
+		>{tabTitle ??
+			(activeTab.value === 'structure'
+				? i18n.t('Content')
+				: activeTab.value === 'media'
+					? i18n.t('Media')
+					: 'Vision')}{tabTitle ? '' : ` - ${title}`}</title
 	>
 </svelte:head>
 
