@@ -44,7 +44,8 @@
 		ArrowLeft,
 		CalendarClock,
 		X,
-		Lock
+		Lock,
+		Undo2
 	} from '@lucide/svelte';
 	import { stegaEncodeDocument } from '../../preview/stega.js';
 	import { collectAssetRefs, injectAssetData, type ResolvedAsset } from '../../preview/assets.js';
@@ -1684,6 +1685,63 @@
 		}
 	}
 
+	// Discard the draft: the server writes the published version back as the
+	// draft (the discarded edits stay in History), then the editor reloads it.
+	const canDiscardDraft = $derived(
+		!!documentId &&
+			canUpdate &&
+			perspective === 'draft' &&
+			fullDocument?._meta?.status === 'published' &&
+			hasUnpublishedContent
+	);
+
+	async function discardDraft() {
+		if (!documentId || saving || !canDiscardDraft) return;
+
+		const confirmDiscard = await confirmDialog({
+			title: i18n.t('Discard your changes?'),
+			description: i18n.t(
+				'The draft goes back to the published version. Your changes stay in History.'
+			),
+			confirmText: i18n.t('Discard changes', undefined, 'confirm discard'),
+			variant: 'destructive'
+		});
+		if (!confirmDiscard) return;
+
+		// A pending autosave would write the discarded edits straight back.
+		if (autoSaveTimer) {
+			clearTimeout(autoSaveTimer);
+			autoSaveTimer = null;
+		}
+		saving = true;
+		saveError = null;
+
+		try {
+			const response = await documents.discardDraft(documentId, {
+				expectedRevision: fullDocument?._meta?.revision as number | undefined
+			});
+			if (!response.success) {
+				throw new Error(response.error || 'Failed to discard draft');
+			}
+			await loadDocumentData();
+			lastSaved = new Date();
+			publishedData = null;
+			notifyDocumentChanged(documentId);
+			if (showVersionHistory) loadVersions();
+			toast.success(i18n.t('Changes discarded'));
+		} catch (err) {
+			if (err instanceof ApiError && err.status === 409) {
+				toast.error(
+					i18n.t('This document was changed elsewhere. Reload to see the latest version.')
+				);
+			} else {
+				toast.error(err instanceof ApiError ? err.message : i18n.t('Failed to discard changes'));
+			}
+		} finally {
+			saving = false;
+		}
+	}
+
 	async function unpublishDocument() {
 		if (!documentId || saving) return;
 
@@ -1958,6 +2016,19 @@
 					{/if}
 				</button>
 			</div>
+		{/if}
+
+		{#if canDiscardDraft}
+			<Button
+				variant="ghost"
+				size="sm"
+				class="text-muted-foreground h-7 cursor-pointer gap-1.5 px-2 text-xs"
+				onclick={discardDraft}
+				disabled={saving}
+			>
+				<Undo2 class="h-3.5 w-3.5" />
+				{i18n.t('Discard changes', undefined, 'discard draft')}
+			</Button>
 		{/if}
 
 		<!-- Plugin document actions (aphex/document/action), applicable to this type -->
