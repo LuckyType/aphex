@@ -30,6 +30,15 @@ import type { Field, FieldCondition, FieldVisibilityContext } from '../types/sch
  * follow the first one. Both are passed so a condition can reach either, but
  * sibling is the one to reach for.
  *
+ * ## Parent and app
+ *
+ * `parentData` is the object one level up from `siblingData` (undefined at the
+ * root), for a nested field that follows a choice on its parent. `app` is what
+ * the app registered with `configureFieldConditions({ context })`: facts no
+ * document holds, such as which segment the site serves. Both sides of the
+ * single-source rule below read the same setup, so configure it where the
+ * server boots and where the Studio mounts.
+ *
  * ## Hidden means not validated
  *
  * A hidden field is skipped by validation as well as by the renderer. Otherwise
@@ -53,6 +62,40 @@ import type { Field, FieldCondition, FieldVisibilityContext } from '../types/sch
 export type { FieldCondition, FieldVisibilityContext };
 
 /**
+ * What the app contributes to every `hidden` predicate.
+ *
+ * `context` is read on each call, so it can answer from a per-request or
+ * per-process source. Set it once where the app boots on the server and once
+ * where the Studio mounts: the validator and the renderer each read it from
+ * their own module instance, and a fact only one side knows makes a field
+ * that is hidden in the editor but still validated, or the reverse.
+ */
+export interface FieldConditionSetup {
+	/** Facts every condition receives as `app`. Called on each evaluation. */
+	context?: () => Record<string, unknown>;
+}
+
+let setup: FieldConditionSetup = {};
+
+export function configureFieldConditions(next: FieldConditionSetup): void {
+	setup = next;
+}
+
+function appContext(): Record<string, unknown> {
+	try {
+		return setup.context?.() ?? {};
+	} catch {
+		return {};
+	}
+}
+
+/** The scope around a field that its own object does not show. */
+export interface FieldVisibilityScope {
+	/** The object holding the field's owner; see `FieldVisibilityContext.parentData`. */
+	parentData?: Record<string, unknown>;
+}
+
+/**
  * Should this field be rendered and validated?
  *
  * The single source of truth for the answer, deliberately: the admin renderer and
@@ -66,14 +109,20 @@ export type { FieldCondition, FieldVisibilityContext };
 export function isFieldVisible(
 	field: Field,
 	siblingData: Record<string, unknown> | undefined,
-	documentData: Record<string, unknown> | undefined
+	documentData: Record<string, unknown> | undefined,
+	scope: FieldVisibilityScope = {}
 ): boolean {
 	const hidden = (field as { hidden?: FieldCondition }).hidden;
 	if (typeof hidden !== 'function') return true;
 
 	const sibling = siblingData ?? documentData ?? {};
 	try {
-		return !hidden({ siblingData: sibling, documentData: documentData ?? sibling });
+		return !hidden({
+			siblingData: sibling,
+			documentData: documentData ?? sibling,
+			parentData: scope.parentData,
+			app: appContext()
+		});
 	} catch {
 		return true;
 	}
