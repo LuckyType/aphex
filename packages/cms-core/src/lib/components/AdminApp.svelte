@@ -2,11 +2,9 @@
 	import * as i18n from '../i18n/index';
 	import {
 		orderedGroups,
-		orderedListPage,
 		studioDocumentTree,
 		studioExtensions,
-		studioDocumentList,
-		studioListOrderings
+		studioDocumentList
 	} from '../studio-extensions';
 	/**
 	 * AdminApp - Complete CMS Admin Interface
@@ -1146,51 +1144,6 @@
 		}, 300);
 	}
 
-	// The type the list last showed, so a type with app orderings opens on
-	// its first one and the next type does not inherit a name it lacks.
-	let listedType: string | null = null;
-
-	function selectListOrdering(docType: string) {
-		if (docType === listedType) return;
-		const leaving = studioListOrderings(listedType);
-		listedType = docType;
-		const first = studioListOrderings(docType)[0];
-		if (first) {
-			currentSortName = first.name;
-		} else if (leaving.some((ordering) => ordering.name === currentSortName)) {
-			currentSortName = 'updatedAtDesc';
-		}
-	}
-
-	function toListRow(doc: any, docType: string, schema: SchemaType | undefined) {
-		// With LocalAPI, data is already flattened at top level (not in draftData)
-		// The document itself IS the data, with _meta containing metadata
-
-		const title = resolvePreviewTitle(doc, schema);
-		const subtitle = resolvePreviewSubtitle(doc, schema) ?? undefined;
-		const badge = studioExtensions().listBadge?.(docType, doc.id) ?? null;
-
-		// Metadata is in _meta field (from LocalAPI transformation)
-		const meta = doc._meta || {};
-
-		return {
-			id: doc.id,
-			title,
-			subtitle,
-			slug: doc.slug,
-			badge,
-			status: meta.status || 'draft',
-			publishedAt: meta.publishedAt ? new Date(meta.publishedAt) : null,
-			updatedAt: meta.updatedAt ? new Date(meta.updatedAt) : null,
-			createdAt: meta.createdAt ? new Date(meta.createdAt) : null,
-			// hasChanges is tracked via publishedHash comparison
-			// If publishedHash is null, it's never been published or has unpublished changes
-			hasChanges: meta.status === 'published' && meta.publishedHash === null,
-			// Include organization info for multi-org view
-			organizationId: meta.organizationId || null
-		};
-	}
-
 	async function fetchDocuments(docType: string) {
 		// No type = nothing to list (e.g. mid-navigation from a plugin tab before a
 		// type is selected). Bail quietly rather than hitting the API and toasting
@@ -1202,62 +1155,18 @@
 			untrack(() => treeChanges++);
 			return;
 		}
-		selectListOrdering(docType);
-		const appOrdering = studioListOrderings(docType).find(
-			(ordering) => ordering.name === currentSortName
-		);
-		cmsLogger.debug('[AdminApp]', 'FETCHING DOCUMENTS', {
-			sort: appOrdering?.name ?? sortString
-		});
+		cmsLogger.debug('[AdminApp]', 'FETCHING DOCUMENTS', { sort: sortString });
 		loading = true;
 		error = null;
 
 		try {
-			const schema = schemas.find((s) => s.name === docType);
-			const search = docSearchQuery.trim() || undefined;
-			const includeChildOrganizations = userPreferences?.includeChildOrganizations ?? false;
-
-			if (appOrdering) {
-				// The app's order is no stored field the API can sort by, so read
-				// every document and page through them here.
-				const all: any[] = [];
-				let page = 1;
-				let lastPage = 1;
-				do {
-					const result = await documents.list({
-						docType,
-						page,
-						pageSize: 200,
-						includeChildOrganizations,
-						search
-					});
-					if (!result.success || !result.data) {
-						throw new Error(result.error || 'Failed to fetch documents');
-					}
-					all.push(...result.data);
-					lastPage = result.pagination?.totalPages ?? 1;
-					page += 1;
-				} while (page <= lastPage);
-
-				const listed = orderedListPage(
-					all.map((doc) => toListRow(doc, docType, schema)),
-					appOrdering,
-					docCurrentPage,
-					docPageSize
-				);
-				docTotalPages = listed.totalPages;
-				docTotalDocs = listed.total;
-				documentsList = listed.rows;
-				return;
-			}
-
 			const result = await documents.list({
 				docType,
 				page: docCurrentPage,
 				pageSize: docPageSize,
-				includeChildOrganizations,
+				includeChildOrganizations: userPreferences?.includeChildOrganizations ?? false,
 				sort: sortString,
-				search
+				search: docSearchQuery.trim() || undefined
 			});
 
 			if (result.success && result.data) {
@@ -1269,7 +1178,37 @@
 					docTotalPages = 1;
 					docTotalDocs = result.data.length;
 				}
-				documentsList = result.data.map((doc: any) => toListRow(doc, docType, schema));
+				// Find schema for preview config
+				const schema = schemas.find((s) => s.name === docType);
+
+				documentsList = result.data.map((doc: any) => {
+					// With LocalAPI, data is already flattened at top level (not in draftData)
+					// The document itself IS the data, with _meta containing metadata
+
+					const title = resolvePreviewTitle(doc, schema);
+					const subtitle = resolvePreviewSubtitle(doc, schema) ?? undefined;
+					const badge = studioExtensions().listBadge?.(docType, doc.id) ?? null;
+
+					// Metadata is in _meta field (from LocalAPI transformation)
+					const meta = doc._meta || {};
+
+					return {
+						id: doc.id,
+						title,
+						subtitle,
+						slug: doc.slug,
+						badge,
+						status: meta.status || 'draft',
+						publishedAt: meta.publishedAt ? new Date(meta.publishedAt) : null,
+						updatedAt: meta.updatedAt ? new Date(meta.updatedAt) : null,
+						createdAt: meta.createdAt ? new Date(meta.createdAt) : null,
+						// hasChanges is tracked via publishedHash comparison
+						// If publishedHash is null, it's never been published or has unpublished changes
+						hasChanges: meta.status === 'published' && meta.publishedHash === null,
+						// Include organization info for multi-org view
+						organizationId: meta.organizationId || null
+					};
+				});
 			} else {
 				throw new Error(result.error || 'Failed to fetch documents');
 			}
@@ -1665,26 +1604,6 @@
 																{i18n.t('Sort by')}
 															</div>
 															<div class="flex flex-col gap-0.5">
-																{#each studioListOrderings(selectedDocumentType) as ordering (ordering.name)}
-																	{@const isActive = currentSortName === ordering.name}
-																	<button
-																		onclick={async () => {
-																			currentSortName = ordering.name;
-																			if (selectedDocumentType) {
-																				docCurrentPage = 1;
-																				await fetchDocuments(selectedDocumentType);
-																			}
-																		}}
-																		aria-pressed={isActive}
-																		class="hover:bg-muted flex items-center justify-between rounded px-2 py-2 text-left text-sm transition-colors {isActive
-																			? 'bg-muted'
-																			: ''}"
-																	>
-																		<span class={isActive ? 'font-medium' : ''}>
-																			{i18n.label(ordering.title)}
-																		</span>
-																	</button>
-																{/each}
 																{#each availableOrderings as ordering (ordering.name)}
 																	{@const fieldName = ordering.by[0]?.field}
 																	{@const baseName = ordering.name
