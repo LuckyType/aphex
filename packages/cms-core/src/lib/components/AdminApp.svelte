@@ -27,7 +27,7 @@
 	import { setAdminNav } from '../admin/nav.svelte';
 	import type { Component } from 'svelte';
 	import { tick } from 'svelte';
-	import { setFieldComponents } from '../admin/field-components.svelte';
+	import { setFieldComponents, setFieldViews } from '../admin/field-components.svelte';
 	import { setBlockPreviews, type BlockPreviewProps } from '../admin/block-previews.svelte';
 	import AdminSlot from './admin/AdminSlot.svelte';
 	import type { UserSessionPreferences } from '../types/organization';
@@ -130,6 +130,7 @@
 	// Publish plugin field-input widgets so SchemaField can swap them in for a
 	// field's `input` key (falling back to the built-in renderer).
 	setFieldComponents((input) => partResolver.fieldComponent(input)?.component);
+	setFieldViews((input) => partResolver.fieldView(input)?.component);
 	// Inline block previews come from the app (presentation is app-owned).
 	setBlockPreviews((type) => blockPreviews[type]);
 

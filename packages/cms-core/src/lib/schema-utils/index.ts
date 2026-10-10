@@ -6,4 +6,5 @@ export * from './settings';
 export * from './utils';
 export * from './validator';
 export * from './visibility';
+export * from './view-fields';
 export * from './singleton';

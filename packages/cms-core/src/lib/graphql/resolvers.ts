@@ -17,6 +17,7 @@ function normalizeDocumentFields(
 	const normalized = { ...data };
 
 	schemaType.fields.forEach((field: Field) => {
+		if (field.type === 'view') return;
 		const fieldValue = normalized[field.name];
 
 		// Normalize null/undefined values to defaults based on field type

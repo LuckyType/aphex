@@ -3,6 +3,7 @@
  * Generates TypeScript types from schema definitions with module augmentation
  */
 import type { SchemaType, Field } from './types/schemas';
+import { storedFields } from './schema-utils/view-fields';
 import type { CMSPlugin } from './plugins/types';
 import { createPartResolver } from './plugins/resolver';
 import { isFieldRequired } from './field-validation/utils';
@@ -120,7 +121,7 @@ function mapFieldTypeToTS(
 			// itself an array item, prepend the runtime-only `_key?` and
 			// `_type?` discriminator props.
 			const arrayMeta = inArray ? '  _key?: string;\n  _type?: string;\n' : '';
-			const props = field.fields
+			const props = storedFields(field.fields)
 				.map((f) => {
 					const tsType = mapFieldTypeToTS(f, schemaMap, { resolved });
 					const optional = isFieldOptional(f) ? '?' : '';
@@ -386,7 +387,7 @@ function generateInterface(
 	blockContentFields?: BlockContentFieldInfo[]
 ): string {
 	const interfaceName = toPascalCase(schema.name) + (resolved ? 'Resolved' : '');
-	const fields = schema.fields
+	const fields = storedFields(schema.fields)
 		.map((field) => {
 			const tsType = mapFieldTypeToTS(field, schemaMap, {
 				resolved,

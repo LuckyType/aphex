@@ -1,5 +1,6 @@
 import type { SchemaType, Field, ArrayField, ObjectField, ReferenceField } from '../types/schemas';
 import { toPascalCase, toCamelCase } from '../utils/string-case';
+import { storedFields } from '../schema-utils/view-fields';
 
 function generateGraphQLField(field: Field, schemaTypes: SchemaType[], parentName = ''): string {
 	const nullability = isFieldRequired(field) ? '!' : '';
@@ -98,7 +99,7 @@ function isFieldRequired(field: Field): boolean {
 
 function generateObjectType(schemaType: SchemaType, allSchemaTypes: SchemaType[]): string {
 	const typeName = toPascalCase(schemaType.name);
-	const fields = schemaType.fields
+	const fields = storedFields(schemaType.fields)
 		.map((field) => generateGraphQLField(field, allSchemaTypes, schemaType.name))
 		.join('\n');
 
@@ -109,7 +110,7 @@ ${fields}
 
 function generateDocumentType(schemaType: SchemaType, allSchemaTypes: SchemaType[]): string {
 	const typeName = toPascalCase(schemaType.name);
-	const customFields = schemaType.fields
+	const customFields = storedFields(schemaType.fields)
 		.map((field) => generateGraphQLField(field, allSchemaTypes, schemaType.name))
 		.join('\n');
 
@@ -132,7 +133,7 @@ function generateInlineObjectTypes(schemaTypes: SchemaType[]): string {
 			if (field.type === 'object' && (field as ObjectField).fields) {
 				const objectField = field as ObjectField;
 				const typeName = toPascalCase(`${parentName}${field.name}Object`);
-				const fieldDefs = objectField.fields
+				const fieldDefs = storedFields(objectField.fields)
 					.map((f) => generateGraphQLField(f, schemaTypes, `${parentName}${field.name}`))
 					.join('\n');
 
@@ -223,7 +224,7 @@ function generateWhereInputType(schemaType: SchemaType, _allSchemaTypes: SchemaT
 	// Generate field filters
 	const fieldFilters: string[] = [];
 
-	schemaType.fields.forEach((field) => {
+	storedFields(schemaType.fields).forEach((field) => {
 		const filterType = getFilterType(field);
 		if (filterType) {
 			fieldFilters.push(`  ${field.name}: ${filterType}`);
@@ -273,7 +274,7 @@ function generateDataInputType(schemaType: SchemaType, allSchemaTypes: SchemaTyp
 
 	const fields: string[] = [];
 
-	schemaType.fields.forEach((field) => {
+	storedFields(schemaType.fields).forEach((field) => {
 		const inputFieldType = getInputFieldType(field, allSchemaTypes, schemaType.name);
 		if (inputFieldType) {
 			const required = isFieldRequired(field) ? '!' : '';

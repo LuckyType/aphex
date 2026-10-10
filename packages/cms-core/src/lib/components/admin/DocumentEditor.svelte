@@ -1275,6 +1275,8 @@
 		const initialData: Record<string, any> = {};
 
 		for (const field of schema.fields) {
+			// A view slot holds no value, so a new document gets no key for it.
+			if (field.type === 'view') continue;
 			if ('initialValue' in field && field.initialValue !== undefined) {
 				// Resolve initialValue if it's a function
 				if (typeof field.initialValue === 'function') {

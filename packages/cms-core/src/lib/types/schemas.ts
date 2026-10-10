@@ -92,6 +92,7 @@ export interface FieldTypeMap {
 	reference: ReferenceField;
 	date: DateField;
 	datetime: DateTimeField;
+	view: ViewField;
 }
 
 export type FieldType = keyof FieldTypeMap;
@@ -349,6 +350,23 @@ export interface DateField extends BaseField {
 	initialValue?: string | (() => string | Promise<string>);
 }
 
+/**
+ * A display slot in the form that holds no value: a preview, a usage summary,
+ * a generated file's download, a line of help computed from its neighbours.
+ *
+ * The slot is rendered by the `aphex/field/view` part whose `input` matches,
+ * with the document, its own object and the parent object as props, but no
+ * value and no `onUpdate`. The server treats the name as undeclared data: a
+ * write carrying a value under it is refused as structural, so the stored
+ * document never gains a key for it. Validation, the generated types, the
+ * GraphQL and OpenAPI schemas and the new-document defaults all skip it.
+ */
+export interface ViewField extends BaseField {
+	type: 'view';
+	/** The `aphex/field/view` part that renders this slot. */
+	input: string;
+}
+
 export interface DateTimeField extends BaseField {
 	type: 'datetime';
 	options?: {
@@ -558,7 +576,7 @@ export type FieldTSType<F extends Field> = F['type'] extends
  * Powered by {@link defineType}, which captures the exact `fields` literal.
  */
 export type InferFields<F extends readonly Field[]> = {
-	[K in F[number] as K['name']]?: FieldTSType<K>;
+	[K in F[number] as K['type'] extends 'view' ? never : K['name']]?: FieldTSType<K>;
 };
 
 /**
