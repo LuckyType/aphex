@@ -13,7 +13,7 @@ import {
 	DOCUMENT_PUBLISH_JOB,
 	DOCUMENT_UNPUBLISH_JOB
 } from '../src/lib/jobs/document-jobs';
-import type { LocalAPI } from '../src/lib/local-api/index';
+import { actorOf, type LocalAPI, type LocalAPIContext } from '../src/lib/local-api/index';
 import type { Job } from '../src/lib/types/events';
 
 function makeJob(payload: unknown): Job {
@@ -62,6 +62,23 @@ describe('createDocumentJobHandlers', () => {
 		expect(id).toBe('doc-1');
 		// System context: scoped to the job's org, RLS overridden.
 		expect(ctx).toMatchObject({ organizationId: 'org-1', overrideAccess: true });
+	});
+
+	it('runs a scheduled publish for the person who scheduled it', async () => {
+		const publish = vi.fn(async () => null);
+		const localAPI = fakeLocalAPI({ publish, unpublish: vi.fn() });
+		const handlers = createDocumentJobHandlers({ localAPI });
+
+		await handlers[DOCUMENT_PUBLISH_JOB]!({
+			job: { ...makeJob({ documentId: 'doc-1', documentType: 'page' }), createdBy: 'user-9' },
+			databaseAdapter: {} as never,
+			logger: {} as never
+		});
+
+		const [ctx] = publish.mock.calls[0]!;
+		// Still the system (no permission re-check), but attributed to the scheduler.
+		expect(ctx).toMatchObject({ organizationId: 'org-1', overrideAccess: true, actorId: 'user-9' });
+		expect(actorOf(ctx as LocalAPIContext)).toBe('user-9');
 	});
 
 	it('unpublish handler routes to unpublish', async () => {

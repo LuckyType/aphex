@@ -23,6 +23,14 @@ export interface LocalAPIContext {
 	user?: CMSUser;
 
 	/**
+	 * Who a write is attributed to when the context has no user of its own: a job that
+	 * runs for the person who scheduled it, a script acting for an operator. Read through
+	 * `actorOf(context)`; `user.id` wins when both are set. Attribution only, never a
+	 * permission grant.
+	 */
+	actorId?: string | null;
+
+	/**
 	 * Override access control and RLS
 	 * Set to true for system operations (seed scripts, cron jobs, admin tasks)
 	 * When true, uses the system database adapter that bypasses RLS
