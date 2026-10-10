@@ -22,6 +22,15 @@ async function hydrateCapabilities(auth: Auth, rolesService: RolesService): Prom
 	);
 }
 
+/**
+ * True for the admin UI and everything under it, with a segment boundary:
+ * `/adminx` or `/administration` is an app's own route, not the Studio, and
+ * must not be put behind the Studio's sign-in gate.
+ */
+export function isAdminPath(path: string): boolean {
+	return path === '/admin' || path.startsWith('/admin/');
+}
+
 export async function handleAuthHook(
 	event: RequestEvent,
 	config: CMSConfig,
@@ -32,7 +41,7 @@ export async function handleAuthHook(
 	const path = event.url.pathname;
 
 	// 1. Admin UI routes - require session authentication
-	if (path.startsWith('/admin')) {
+	if (isAdminPath(path)) {
 		try {
 			const session = await authProvider.requireSession(event.request, db);
 			await hydrateCapabilities(session, rolesService);
