@@ -13,7 +13,7 @@
 	import ImageField from './ImageField.svelte';
 	import ReferenceField from './ReferenceField.svelte';
 	import FieldInput from './FieldInput.svelte';
-	import { getDefaultValueForFieldType } from '../../../utils/field-defaults';
+	import { newArrayItem } from '../../../utils/field-defaults';
 	import { DragDropProvider } from '@dnd-kit/svelte';
 	import { createSortable, isSortable } from '@dnd-kit/svelte/sortable';
 	import { arrayMove } from '@dnd-kit/helpers';
@@ -422,21 +422,7 @@
 		const schema = getSchemaForType(selectedType);
 		if (!schema) return;
 
-		const newItem: Record<string, any> = { _type: selectedType, _key: generateKey() };
-
-		if (schema.fields) {
-			schema.fields.forEach((field) => {
-				if ('initialValue' in field && field.initialValue !== undefined) {
-					if (typeof field.initialValue !== 'function') {
-						newItem[field.name] = field.initialValue;
-					} else {
-						newItem[field.name] = getDefaultValueForFieldType(field.type);
-					}
-				} else {
-					newItem[field.name] = getDefaultValueForFieldType(field.type);
-				}
-			});
-		}
+		const newItem = newArrayItem(schema, selectedType, generateKey);
 
 		// Add to array immediately so document auto-save captures it
 		const newArray = [...keyedItems, newItem];
