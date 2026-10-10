@@ -1,4 +1,5 @@
 <script lang="ts">
+	import * as i18n from '../../i18n/index';
 	import { tick } from 'svelte';
 	import { Button } from '@aphexcms/ui/shadcn/button';
 	import { Badge } from '@aphexcms/ui/shadcn/badge';
@@ -1630,11 +1631,14 @@
 			}
 		} catch (err) {
 			if (err instanceof ApiError && err.status === 409) {
-				toast.error('This document was changed elsewhere. Reload to see the latest version.');
-				saveError =
-					'Conflict: this document was updated by someone else. Reload the page to continue editing.';
+				toast.error(
+					i18n.t('This document was changed elsewhere. Reload to see the latest version.')
+				);
+				saveError = i18n.t(
+					'Conflict: this document was updated by someone else. Reload the page to continue editing.'
+				);
 			} else {
-				toast.error(err instanceof ApiError ? err.message : 'Failed to publish document');
+				toast.error(err instanceof ApiError ? err.message : i18n.t('Failed to publish document'));
 
 				// Extract validation errors if present
 				if (err instanceof ApiError && err.response?.validationErrors) {
@@ -2479,7 +2483,7 @@
 
 						<!-- Viewport switcher -->
 						<div class="bg-muted flex items-center gap-0.5 rounded p-0.5">
-							{#each [{ v: 'desktop', Icon: Monitor, label: 'Desktop' }, { v: 'tablet', Icon: Tablet, label: 'Tablet' }, { v: 'mobile', Icon: Smartphone, label: 'Mobile' }] as { v, Icon, label } (v)}
+							{#each [{ v: 'desktop', Icon: Monitor, label: 'Desktop' }, { v: 'tablet', Icon: Tablet, label: 'Tablet' }, { v: 'mobile', Icon: Smartphone, label: i18n.t('Mobile') }] as { v, Icon, label } (v)}
 								<button
 									onclick={() => (previewViewport = v as typeof previewViewport)}
 									class="cursor-pointer rounded p-1 transition-colors {previewViewport === v
@@ -2725,7 +2729,7 @@
 								{/if}
 							</Button>
 						{:else if isViewingReadOnly}
-							<Badge variant="secondary" class="text-xs">Read Only</Badge>
+							<Badge variant="secondary" class="text-xs">{i18n.t('Read Only')}</Badge>
 						{/if}
 
 						{#if canDelete && !schema?.singleton}

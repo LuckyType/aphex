@@ -1,4 +1,5 @@
 <script lang="ts">
+	import * as i18n from '../i18n/index';
 	/**
 	 * AdminApp - Complete CMS Admin Interface
 	 * A packaged, reusable Sanity-style admin UI
@@ -1210,9 +1211,9 @@
 <svelte:head>
 	<title
 		>{activeTab.value === 'structure'
-			? 'Content'
+			? i18n.t('Content')
 			: activeTab.value === 'media'
-				? 'Media'
+				? i18n.t('Media')
 				: 'Vision'} - {title}</title
 	>
 </svelte:head>
@@ -1498,7 +1499,7 @@
 															variant="ghost"
 															onclick={() => navigateToCreateDocument(selectedDocumentType!)}
 															class="h-8 w-8 p-0"
-															title="Create new document"
+															title={i18n.t('Create new document')}
 														>
 															<svg
 																class="h-4 w-4"
@@ -1741,14 +1742,22 @@
 														{/if}
 													</div>
 													{#if docSearchQuery}
-														<h3 class="mb-2 font-medium">No matching documents</h3>
+														<h3 class="mb-2 font-medium">{i18n.t('No matching documents')}</h3>
 														<p class="text-muted-foreground text-sm">
-															No results for "{docSearchQuery}". Try a different search.
+															{i18n.t('No results for "{query}". Try a different search.', {
+																query: docSearchQuery
+															})}
 														</p>
 													{:else}
-														<h3 class="mb-2 font-medium">No documents found</h3>
+														<h3 class="mb-2 font-medium">{i18n.t('No documents found')}</h3>
 														<p class="text-muted-foreground text-sm">
-															Create your first {selectedDocumentType} document using the + button above
+															{i18n.t(
+																'Create your first {type} document using the + button above',
+																{
+																	type: selectedDocumentType,
+																	typeLabel: typeLabel(selectedDocumentType)
+																}
+															)}
 														</p>
 													{/if}
 												</div>
