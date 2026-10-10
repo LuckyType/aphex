@@ -58,7 +58,7 @@ export async function emitDocumentCreated(
 		organizationId,
 		type: documentCreated.type,
 		payload: documentCreated.parse({ documentId: doc.id, documentType: doc.type }),
-		createdBy: actorId ?? doc.updatedBy ?? doc.createdBy
+		createdBy: actorId ?? doc.updatedBy
 	});
 }
 
