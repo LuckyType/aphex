@@ -34,9 +34,9 @@ import { fieldWriteShape } from '../type-gen';
 import { hasCapability, resolveCapabilities } from '../types/capabilities';
 import { contentWorkspaceTools } from '../ai/content-workspace-tools';
 import {
+	answersInParts,
 	objectTypeNames,
 	objectTypePart,
-	schemaIsTooLarge,
 	stubbedItemTypes,
 	stubFields
 } from './schema-parts';
@@ -193,9 +193,9 @@ function buildWriteShapes(
 	return { writeShapes, shapeLegend };
 }
 
-// `get_schema` for a schema past SCHEMA_INLINE_LIMIT (schema-parts.ts).
+// `get_schema` for a schema answered in parts (schema-parts.ts `answersInParts`).
 function compactSchemaResult(schema: SchemaType, allSchemas: SchemaType[]): AgentToolResult {
-	const fields = stubFields(schema.fields);
+	const fields = stubFields(schema.fields, allSchemas);
 	const stubbed = { ...schema, fields };
 	const { writeShapes, shapeLegend } = buildWriteShapes(stubbed, allSchemas);
 	for (const field of fields) {
@@ -208,8 +208,8 @@ function compactSchemaResult(schema: SchemaType, allSchemas: SchemaType[]): Agen
 	const portableText = portableTextGuide(stubbed);
 	return ok({
 		schema: stubbed,
-		objectTypes: objectTypeNames(schema),
-		note: "Too large to answer whole: each array item type is a stub. Call get_schema with { collection, type } for one type's fields, write shapes and Portable Text guide.",
+		objectTypes: objectTypeNames(schema, allSchemas),
+		note: "Too large to answer whole, or naming a registered object type: each array item type is a stub. Call get_schema with { collection, type } for one type's fields, write shapes and Portable Text guide.",
 		writeShapes,
 		...(Object.keys(shapeLegend).length > 0 ? { shapeLegend } : {}),
 		...(portableText ? { portableText } : {})
@@ -222,10 +222,10 @@ function objectTypeResult(
 	typeName: string,
 	allSchemas: SchemaType[]
 ): AgentToolResult {
-	const part = objectTypePart(schema, typeName);
+	const part = objectTypePart(schema, typeName, allSchemas);
 	if (!part) {
 		return fail(
-			`'${typeName}' is not an array item type of ${schema.name}. Types: ${objectTypeNames(schema).join(', ')}`
+			`'${typeName}' is not an array item type of ${schema.name}. Types: ${objectTypeNames(schema, allSchemas).join(', ')}`
 		);
 	}
 	const asSchema = { ...schema, name: typeName, fields: part.definition.fields };
@@ -327,7 +327,7 @@ export const contentAgentTools: ContentAgentTool[] = [
 		definition: {
 			name: 'get_schema',
 			description:
-				"Get the field schema for one collection, so you know the shape to use when creating or updating its documents. Returns { schema, portableText? } — `portableText` is present when the type has rich-text (block) fields and links the open Portable Text spec plus this schema's allowed styles/marks/custom block types. A schema too large to answer whole (e.g. a page of nested blocks) comes back with `objectTypes` and each array item type as a stub: call again with `type` for one item type's fields.",
+				"Get the field schema for one collection, so you know the shape to use when creating or updating its documents. Returns { schema, portableText? } — `portableText` is present when the type has rich-text (block) fields and links the open Portable Text spec plus this schema's allowed styles/marks/custom block types. A schema too large to answer whole (e.g. a page of nested blocks), or one whose arrays name a registered object type, comes back with `objectTypes` and each array item type as a stub: call again with `type` for one item type's fields.",
 			mutates: false,
 			requiredCapabilities: [],
 			execution: 'server',
@@ -349,7 +349,8 @@ export const contentAgentTools: ContentAgentTool[] = [
 			if (!schema) return fail(`Unknown collection: ${collection}`);
 			const typeName = asString(args, 'type');
 			if (typeName) return objectTypeResult(schema, typeName, aphexCMS.config.schemaTypes);
-			if (schemaIsTooLarge(schema)) return compactSchemaResult(schema, aphexCMS.config.schemaTypes);
+			if (answersInParts(schema, aphexCMS.config.schemaTypes))
+				return compactSchemaResult(schema, aphexCMS.config.schemaTypes);
 			const portableText = portableTextGuide(schema);
 			const { writeShapes, shapeLegend } = buildWriteShapes(schema, aphexCMS.config.schemaTypes);
 			return ok({
