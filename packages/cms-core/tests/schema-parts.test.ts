@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+	answersInParts,
 	objectTypeNames,
 	objectTypePart,
 	schemaIsTooLarge,
@@ -52,5 +53,50 @@ describe('schema parts', () => {
 		expect(schemaIsTooLarge(page)).toBe(false);
 		const huge = { ...page, description: 'x'.repeat(60_000) };
 		expect(schemaIsTooLarge(huge)).toBe(true);
+	});
+
+	describe('an array item naming a registered object type', () => {
+		// A container that holds itself by name, as a validator with a registry allows.
+		const box = {
+			type: 'object',
+			name: 'box',
+			title: 'Box',
+			fields: [
+				{ name: 'layout', type: 'string' },
+				{ name: 'children', type: 'array', of: [heading, { type: 'box' }], maxDepth: 4 }
+			]
+		} as unknown as SchemaType;
+		const boxPage = {
+			type: 'document',
+			name: 'boxPage',
+			fields: [{ name: 'blocks', type: 'array', of: [heading, { type: 'box' }] }]
+		} as unknown as SchemaType;
+		const named = [boxPage, box];
+
+		it('is answered in parts, though small, and only with the registry to resolve it', () => {
+			expect(schemaIsTooLarge(boxPage)).toBe(false);
+			expect(answersInParts(boxPage, named)).toBe(true);
+			expect(answersInParts(boxPage)).toBe(false);
+			expect(answersInParts(page, named)).toBe(false);
+		});
+
+		it('is stubbed and listed like an inline type', () => {
+			const blocks = stubFields(boxPage.fields, named)[0] as Field;
+			expect(stubbedItemTypes(blocks)).toEqual(['heading', 'box']);
+			expect(objectTypeNames(boxPage, named)).toEqual(['heading', 'box']);
+		});
+
+		it('answers its fields once, though it holds itself', () => {
+			const part = objectTypePart(boxPage, 'box', named);
+			expect(part?.definition.fields.map((f) => f.name)).toEqual(['layout', 'children']);
+			expect(part?.foundAt).toEqual(['blocks[box]', 'blocks[box].children[box]']);
+			expect(part?.variants).toEqual([]);
+			const inner = part?.definition.fields.find((f) => f.name === 'children') as Field;
+			expect(stubbedItemTypes(inner)).toEqual(['heading', 'box']);
+			expect(objectTypePart(boxPage, 'heading', named)?.foundAt).toEqual([
+				'blocks[heading]',
+				'blocks[box].children[heading]'
+			]);
+		});
 	});
 });
