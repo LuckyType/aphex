@@ -2546,7 +2546,7 @@
 								>
 									<SchemaField
 										field={lock?.fields.includes(field.name)
-											? { ...field, description: lock.reason }
+											? { ...field, description: i18n.validationMessage(lock.reason) }
 											: field}
 										value={viewData[field.name]}
 										documentData={viewData}

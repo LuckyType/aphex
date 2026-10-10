@@ -76,6 +76,7 @@ describe('localizeSchema', () => {
 		groups: [{ name: 'seo', title: 'SEO' }],
 		orderings: [{ name: 'byTitle', title: 'Title', by: [] }],
 		lock: () => null,
+		preview: { title: 'Settings', select: { subtitle: 'kind' } },
 		fields: [
 			{
 				name: 'kind',
@@ -128,7 +129,8 @@ describe('localizeSchema', () => {
 			Heading: 'Titel',
 			Normal: 'Absatz',
 			Bold: 'Fett',
-			Title: 'Titel'
+			Title: 'Titel',
+			Settings: 'Einstellungen'
 		};
 		configureStudioI18n({ label: (text) => de[text] ?? text });
 		const out = localizeSchema(schema);
@@ -138,6 +140,7 @@ describe('localizeSchema', () => {
 		expect(out.groups[0]!.title).toBe('SEO');
 		expect(out.orderings[0]!.title).toBe('Titel');
 		expect(out.lock).toBe(schema.lock);
+		expect(out.preview).toEqual({ title: 'Einstellungen', select: { subtitle: 'kind' } });
 		const [kind, tone, layout] = out.fields as any[];
 		expect(kind.title).toBe('Art');
 		expect(kind.description).toBe('Was es ist');
@@ -150,5 +153,14 @@ describe('localizeSchema', () => {
 		expect(layout.of[1].styles[0].title).toBe('Absatz');
 		expect(layout.of[1].marks.decorators[0].title).toBe('Fett');
 		expect(schema.fields[0]!.title).toBe('Kind');
+		expect(schema.preview.title).toBe('Settings');
+	});
+
+	it('leaves a preview without a literal title alone', () => {
+		configureStudioI18n({ label: (text) => `de:${text}` });
+		const prepare = () => ({ title: 'x' });
+		const out = localizeSchema({ title: 'Item', preview: { prepare } });
+		expect(out.preview.prepare).toBe(prepare);
+		expect(out.preview).not.toHaveProperty('title');
 	});
 });
