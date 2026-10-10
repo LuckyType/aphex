@@ -1084,6 +1084,8 @@
 	 */
 	function uploadErrorMessage(err: unknown): string {
 		if (err instanceof ApiError) {
+			// An app's own wording (configureApiErrorMessage) wins over the server's.
+			if (err.message !== err.detail) return err.message;
 			const serverMessage = err.response?.error;
 			if (typeof serverMessage === 'string' && serverMessage) return serverMessage;
 			if (err.status === 413) return i18n.t('File is too large for this server’s upload limit');
