@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { authToContext } from '../../../local-api/auth-helpers';
 import { PermissionError } from '../../../local-api/permissions';
+import { DocumentPolicyError } from '../../../local-api/policies';
 import { DocumentValidationError } from '../../../local-api/collection-api';
 import { cmsLogger } from '../../../utils/logger';
 import {
@@ -129,6 +130,18 @@ export const documentsRouter: Hono<AphexEnv> = new Hono<AphexEnv>()
 				if (error instanceof PermissionError) {
 					return c.json({ success: false, error: 'Forbidden', message: error.message }, 403);
 				}
+				if (error instanceof DocumentPolicyError) {
+					return c.json(
+						{
+							success: false,
+							error: 'Refused by policy',
+							message: error.message,
+							operation: error.operation,
+							lockedFields: error.lockedFields
+						},
+						409
+					);
+				}
 				return c.json(
 					{
 						success: false,
@@ -166,6 +179,18 @@ export const documentsRouter: Hono<AphexEnv> = new Hono<AphexEnv>()
 				cmsLogger.error('Failed to batch-fetch documents:', error);
 				if (error instanceof PermissionError) {
 					return c.json({ success: false, error: 'Forbidden', message: error.message }, 403);
+				}
+				if (error instanceof DocumentPolicyError) {
+					return c.json(
+						{
+							success: false,
+							error: 'Refused by policy',
+							message: error.message,
+							operation: error.operation,
+							lockedFields: error.lockedFields
+						},
+						409
+					);
 				}
 				return c.json(
 					{
@@ -230,6 +255,18 @@ export const documentsRouter: Hono<AphexEnv> = new Hono<AphexEnv>()
 				cmsLogger.error('Failed to create document:', error);
 				if (error instanceof PermissionError) {
 					return c.json({ success: false, error: 'Forbidden', message: error.message }, 403);
+				}
+				if (error instanceof DocumentPolicyError) {
+					return c.json(
+						{
+							success: false,
+							error: 'Refused by policy',
+							message: error.message,
+							operation: error.operation,
+							lockedFields: error.lockedFields
+						},
+						409
+					);
 				}
 				// A malformed payload is the caller's fault, not the server's.
 				if (error instanceof DocumentValidationError) {
