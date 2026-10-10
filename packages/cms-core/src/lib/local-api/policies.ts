@@ -1,6 +1,7 @@
 // Policy runner for the reject-only seam (DocumentPolicies) and the server
 // side of DocumentType.lock. Both live beside the hooks runner on purpose: the
 // hooks transform, these refuse, and neither reacts.
+import type { DatabaseAdapter } from '../db/interfaces/index';
 import type { Document } from '../types/document';
 import type {
 	DocumentLock,
@@ -60,6 +61,7 @@ export function policyContext(
 	schema: SchemaType,
 	document: Pick<Document, 'id' | 'draftData' | 'publishedData'>,
 	context: { organizationId: string; user?: { id: string } | null; actorId?: string | null },
+	databaseAdapter: DatabaseAdapter,
 	data?: Record<string, unknown>
 ): DocumentPolicyContext {
 	return {
@@ -68,7 +70,8 @@ export function policyContext(
 		data: data ?? (document.draftData as Record<string, unknown>) ?? {},
 		publishedData: (document.publishedData as Record<string, unknown> | null) ?? null,
 		context: { organizationId: context.organizationId, userId: context.user?.id },
-		schema
+		schema,
+		databaseAdapter
 	};
 }
 
