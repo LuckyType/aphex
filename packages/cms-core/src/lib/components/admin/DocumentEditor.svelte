@@ -1,5 +1,6 @@
 <script lang="ts">
 	import * as i18n from '../../i18n/index';
+	import { isFieldVisible } from '../../schema-utils/visibility';
 	import { tick } from 'svelte';
 	import { Button } from '@aphexcms/ui/shadcn/button';
 	import { Badge } from '@aphexcms/ui/shadcn/badge';
@@ -1244,7 +1245,7 @@
 				// otherwise Publish is enabled after a refresh until it's clicked.
 				await tick(); // Wait for DOM to update with new data
 				for (const [name, fieldComponent] of Object.entries(schemaFields)) {
-					fieldComponent?.performValidation(documentData[name], documentData);
+					fieldComponent?.performValidation(documentData[name]);
 				}
 				validateAllFields();
 			} else {
@@ -1501,7 +1502,7 @@
 				// Trigger validation on all fields after auto-save
 				validateAllFields(); // Update validation status
 				for (const [name, fieldComponent] of Object.entries(schemaFields)) {
-					fieldComponent?.performValidation(documentData[name], documentData);
+					fieldComponent?.performValidation(documentData[name]);
 				}
 				// Notify parent of autosave with current title
 				if (onAutoSaved && documentId) {
@@ -1751,7 +1752,11 @@
 
 		const invalid: Array<{ name: string; title: string; messages: string[] }> = [];
 
-		for (const field of schema.fields) {
+		// Hidden fields are skipped, as the form and the server's own validation
+		// skip them: a required field nobody can see would block the publish.
+		for (const field of schema.fields.filter((f) =>
+			isFieldVisible(f, documentData, documentData)
+		)) {
 			if (field.validation) {
 				try {
 					const validationFunctions = Array.isArray(field.validation)

@@ -1,4 +1,6 @@
 <script lang="ts">
+	import * as i18n from '../../i18n/index';
+	import { studioExtensions } from '../../studio-extensions';
 	import { Label } from '@aphexcms/ui/shadcn/label';
 	import * as Alert from '@aphexcms/ui/shadcn/alert';
 	import * as Tooltip from '@aphexcms/ui/shadcn/tooltip';
@@ -88,8 +90,11 @@
 	let validationErrors = $state<ValidationError[]>([]);
 
 	// Real-time validation for wrapper display
-	export async function performValidation(currentValue: any, context: any = {}) {
+	export async function performValidation(currentValue: any) {
 		validationErrors = []; // Clear previous errors
+		// The context the publish check (validateDocumentData) gives, so a rule that
+		// reads `context.document` flags its field while editing too, not only on publish.
+		const context = { document: documentData ?? {} };
 
 		cmsLogger.debug(
 			'[SchemaField.performValidation]',
@@ -161,7 +166,7 @@
 	function validateOnLeave(event: FocusEvent) {
 		const wrapper = event.currentTarget as HTMLElement;
 		if (event.relatedTarget instanceof Node && wrapper.contains(event.relatedTarget)) return;
-		void performValidation(value, documentData ?? {});
+		void performValidation(value);
 	}
 </script>
 
@@ -222,7 +227,8 @@
 								: 'default'}
 					>
 						<Alert.Description class="text-xs">
-							{error.message}
+							{studioExtensions().fieldErrorText?.(error.message, field, value) ??
+								i18n.validationMessage(error.message)}
 						</Alert.Description>
 					</Alert.Root>
 				{/each}
