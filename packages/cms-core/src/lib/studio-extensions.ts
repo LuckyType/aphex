@@ -88,9 +88,12 @@ export interface StudioExtensions {
 	fieldErrorText?: (message: string, field: Field, value: unknown) => string;
 	/**
 	 * The nonce for the inline script the Studio renders (the theme switch),
-	 * for an app whose Content-Security-Policy forbids inline scripts.
+	 * for an app whose Content-Security-Policy forbids inline scripts. A
+	 * function is called on every render, so an app can hand out the nonce
+	 * of the current response (read from its request event) rather than one
+	 * fixed string.
 	 */
-	scriptNonce?: string;
+	scriptNonce?: string | (() => string | undefined);
 }
 
 let current: StudioExtensions = {};
@@ -101,6 +104,12 @@ export function configureStudio(extensions: StudioExtensions): void {
 
 export function studioExtensions(): Readonly<StudioExtensions> {
 	return current;
+}
+
+/** The nonce for this render of the Studio's inline script, if the app set one. */
+export function studioScriptNonce(): string | undefined {
+	const nonce = current.scriptNonce;
+	return typeof nonce === 'function' ? nonce() : nonce;
 }
 
 /** The orderings `listOrderings` adds for `type`, none when it adds none. */
