@@ -43,7 +43,7 @@ export const PRIMITIVE_FIELD_TYPES: string[] = [
 ];
 
 /** All valid field types (primitives + containers). */
-export const VALID_FIELD_TYPES: string[] = [...PRIMITIVE_FIELD_TYPES, 'array', 'object'];
+export const VALID_FIELD_TYPES: string[] = [...PRIMITIVE_FIELD_TYPES, 'array', 'object', 'view'];
 
 /**
  * Validate all schema references to ensure they exist
@@ -81,6 +81,13 @@ export function validateSchemaReferences(schemas: SchemaType[]): void {
 		if (!validFieldTypes.includes(field.type)) {
 			errors.push(
 				`Schema "${parentSchema}" field "${field.name}" has invalid type "${field.type}". Valid types: ${validFieldTypes.join(', ')}`
+			);
+		}
+
+		// A view slot is drawn by a part; without one it would be an empty label.
+		if (field.type === 'view' && typeof (field as { input?: unknown }).input !== 'string') {
+			errors.push(
+				`Schema "${parentSchema}" view field "${field.name}" must name the "aphex/field/view" part that renders it in "input"`
 			);
 		}
 

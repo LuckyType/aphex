@@ -7,7 +7,7 @@
  * resolves the widget and renders it in place of the built-in for that field type.
  */
 import { getContext, setContext, type Component } from 'svelte';
-import type { FieldComponentProps } from '../plugins/types';
+import type { FieldComponentProps, FieldViewProps } from '../plugins/types';
 
 export type FieldComponentLookup = (input: string) => Component<FieldComponentProps> | undefined;
 
@@ -21,4 +21,18 @@ export function setFieldComponents(lookup: FieldComponentLookup): void {
 /** Resolve the widget lookup. Returns a no-op lookup outside the admin shell. */
 export function useFieldComponents(): FieldComponentLookup {
 	return getContext<FieldComponentLookup | undefined>(FIELD_COMPONENTS_KEY) ?? (() => undefined);
+}
+
+export type FieldViewLookup = (input: string) => Component<FieldViewProps> | undefined;
+
+const FIELD_VIEWS_KEY = Symbol.for('aphex.admin.field-views');
+
+/** Publish the view-slot lookup (`aphex/field/view` parts) to descendants. */
+export function setFieldViews(lookup: FieldViewLookup): void {
+	setContext(FIELD_VIEWS_KEY, lookup);
+}
+
+/** Resolve the view-slot lookup. Returns a no-op lookup outside the admin shell. */
+export function useFieldViews(): FieldViewLookup {
+	return getContext<FieldViewLookup | undefined>(FIELD_VIEWS_KEY) ?? (() => undefined);
 }

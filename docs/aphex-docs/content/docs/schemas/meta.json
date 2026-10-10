@@ -18,6 +18,7 @@
 		"array",
 		"object",
 		"reference",
+		"view",
 		"---Rich Text---",
 		"block",
 		"---",
