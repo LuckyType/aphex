@@ -52,6 +52,13 @@ export * from '../storage/providers/storage';
 // Services (includes sharp for image processing)
 export * from '../services/index';
 export { AssetService } from '../services/asset-service';
+export {
+	ImageMetadataError,
+	resolveStripMetadataConfig,
+	stripImageMetadata,
+	type StripMetadataConfig,
+	type StripMetadataResult
+} from '../images/strip-metadata';
 export { RolesService } from '../services/roles-service';
 
 // CDN handler — re-exported for the studio/template `media/[id]/[filename]/

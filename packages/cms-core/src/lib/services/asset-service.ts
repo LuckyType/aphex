@@ -14,6 +14,11 @@ import {
 	getVariants,
 	type ImageConfig
 } from '../images/variants';
+import {
+	ImageMetadataError,
+	stripImageMetadata,
+	type StripMetadataConfig
+} from '../images/strip-metadata';
 import { DEFAULT_ALLOWED_MIME_TYPES, isAcceptedFileType } from '../utils/file-accept';
 import { validateFile } from '../utils/mime-detect';
 
@@ -46,6 +51,36 @@ async function streamToBuffer(stream: ReadableStream<Uint8Array>): Promise<Buffe
 		chunks.push(value);
 	}
 	return Buffer.concat(chunks);
+}
+
+/**
+ * The upload with its metadata removed, when `upload.stripImageMetadata` is on.
+ *
+ * Fails closed: an image that carries metadata it cannot rewrite, or that Sharp
+ * cannot read at all, is refused, because storing it would publish exactly what
+ * the option promises to remove. SVG is markup Sharp cannot write back and holds
+ * no camera data, so it is left alone.
+ */
+async function withoutImageMetadata(
+	buffer: Buffer,
+	mimeType: string,
+	config: StripMetadataConfig
+): Promise<{ buffer: Buffer; removed: string[] }> {
+	if (mimeType === 'image/svg+xml') return { buffer, removed: [] };
+	let result;
+	try {
+		result = await stripImageMetadata(buffer, config);
+	} catch {
+		throw new ImageMetadataError(
+			'This image could not be read, so its metadata (such as a GPS position) cannot be removed.'
+		);
+	}
+	if (result.status === 'unsupported') {
+		throw new ImageMetadataError(
+			'This image carries metadata (such as a GPS position) that cannot be removed from its file format. Save it as JPEG or PNG and upload it again.'
+		);
+	}
+	return { buffer: result.buffer, removed: result.status === 'stripped' ? result.removed : [] };
 }
 
 function chunk<T>(items: T[], size: number): T[][] {
@@ -110,7 +145,8 @@ export class AssetService {
 		private storage: StorageAdapter,
 		private database: DatabaseAdapter,
 		private images: ImageConfig | null = null,
-		private allowedMimeTypes: readonly string[] = DEFAULT_ALLOWED_MIME_TYPES
+		private allowedMimeTypes: readonly string[] = DEFAULT_ALLOWED_MIME_TYPES,
+		private stripMetadata: StripMetadataConfig | null = null
 	) {}
 
 	/**
@@ -126,6 +162,17 @@ export class AssetService {
 		// Determine asset type
 		const assetType = safeMimeType.startsWith('image/') ? 'image' : 'file';
 
+		// Before anything measures or stores the bytes: the rewrite applies the
+		// EXIF orientation, so the dimensions read below are the upright ones.
+		let removedMetadata: string[] = [];
+		if (assetType === 'image' && this.stripMetadata) {
+			const stripped = await withoutImageMetadata(data.buffer, safeMimeType, this.stripMetadata);
+			removedMetadata = stripped.removed;
+			if (removedMetadata.length > 0) {
+				data = { ...data, buffer: stripped.buffer, size: stripped.buffer.length };
+			}
+		}
+
 		// Extract image metadata if it's an image
 		// Seeded from the caller for video: sharp can read an image's dimensions from
 		// the buffer below, but nothing here can demux a video container, so the
@@ -135,7 +182,10 @@ export class AssetService {
 		let height: number | undefined = data.height;
 		let metadata: any = {
 			// Include field metadata for privacy checking
-			...data.metadata
+			...data.metadata,
+			// Which blocks were removed, so an asset can be told apart from one
+			// uploaded before the option was on.
+			...(removedMetadata.length > 0 ? { metadataRemoved: removedMetadata } : {})
 		};
 
 		if (assetType === 'image') {
@@ -327,15 +377,15 @@ export class AssetService {
 			// Verified, not reported. A client that skipped the PUT would otherwise
 			// leave a row pointing at nothing, which renders as a permanently broken
 			// image with no indication why.
-			const size = await this.verifyUploadedObject(finalPath, extras.maxBytes);
+			const verifiedSize = await this.verifyUploadedObject(finalPath, extras.maxBytes);
 			let inspectedBuffer: Buffer | undefined;
 			let detectedMimeType: string | null = null;
 			if (this.storage.getObjectRange) {
-				const end = Math.min(size, DIRECT_UPLOAD_SNIFF_BYTES) - 1;
+				const end = Math.min(verifiedSize, DIRECT_UPLOAD_SNIFF_BYTES) - 1;
 				inspectedBuffer = await streamToBuffer(
 					await this.storage.getObjectRange(finalPath, 0, end)
 				);
-			} else if (size <= DIRECT_UPLOAD_INSPECT_MAX_BYTES) {
+			} else if (verifiedSize <= DIRECT_UPLOAD_INSPECT_MAX_BYTES) {
 				inspectedBuffer = await this.storage.getObject(finalPath);
 			} else {
 				await this.storage.delete(finalPath).catch(() => false);
@@ -357,6 +407,39 @@ export class AssetService {
 			let width: number | undefined;
 			let height: number | undefined;
 			let metadata = initialMetadata;
+			let size = verifiedSize;
+
+			// The browser wrote the object, so the metadata is removed after the
+			// fact: read the whole file back, rewrite it, store it over itself.
+			// Past the inspection bound that read is refused rather than skipped,
+			// since skipping would keep the metadata the option promises to remove.
+			if (assetType === 'image' && this.stripMetadata) {
+				if (size > DIRECT_UPLOAD_INSPECT_MAX_BYTES) {
+					throw new ImageMetadataError(
+						'This image is too large to remove its metadata (such as a GPS position) from.'
+					);
+				}
+				if (!inspectedBuffer || inspectedBuffer.length !== size) {
+					inspectedBuffer = await this.storage.getObject(finalPath);
+				}
+				const stripped = await withoutImageMetadata(
+					inspectedBuffer,
+					safeMimeType,
+					this.stripMetadata
+				);
+				if (stripped.removed.length > 0) {
+					await this.storage.store({
+						buffer: stripped.buffer,
+						filename: intent.originalFilename,
+						mimeType: safeMimeType,
+						size: stripped.buffer.length,
+						key: intent.finalKey
+					});
+					inspectedBuffer = stripped.buffer;
+					size = stripped.buffer.length;
+					metadata = { ...metadata, metadataRemoved: stripped.removed };
+				}
+			}
 
 			if (assetType === 'image' && size <= DIRECT_UPLOAD_INSPECT_MAX_BYTES) {
 				// Reading the object back costs a download the direct path exists to

@@ -65,6 +65,8 @@ export interface AssetMetadata {
 	schemaType?: string;
 	/** Field path within that schema type. */
 	fieldPath?: string;
+	/** Metadata blocks `upload.stripImageMetadata` removed at upload (`exif`, `xmp`, ...). */
+	metadataRemoved?: string[];
 	[key: string]: any;
 }
 

@@ -168,6 +168,30 @@ export interface CMSConfig {
 		 * uploading through the app, which works everywhere.
 		 */
 		direct?: boolean;
+
+		/**
+		 * Remove EXIF, XMP, IPTC and text metadata from uploaded images.
+		 *
+		 * A phone photo carries the GPS position it was taken at and the device
+		 * that took it, and `/media` serves the original as uploaded. Turned on,
+		 * an image carrying any of that is re-encoded in its own format before it
+		 * is stored: orientation applied to the pixels, ICC profile kept, `quality`
+		 * (default 90) for JPEG, WebP and AVIF. An image without metadata keeps
+		 * its bytes.
+		 *
+		 * An image that carries metadata but cannot be rewritten (HEIC: the
+		 * prebuilt libvips has no HEVC codec) is refused rather than stored with
+		 * the data this option promises to remove. Direct uploads are read back
+		 * and rewritten the same way, up to 25MB; a larger direct image upload is
+		 * refused.
+		 *
+		 * Off by default because it rewrites the stored original. Assets uploaded
+		 * before it was turned on keep their metadata.
+		 *
+		 * @example
+		 * upload: { stripImageMetadata: true }
+		 */
+		stripImageMetadata?: boolean | { quality?: number };
 	};
 	email?: EmailAdapter | null;
 	/** Model backend for the in-admin agent. Omit to leave the agent panel disabled. */

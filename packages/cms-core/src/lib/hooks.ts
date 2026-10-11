@@ -17,6 +17,7 @@ import { cmsLogger, setLogLevel, setLogger } from './utils/logger';
 import { createStorageAdapter as createStorageAdapterProvider } from './storage/providers/storage';
 import { AssetService as AssetServiceClass } from './services/asset-service';
 import { resolveImageConfig } from './images/variants';
+import { resolveStripMetadataConfig } from './images/strip-metadata';
 import { resolveGlobalAllowedMimeTypes } from './utils/file-accept';
 import { RolesService } from './services/roles-service';
 import { PluginSettingsService } from './services/plugin-settings-service';
@@ -169,7 +170,8 @@ export function createCMSHook(config: CMSConfig): Handle {
 				storageAdapter,
 				databaseAdapter,
 				resolveImageConfig(currentConfig.images),
-				resolveGlobalAllowedMimeTypes({ config: currentConfig })
+				resolveGlobalAllowedMimeTypes({ config: currentConfig }),
+				resolveStripMetadataConfig(currentConfig.upload?.stripImageMetadata)
 			);
 			const cmsEngine = createCMS(currentConfig, databaseAdapter);
 			const rolesService = new RolesService(databaseAdapter, currentConfig.cache ?? null);
