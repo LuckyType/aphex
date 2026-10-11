@@ -324,6 +324,7 @@
 					{organizationId}
 					{documentData}
 					siblingData={scope}
+					{schemaType}
 				/>
 			{:else}
 				<!-- Leaf / reference / custom-input fields — resolved uniformly. -->

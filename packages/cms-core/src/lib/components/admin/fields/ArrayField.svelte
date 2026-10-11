@@ -17,6 +17,7 @@
 	import { DragDropProvider } from '@dnd-kit/svelte';
 	import { createSortable, isSortable } from '@dnd-kit/svelte/sortable';
 	import { arrayMove } from '@dnd-kit/helpers';
+	import { studioDragPlugins } from './drag-a11y';
 	import {
 		GripVertical,
 		Ellipsis,
@@ -57,6 +58,8 @@
 		 * `parentData` in their `hidden` conditions.
 		 */
 		siblingData?: Record<string, any>;
+		/** Document type, handed to an item's fields (a slug's root-level `source` title). */
+		schemaType?: string;
 	}
 
 	let {
@@ -67,7 +70,8 @@
 		readonly = false,
 		organizationId,
 		documentData,
-		siblingData
+		siblingData,
+		schemaType
 	}: Props = $props();
 
 	const schemas = getSchemaContext();
@@ -550,7 +554,7 @@
 	     own context menu, which we override via onRemove to drop the row). -->
 	{#if keyedItems.length > 0}
 		{#key dndKey}
-			<DragDropProvider onDragEnd={handleDragEnd}>
+			<DragDropProvider plugins={studioDragPlugins} onDragEnd={handleDragEnd}>
 				<div class="space-y-1">
 					{#each keyedItems as item, index (item._key ?? `__row-${index}`)}
 						{@const sortable = createSortable({ id: item._key, index, disabled: readonly })}
@@ -628,7 +632,7 @@
 		</div>
 	{:else if primitiveType === 'image'}
 		{#key dndKey}
-			<DragDropProvider onDragEnd={handlePrimitiveDragEnd}>
+			<DragDropProvider plugins={studioDragPlugins} onDragEnd={handlePrimitiveDragEnd}>
 				{#if isGridLayout}
 					<!-- Grid layout for images -->
 					{#if arrayValue.length === 0}
@@ -807,7 +811,7 @@
 		{/key}
 	{:else}
 		{#key dndKey}
-			<DragDropProvider onDragEnd={handlePrimitiveDragEnd}>
+			<DragDropProvider plugins={studioDragPlugins} onDragEnd={handlePrimitiveDragEnd}>
 				<div class="space-y-1">
 					{#each arrayValue as item, index (`prim-${index}`)}
 						{@const sortable = createSortable({ id: `prim-${index}`, index, disabled: readonly })}
@@ -965,7 +969,7 @@
 		</div>
 	{:else}
 		{#key dndKey}
-			<DragDropProvider onDragEnd={handleDragEnd}>
+			<DragDropProvider plugins={studioDragPlugins} onDragEnd={handleDragEnd}>
 				<div class="space-y-1">
 					{#each keyedItems as item, index (item._key ?? `__row-${index}`)}
 						{@const sortable = createSortable({ id: item._key, index, disabled: readonly })}
@@ -1104,6 +1108,7 @@
 		{organizationId}
 		{documentData}
 		parentData={siblingData}
+		{schemaType}
 	/>
 {/if}
 
