@@ -100,7 +100,7 @@
 			<div class="flex w-full items-center gap-2 px-4">
 				<!-- Left: Trigger, Separator, and navbar-start slot (e.g. editor breadcrumb) -->
 				<div class="flex min-w-0 items-center gap-2">
-					<SidebarTrigger class="-ml-1" />
+					<SidebarTrigger class="-ml-1" aria-label={i18n.t('Toggle sidebar')} />
 					<Separator orientation="vertical" class="h-4" />
 					{#each slots.get('navbar-start') as entry (entry.id)}
 						{@render entry.snippet()}

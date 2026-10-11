@@ -5,7 +5,7 @@
 	import { type DateValue, parseDate } from '@internationalized/date';
 	import { Input } from '@aphexcms/ui/shadcn/input';
 	import { Button } from '@aphexcms/ui/shadcn/button';
-	import { Calendar } from '@aphexcms/ui/shadcn/calendar';
+	import Calendar from '../StudioCalendar.svelte';
 	import * as Popover from '@aphexcms/ui/shadcn/popover';
 	import type { DateTimeField } from '../../../types/schemas';
 	import { cmsLogger } from '../../../utils/logger';
