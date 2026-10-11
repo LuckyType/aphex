@@ -307,6 +307,13 @@ export interface FieldComponentProps {
 	 * item those are two different objects, and `documentData` is the wrong one.
 	 */
 	siblingData?: Record<string, unknown>;
+	/**
+	 * Writes several fields of `siblingData` at once, merged into that object as one
+	 * change: for a widget that fills its neighbours from one action, such as an
+	 * address search setting street, city and coordinates. Undefined where the host
+	 * renders the field outside an editable object.
+	 */
+	onUpdateSiblings?: (patch: Record<string, unknown>) => void;
 	/** The document's type name (e.g. `'author'`) — for widgets that vary by type. */
 	schemaType?: string;
 }
@@ -323,9 +330,9 @@ export interface FieldComponentPart {
 }
 
 /**
- * What an `aphex/field/view` component receives: where it sits, and nothing
- * to write. A view slot has no value and no `onUpdate`; it reads the document
- * and its neighbours and draws.
+ * What an `aphex/field/view` component receives: where it sits, and no value
+ * of its own. A view slot has no `onUpdate`; it reads the document and its
+ * neighbours and draws, and may write those neighbours through `onUpdateSiblings`.
  */
 export interface FieldViewProps {
 	field: ViewField;
@@ -335,6 +342,13 @@ export interface FieldViewProps {
 	siblingData?: Record<string, unknown>;
 	/** The object holding `siblingData`'s owner; undefined at the top level. */
 	parentData?: Record<string, unknown>;
+	/**
+	 * Writes several fields of `siblingData` at once, merged into that object as one
+	 * change: for a widget that fills its neighbours from one action, such as an
+	 * address search setting street, city and coordinates. Undefined where the host
+	 * renders the field outside an editable object.
+	 */
+	onUpdateSiblings?: (patch: Record<string, unknown>) => void;
 	/** Dotted path of the slot in the document, e.g. `contact.appearsOn`. */
 	fieldPath?: string;
 	/** The document's type name. */
@@ -344,8 +358,9 @@ export interface FieldViewProps {
 
 /**
  * Draws a `view` field: a display slot in the editor that holds no value
- * (a preview, a usage summary, a generated file). Selected by the field's
- * `input` key, like `aphex/field/component`, but it never writes.
+ * (a preview, a usage summary, a generated file, a search that fills its
+ * neighbours). Selected by the field's `input` key, like `aphex/field/component`,
+ * but nothing is ever stored under its own name.
  */
 export interface FieldViewPart {
 	implements: 'aphex/field/view';
