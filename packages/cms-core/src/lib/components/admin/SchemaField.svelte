@@ -55,6 +55,12 @@
 		 */
 		parentData?: Record<string, any>;
 		onUpdate: (value: any) => void;
+		/**
+		 * Merges a patch into `siblingData`'s owner as one change, for a widget that
+		 * fills several neighbours at once (`FieldComponentProps.onUpdateSiblings`).
+		 * Undefined where the owner is not editable here.
+		 */
+		onUpdateSiblings?: (patch: Record<string, any>) => void;
 		onOpenReference?: (documentId: string, documentType: string) => void;
 		doValidation?: () => void;
 		schemaType?: string; // Document type
@@ -78,6 +84,7 @@
 		siblingFields,
 		parentData,
 		onUpdate,
+		onUpdateSiblings,
 		onOpenReference,
 		doValidation,
 		schemaType,
@@ -280,6 +287,7 @@
 						{documentData}
 						siblingData={scope}
 						{parentData}
+						{onUpdateSiblings}
 						{fieldPath}
 						{schemaType}
 						{readonly}
@@ -303,6 +311,7 @@
 							siblingFields={field.fields}
 							parentData={scope}
 							onUpdate={(subValue) => onUpdate({ ...value, [subField.name]: subValue })}
+							onUpdateSiblings={(patch) => onUpdate({ ...value, ...patch })}
 							{doValidation}
 							{schemaType}
 							parentPath={fieldPath}
@@ -332,6 +341,7 @@
 					{field}
 					{value}
 					{onUpdate}
+					{onUpdateSiblings}
 					{readonly}
 					{validationClasses}
 					{documentData}

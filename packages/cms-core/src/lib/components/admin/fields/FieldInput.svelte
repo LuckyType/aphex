@@ -26,6 +26,8 @@
 		field: Field;
 		value: any;
 		onUpdate: (value: any) => void;
+		/** Passed through to a plugin widget: see `FieldComponentProps.onUpdateSiblings`. */
+		onUpdateSiblings?: (patch: Record<string, any>) => void;
 		readonly?: boolean;
 		validationClasses?: string;
 		documentData?: Record<string, any>;
@@ -43,6 +45,7 @@
 		field,
 		value,
 		onUpdate,
+		onUpdateSiblings,
 		readonly = false,
 		validationClasses,
 		documentData,
@@ -63,6 +66,7 @@
 		{field}
 		{value}
 		{onUpdate}
+		{onUpdateSiblings}
 		{validationClasses}
 		{readonly}
 		{documentData}
