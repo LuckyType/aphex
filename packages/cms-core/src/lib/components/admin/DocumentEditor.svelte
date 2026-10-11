@@ -2563,6 +2563,11 @@
 											documentData = { ...documentData, [field.name]: newValue };
 											hasUnsavedChanges = true;
 										}}
+										onUpdateSiblings={(patch) => {
+											if (isViewingPublished) return;
+											documentData = { ...documentData, ...patch };
+											hasUnsavedChanges = true;
+										}}
 										{onOpenReference}
 										schemaType={effectiveType}
 										readonly={isReadOnly ||
