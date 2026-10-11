@@ -3,7 +3,7 @@
 	import CalendarIcon from '@lucide/svelte/icons/calendar';
 	import { type DateValue, parseDate } from '@internationalized/date';
 	import { Input } from '@aphexcms/ui/shadcn/input';
-	import { Calendar } from '@aphexcms/ui/shadcn/calendar';
+	import Calendar from '../StudioCalendar.svelte';
 	import * as Popover from '@aphexcms/ui/shadcn/popover';
 	import type { DateField } from '../../../types/schemas';
 	import { cmsLogger } from '../../../utils/logger';
