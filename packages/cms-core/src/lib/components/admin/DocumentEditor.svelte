@@ -46,7 +46,8 @@
 		CalendarClock,
 		X,
 		Lock,
-		Undo2
+		Undo2,
+		GripVertical
 	} from '@lucide/svelte';
 	import { stegaEncodeDocument } from '../../preview/stega.js';
 	import { collectAssetRefs, injectAssetData, type ResolvedAsset } from '../../preview/assets.js';
@@ -463,6 +464,17 @@
 		}
 		window.addEventListener('mousemove', onMove);
 		window.addEventListener('mouseup', onUp);
+	}
+
+	// The same bounds as dragging, for an author on the keyboard.
+	function resizeByKey(e: KeyboardEvent) {
+		const step = e.shiftKey ? 64 : 16;
+		if (e.key === 'ArrowLeft') fieldsWidth = Math.max(500, fieldsWidth - step);
+		else if (e.key === 'ArrowRight') fieldsWidth = Math.min(720, fieldsWidth + step);
+		else if (e.key === 'Home') fieldsWidth = 500;
+		else if (e.key === 'End') fieldsWidth = 720;
+		else return;
+		e.preventDefault();
 	}
 
 	// Derived from the already-loaded schema + live documentData — no extra prop needed.
@@ -2609,14 +2621,31 @@
 
 		<!-- Preview iframe (presentation mode only) -->
 		{#if presentationMode}
-			<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-			<!-- Drag handle -->
+			<!-- Drag handle: a visible rule between the form and the preview with a grip
+			     in its middle, so the split reads as movable before anyone hovers it. -->
+			<!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
 			<div
 				role="separator"
 				aria-orientation="vertical"
-				class="hover:bg-primary/20 active:bg-primary/30 w-1 shrink-0 cursor-ew-resize transition-colors"
+				aria-label={i18n.t('Resize preview')}
+				aria-valuemin={500}
+				aria-valuemax={720}
+				aria-valuenow={fieldsWidth}
+				tabindex="0"
+				class="group border-foreground/15 bg-muted hover:bg-primary/15 focus-visible:bg-primary/15 focus-visible:ring-ring relative z-10 w-2 shrink-0 cursor-ew-resize border-x transition-colors outline-none focus-visible:ring-2 {isResizing
+					? 'bg-primary/25'
+					: ''}"
 				onmousedown={startResize}
-			></div>
+				onkeydown={resizeByKey}
+			>
+				<div
+					class="border-foreground/20 bg-background text-foreground/60 group-hover:border-primary/60 group-hover:text-primary pointer-events-none absolute top-1/2 left-1/2 flex h-12 w-5 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-md border shadow-sm transition-colors {isResizing
+						? 'border-primary/60 text-primary'
+						: ''}"
+				>
+					<GripVertical class="h-4 w-4" />
+				</div>
+			</div>
 			<div class="flex min-h-0 flex-1 flex-col">
 				{#if iframeUrl}
 					<!-- Preview toolbar -->
