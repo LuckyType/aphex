@@ -50,6 +50,7 @@
 	} from '@lucide/svelte';
 	import { stegaEncodeDocument } from '../../preview/stega.js';
 	import { collectAssetRefs, injectAssetData, type ResolvedAsset } from '../../preview/assets.js';
+	import { PREVIEW_QUERY_PARAM, displayPreviewUrl } from '../../preview/address.js';
 	import { setRichtextEditorRegistry } from '../../richtext-context.svelte.js';
 	import { documentWorkspaceRegistry } from '../../document-workspace-registry.svelte';
 	import type {
@@ -489,10 +490,13 @@
 			return resolvedPreviewUrl;
 		}
 		if (perspective === 'published') {
-			u.searchParams.delete('aphex-preview');
+			u.searchParams.delete(PREVIEW_QUERY_PARAM);
 		}
 		return u.toString();
 	});
+
+	// What the URL bar shows: the page's address, without the preview marker.
+	const iframeDisplayUrl = $derived(iframeUrl ? displayPreviewUrl(iframeUrl) : null);
 
 	$effect(() => {
 		if (!presentationMode) return;
@@ -2668,7 +2672,7 @@
 						<!-- URL bar -->
 						<div class="bg-muted mx-1 min-w-0 flex-1 rounded px-2.5 py-1">
 							<span class="text-muted-foreground block truncate text-center font-mono text-[11px]"
-								>{iframeUrl}</span
+								>{iframeDisplayUrl}</span
 							>
 						</div>
 
