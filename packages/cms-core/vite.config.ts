@@ -28,6 +28,10 @@ export default defineConfig({
 		// Component tests mount in jsdom, so they need svelte's client build, not
 		// the server one Node resolves by default (tests/field-a11y.svelte.spec.ts).
 		...(process.env.VITEST ? { conditions: ['browser'] } : {}),
+		// pnpm resolves bits-ui once for cms-core and once for @aphexcms/ui, and
+		// bits-ui's contexts are keyed per copy, so a calendar or dialog built
+		// from both fails to mount. An app has one copy (a peer dependency).
+		...(process.env.VITEST ? { dedupe: ['bits-ui'] } : {}),
 		alias: {
 			// @aphexcms/ui read as source imports itself through its own `@lib`
 			// alias, as tsconfig.json's paths explain.
@@ -48,7 +52,14 @@ export default defineConfig({
 			deps: {
 				// Libraries that ship .svelte files, which Node's loader cannot import:
 				// Vite compiles them for the component tests instead.
-				inline: [/bits-ui/, /svelte-sonner/, /mode-watcher/, /@lucide\/svelte/, /@dnd-kit\/svelte/]
+				inline: [
+					/bits-ui/,
+					/svelte-sonner/,
+					/mode-watcher/,
+					/@lucide\/svelte/,
+					/@dnd-kit\/svelte/,
+					/@dnd-kit\/dom/
+				]
 			}
 		}
 	}
