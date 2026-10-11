@@ -22,7 +22,7 @@
 	import { createPartResolver } from '../../plugins/resolver';
 	import type { CMSPlugin, DocumentActionProps } from '../../plugins/types';
 	import { getDefaultValueForFieldType } from '../../utils/field-defaults';
-	import { notifyDocumentChanged } from '../../document-refresh.svelte';
+	import { notifyCollectionChanged, notifyDocumentChanged } from '../../document-refresh.svelte';
 	import { collectReferenceIds } from '../../utils/reference-walk';
 	import { cmsLogger } from '../../utils/logger';
 	import { resolvePreviewTitle } from '../../utils/preview';
@@ -1786,9 +1786,14 @@
 				throw new Error(response.error || 'Failed to discard draft');
 			}
 			await loadDocumentData();
-			lastSaved = new Date();
+			// Nothing was saved: the badge would otherwise read "Auto-saved" for a
+			// draft that just went back to the published version.
+			lastSaved = null;
 			publishedData = null;
 			notifyDocumentChanged(documentId);
+			// The list row still carries the discarded title and draft state; a
+			// discard is no autosave, so refetch the list rather than patch the row.
+			notifyCollectionChanged(effectiveType);
 			if (showVersionHistory) loadVersions();
 			toast.success(i18n.t('Changes discarded'));
 		} catch (err) {
