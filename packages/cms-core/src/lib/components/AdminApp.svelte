@@ -60,6 +60,7 @@
 	const pluralize = (title: string) => i18n.plural(title, __cmsPluralize);
 	import { toast } from 'svelte-sonner';
 	import { setPermissionsContext } from '../permissions-context.svelte';
+	import { computePaneLayout } from './pane-layout';
 
 	interface Props {
 		schemas: SchemaType[];
@@ -467,10 +468,6 @@
 
 	// Layout: editors take precedence. When space is tight, panels collapse
 	// to 60px strips — types first, then the docs list.
-	const MIN_EDITOR_WIDTH = 650;
-	const COLLAPSED_WIDTH = 60;
-	const TYPES_WIDTH = 350;
-	const DOCS_WIDTH = 350;
 	const VERSION_PANEL_WIDTH = 280;
 
 	/**
@@ -485,131 +482,38 @@
 	 */
 	let contentWidth = $state(0);
 
-	let layoutConfig = $derived.by(() => {
-		// A stacked reference counts as a second editor *only when it is a real
-		// column*. In presentation mode it isn't — it renders as an `absolute`
-		// overlay **inside** the primary editor's container so the live preview
-		// stays visible behind it. Counting it here made the two compete for the
-		// same width, and opening the version panel (which subtracts 280px below)
-		// was enough to push `maxEditors` to 1. The expanded slot then went to the
-		// stacked editor, index 0 collapsed, and its container picked up `hidden` —
-		// taking the overlay nested inside it along with it. Both editors vanished
-		// and the version panel was left alone on the left of the row.
-		const stackIsOwnColumn = editorStack.length > 0 && !presentationModeOn;
-		const totalEditors = (currentView === 'editor' ? 1 : 0) + (stackIsOwnColumn ? 1 : 0);
+	// True when the user is currently looking at a singleton-flagged doc type.
+	// Drives layout adjustments — singletons skip the document-list panel
+	// entirely and just show types-sidebar + editor.
+	const currentTypeIsSingleton = $derived(
+		!!selectedDocumentType &&
+			(schemas.find((s) => s.name === selectedDocumentType)?.singleton ?? false)
+	);
 
-		if (totalEditors === 0) {
-			return {
-				totalEditors: 0,
-				expandedCount: 0,
-				collapsedCount: 0,
-				typesCollapsed: false,
-				docsCollapsed: false,
-				expandedIndices: [] as number[],
-				activeIndex: activeEditorIndex,
-				typesExpanded: true,
-				docsExpanded: true
-			};
-		}
+	// A space with a single type needs no types column beside its list. Shared by
+	// the collapse math and `typesPanel`, so the column is measured exactly when
+	// it is drawn.
+	const typesColumnHidden = $derived(
+		focusModeOn ||
+			presentationModeOn ||
+			(documentTypes.length === 1 && selectedDocumentType === documentTypes[0]?.name)
+	);
 
-		const validActiveIndex =
-			activeEditorIndex < 0
-				? activeEditorIndex
-				: Math.max(0, Math.min(activeEditorIndex, totalEditors - 1));
-
-		const hasDocs = !!selectedDocumentType && !currentTypeIsSingleton;
-		const typesActive = activeEditorIndex === -1;
-		const docsActive = activeEditorIndex === -2;
-
-		// Two editors open → always collapse both panels to maximize editing space
-		// Unless user explicitly clicked a collapsed strip to expand it
-		let typesExpanded = typesActive || totalEditors < 2;
-		let docsExpanded = docsActive || totalEditors < 2;
-
-		// Everything competing with the editor for horizontal space. The version
-		// panel is a sibling of the editor inside this container, so it has to be
-		// subtracted too — leaving it out is what let a 280px panel open on top of
-		// an editor that was already at its minimum.
-		const available = (contentWidth || windowWidth) - (showVersionPanel ? VERSION_PANEL_WIDTH : 0);
-
-		let panelsWidth =
-			(typesExpanded ? TYPES_WIDTH : COLLAPSED_WIDTH) +
-			(hasDocs ? (docsExpanded ? DOCS_WIDTH : COLLAPSED_WIDTH) : 0);
-		let editorSpace = available - panelsWidth;
-		let maxEditors = Math.floor(editorSpace / MIN_EDITOR_WIDTH);
-
-		// Reclaim space for the editor by collapsing the list panels. An open editor
-		// is never the thing that gives way — a list losing 290px is recoverable in
-		// one click, an editor squeezed under its minimum is unusable.
-		//
-		// Types goes first, then docs. Not depth order, which would take docs first:
-		// depth is about how you got here, and what matters is what you still need
-		// once you're here. While editing, the type list is the pane you're least
-		// likely to want — you already know what you're editing, and switching type
-		// is a rarer move than switching between documents of the same type, which
-		// is the docs list's entire job. Collapsing the sibling list first to keep a
-		// list of types you aren't using has it backwards.
-		//
-		// A panel the user explicitly expanded (by clicking its collapsed strip) is
-		// never collapsed — an explicit click has to take effect. Collapsing it
-		// back in the same derivation is indistinguishable from the click doing
-		// nothing. If the editor then has no room, it becomes a strip instead and
-		// one click swaps them back; every pane stays reachable.
-		const reclaim = (collapseTypes: boolean, collapseDocs: boolean) => {
-			if (maxEditors >= 1) return;
-			if (collapseDocs && hasDocs) docsExpanded = false;
-			if (collapseTypes) typesExpanded = false;
-			panelsWidth =
-				(typesExpanded ? TYPES_WIDTH : COLLAPSED_WIDTH) +
-				(hasDocs ? (docsExpanded ? DOCS_WIDTH : COLLAPSED_WIDTH) : 0);
-			editorSpace = available - panelsWidth;
-			maxEditors = Math.floor(editorSpace / MIN_EDITOR_WIDTH);
-		};
-
-		if (totalEditors >= 1) {
-			reclaim(!typesActive, false); // types, unless the user just opened it
-			reclaim(false, !docsActive); // then docs, unless the user just opened it
-
-			// Neither list was explicitly opened, so there is no click to honour —
-			// collapse them regardless rather than leave the editor unusable.
-			if (!typesActive && !docsActive) {
-				reclaim(true, false);
-				reclaim(false, true);
-			}
-		}
-
-		// MIN_EDITOR_WIDTH is what the editor *wants*, not a floor it must clear to
-		// be shown. If the lists couldn't be collapsed any further (the user
-		// explicitly opened one), the editor simply takes what's left — a narrow
-		// editor still beats a 60px strip sitting next to unused space.
-		if (maxEditors < 1) maxEditors = 1;
-
-		// Build expanded editor indices, prioritizing active + most recent.
-		// A negative `validActiveIndex` means a *list* panel holds focus (-1 types,
-		// -2 docs), not an editor. Seeding the array with it left no editor in the
-		// expanded set at all, so clicking the document list collapsed the open
-		// editor to a 60px strip. Focus and space priority are separate concerns:
-		// fall back to the deepest editor so one is always expanded.
-		const primaryIndex = validActiveIndex >= 0 ? validActiveIndex : totalEditors - 1;
-		let expandedIndices: number[] = [primaryIndex];
-		if (maxEditors > 1) {
-			for (let i = totalEditors - 1; i >= 0 && expandedIndices.length < maxEditors; i--) {
-				if (i !== primaryIndex) expandedIndices.push(i);
-			}
-		}
-
-		return {
-			totalEditors,
-			expandedCount: expandedIndices.length,
-			collapsedCount: totalEditors - expandedIndices.length,
-			typesCollapsed: !typesExpanded,
-			docsCollapsed: !docsExpanded,
-			expandedIndices,
-			activeIndex: validActiveIndex,
-			typesExpanded,
-			docsExpanded
-		};
-	});
+	let layoutConfig = $derived(
+		computePaneLayout({
+			// A stacked reference counts as a second editor *only when it is a real
+			// column*; in presentation mode it is an overlay inside the primary
+			// editor (see `computePaneLayout`).
+			editorOpen: currentView === 'editor',
+			stackedColumn: editorStack.length > 0 && !presentationModeOn,
+			activeEditorIndex,
+			// Same rule as `documentsPanelState`: focus and presentation hide the list.
+			hasDocs:
+				!!selectedDocumentType && !currentTypeIsSingleton && !focusModeOn && !presentationModeOn,
+			typesShown: !typesColumnHidden,
+			available: (contentWidth || windowWidth) - (showVersionPanel ? VERSION_PANEL_WIDTH : 0)
+		})
+	);
 
 	// Pane widths: both lists are fixed (350px expanded, 60px collapsed) and never
 	// flex. Only the editor absorbs leftover width — it is the one pane that reads
@@ -624,21 +528,10 @@
 			return mobileView === 'types' ? 'w-full' : 'hidden';
 		}
 
-		// A space with a single type needs no types column beside its list.
-		if (documentTypes.length === 1 && selectedDocumentType === documentTypes[0]?.name) {
-			return 'hidden';
-		}
+		if (typesColumnHidden) return 'hidden';
 
 		return layoutConfig.typesExpanded ? 'w-[350px]' : 'w-[60px]';
 	});
-
-	// True when the user is currently looking at a singleton-flagged doc type.
-	// Drives layout adjustments — singletons skip the document-list panel
-	// entirely and just show types-sidebar + editor.
-	const currentTypeIsSingleton = $derived(
-		!!selectedDocumentType &&
-			(schemas.find((s) => s.name === selectedDocumentType)?.singleton ?? false)
-	);
 
 	let documentsPanelState = $derived.by(() => {
 		if (focusModeOn || presentationModeOn) return { visible: false, width: 'none' };
