@@ -213,5 +213,5 @@
 		{/if}
 	</SidebarFooter>
 
-	<SidebarRail />
+	<SidebarRail aria-label={i18n.t('Toggle sidebar')} title={i18n.t('Toggle sidebar')} />
 </Sidebar>

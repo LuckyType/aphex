@@ -33,6 +33,8 @@
 		documentData?: Record<string, any>;
 		/** The object holding the edited item, read by its fields' `hidden` conditions as `parentData`. */
 		parentData?: Record<string, any>;
+		/** Document type, for the title of a root-level field a slug's `source` names. */
+		schemaType?: string;
 	}
 
 	let {
@@ -45,7 +47,8 @@
 		readonly = false,
 		organizationId,
 		documentData,
-		parentData
+		parentData,
+		schemaType
 	}: Props = $props();
 
 	let myDepth = $state(0);
@@ -171,6 +174,7 @@
 							siblingData={value ?? {}}
 							siblingFields={schema.fields}
 							{parentData}
+							{schemaType}
 							onUpdate={(newValue) => {
 								onUpdate({ ...value, [field.name]: newValue });
 							}}

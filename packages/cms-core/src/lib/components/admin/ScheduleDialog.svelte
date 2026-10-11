@@ -7,7 +7,7 @@
 	// (re-validating then), and `runAt` is floored to the minute so 1:30 means 1:30:00.
 	import * as Dialog from '@aphexcms/ui/shadcn/dialog';
 	import * as Popover from '@aphexcms/ui/shadcn/popover';
-	import { Calendar } from '@aphexcms/ui/shadcn/calendar';
+	import Calendar from './StudioCalendar.svelte';
 	import { Button } from '@aphexcms/ui/shadcn/button';
 	import { Label } from '@aphexcms/ui/shadcn/label';
 	import { Calendar as CalendarIcon, Globe } from '@lucide/svelte';
@@ -15,6 +15,7 @@
 	import { documents } from '../../api/documents';
 	import { toast } from 'svelte-sonner';
 	import { untrack } from 'svelte';
+	import DialogCloseButton from './DialogCloseButton.svelte';
 	import { formatScheduleTime, initialScheduleRunAt } from '../../utils/schedule-time';
 
 	interface Props {
@@ -125,7 +126,7 @@
 </script>
 
 <Dialog.Root bind:open>
-	<Dialog.Content class="max-w-md">
+	<Dialog.Content class="max-w-md" showCloseButton={false}>
 		<Dialog.Header>
 			<Dialog.Title
 				>{action === 'publish'
@@ -189,5 +190,6 @@
 				{submitting ? i18n.t('Scheduling…') : i18n.t('Schedule')}
 			</Button>
 		</Dialog.Footer>
+		<DialogCloseButton />
 	</Dialog.Content>
 </Dialog.Root>
