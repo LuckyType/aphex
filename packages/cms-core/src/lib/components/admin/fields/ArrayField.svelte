@@ -14,10 +14,9 @@
 	import ReferenceField from './ReferenceField.svelte';
 	import FieldInput from './FieldInput.svelte';
 	import { newArrayItem } from '../../../utils/field-defaults';
-	import { DragDropProvider } from '@dnd-kit/svelte';
 	import { createSortable, isSortable } from '@dnd-kit/svelte/sortable';
 	import { arrayMove } from '@dnd-kit/helpers';
-	import { studioDragPlugins } from './drag-a11y';
+	import SortableProvider from './SortableProvider.svelte';
 	import {
 		GripVertical,
 		Ellipsis,
@@ -554,7 +553,7 @@
 	     own context menu, which we override via onRemove to drop the row). -->
 	{#if keyedItems.length > 0}
 		{#key dndKey}
-			<DragDropProvider plugins={studioDragPlugins} onDragEnd={handleDragEnd}>
+			<SortableProvider onDragEnd={handleDragEnd}>
 				<div class="space-y-1">
 					{#each keyedItems as item, index (item._key ?? `__row-${index}`)}
 						{@const sortable = createSortable({ id: item._key, index, disabled: readonly })}
@@ -567,6 +566,8 @@
 							{#if !readonly}
 								<button
 									{@attach sortable.attachHandle}
+									aria-label={i18n.t('Move item')}
+									aria-roledescription={i18n.t('sortable item')}
 									class="text-muted-foreground hover:text-foreground flex h-9 w-7 shrink-0 cursor-grab items-center justify-center active:cursor-grabbing"
 								>
 									<GripVertical class="h-4 w-4" />
@@ -610,7 +611,7 @@
 						</div>
 					{/each}
 				</div>
-			</DragDropProvider>
+			</SortableProvider>
 		{/key}
 	{/if}
 	{#if !readonly}
@@ -632,7 +633,7 @@
 		</div>
 	{:else if primitiveType === 'image'}
 		{#key dndKey}
-			<DragDropProvider plugins={studioDragPlugins} onDragEnd={handlePrimitiveDragEnd}>
+			<SortableProvider onDragEnd={handlePrimitiveDragEnd}>
 				{#if isGridLayout}
 					<!-- Grid layout for images -->
 					{#if arrayValue.length === 0}
@@ -699,6 +700,8 @@
 									>
 										<button
 											{@attach sortable.attachHandle}
+											aria-label={i18n.t('Move item')}
+											aria-roledescription={i18n.t('sortable item')}
 											class="bg-background/80 cursor-grab rounded p-1 active:cursor-grabbing"
 										>
 											<GripVertical class="h-3.5 w-3.5" />
@@ -748,6 +751,8 @@
 								{#if !readonly}
 									<button
 										{@attach sortable.attachHandle}
+										aria-label={i18n.t('Move item')}
+										aria-roledescription={i18n.t('sortable item')}
 										class="text-muted-foreground hover:text-foreground flex h-8 w-6 cursor-grab items-center justify-center active:cursor-grabbing"
 									>
 										<GripVertical class="h-4 w-4" />
@@ -807,11 +812,11 @@
 						{/each}
 					</div>
 				{/if}
-			</DragDropProvider>
+			</SortableProvider>
 		{/key}
 	{:else}
 		{#key dndKey}
-			<DragDropProvider plugins={studioDragPlugins} onDragEnd={handlePrimitiveDragEnd}>
+			<SortableProvider onDragEnd={handlePrimitiveDragEnd}>
 				<div class="space-y-1">
 					{#each arrayValue as item, index (`prim-${index}`)}
 						{@const sortable = createSortable({ id: `prim-${index}`, index, disabled: readonly })}
@@ -823,6 +828,8 @@
 							{#if !readonly}
 								<button
 									{@attach sortable.attachHandle}
+									aria-label={i18n.t('Move item')}
+									aria-roledescription={i18n.t('sortable item')}
 									class="text-muted-foreground hover:text-foreground flex h-8 w-6 cursor-grab items-center justify-center active:cursor-grabbing"
 								>
 									<GripVertical class="h-4 w-4" />
@@ -900,7 +907,7 @@
 						</div>
 					{/each}
 				</div>
-			</DragDropProvider>
+			</SortableProvider>
 		{/key}
 	{/if}
 
@@ -969,7 +976,7 @@
 		</div>
 	{:else}
 		{#key dndKey}
-			<DragDropProvider plugins={studioDragPlugins} onDragEnd={handleDragEnd}>
+			<SortableProvider onDragEnd={handleDragEnd}>
 				<div class="space-y-1">
 					{#each keyedItems as item, index (item._key ?? `__row-${index}`)}
 						{@const sortable = createSortable({ id: item._key, index, disabled: readonly })}
@@ -983,6 +990,8 @@
 							{#if !readonly}
 								<button
 									{@attach sortable.attachHandle}
+									aria-label={i18n.t('Move item')}
+									aria-roledescription={i18n.t('sortable item')}
 									class="text-muted-foreground hover:text-foreground flex h-9 w-7 shrink-0 cursor-grab items-center justify-center active:cursor-grabbing"
 								>
 									<GripVertical class="h-4 w-4" />
@@ -1050,7 +1059,7 @@
 						</div>
 					{/each}
 				</div>
-			</DragDropProvider>
+			</SortableProvider>
 		{/key}
 	{/if}
 

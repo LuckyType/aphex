@@ -7,6 +7,8 @@
 	import * as Calendar from '@aphexcms/ui/shadcn/calendar';
 	import * as i18n from '../../i18n/index';
 	import { cn } from '@aphexcms/ui/utils';
+	import ChevronLeftIcon from '@lucide/svelte/icons/chevron-left';
+	import ChevronRightIcon from '@lucide/svelte/icons/chevron-right';
 
 	// Distributive, so `RootProps` stays a single/multiple union.
 	type WithoutChildrenOrChild<T> = T extends unknown ? Omit<T, 'children' | 'child'> : never;
@@ -47,8 +49,22 @@
 	{#snippet children({ months, weekdays })}
 		<Calendar.Months>
 			<Calendar.Nav>
-				<Calendar.PrevButton aria-label={i18n.t('Previous month')} />
-				<Calendar.NextButton aria-label={i18n.t('Next month')} />
+				<!-- bits-ui merges its own hardcoded aria-label over the caller's, so only
+				     a `child` snippet can name the month buttons (bits-ui 2.18.1). -->
+				<Calendar.PrevButton>
+					{#snippet child({ props })}
+						<button {...props} aria-label={i18n.t('Previous month')}>
+							<ChevronLeftIcon class="size-4" aria-hidden="true" />
+						</button>
+					{/snippet}
+				</Calendar.PrevButton>
+				<Calendar.NextButton>
+					{#snippet child({ props })}
+						<button {...props} aria-label={i18n.t('Next month')}>
+							<ChevronRightIcon class="size-4" aria-hidden="true" />
+						</button>
+					{/snippet}
+				</Calendar.NextButton>
 			</Calendar.Nav>
 			{#each months as month, monthIndex (month)}
 				<Calendar.Month>
