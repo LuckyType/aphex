@@ -64,6 +64,7 @@
 		type AcceptedFileTypes
 	} from '../../utils/file-accept';
 	import { revalidateRejectedUploads } from '../../utils/upload-queue';
+	import DialogCloseButton from './DialogCloseButton.svelte';
 
 	interface Props {
 		/** When true, shows a "Select" button for picking an asset */
@@ -3143,7 +3144,7 @@
 		}
 	}}
 >
-	<Dialog.Content class="!z-[10000] max-w-lg" overlayClass="!z-[9999]">
+	<Dialog.Content class="!z-[10000] max-w-lg" overlayClass="!z-[9999]" showCloseButton={false}>
 		<Dialog.Header>
 			<Dialog.Title>{i18n.t('Upload Assets')}</Dialog.Title>
 		</Dialog.Header>
@@ -3337,5 +3338,6 @@
 				</Button>
 			</div>
 		{/if}
+		<DialogCloseButton />
 	</Dialog.Content>
 </Dialog.Root>
