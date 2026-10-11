@@ -23,8 +23,9 @@ import type { ViewField } from '@aphexcms/cms-core';
 ```
 
 `input` is required and names an `aphex/field/view` plugin part. The part's component receives
-`FieldViewProps`: `field`, `documentData`, `siblingData`, `parentData`, `fieldPath`, `schemaType`
-and `readonly`. It has no value and no `onUpdate`.
+`FieldViewProps`: `field`, `documentData`, `siblingData`, `parentData`, `fieldPath`, `schemaType`,
+`readonly` and `onUpdateSiblings`. It has no value and no `onUpdate`; `onUpdateSiblings(patch)`
+writes its neighbours, for a slot such as an address search that fills the fields around it.
 
 ## What a view is not
 
