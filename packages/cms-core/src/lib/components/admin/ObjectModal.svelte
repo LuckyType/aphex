@@ -178,6 +178,7 @@
 							onUpdate={(newValue) => {
 								onUpdate({ ...value, [field.name]: newValue });
 							}}
+							onUpdateSiblings={(patch) => onUpdate({ ...value, ...patch })}
 							onOpenReference={onOpenReference ? handleOpenReference : undefined}
 							{readonly}
 							{organizationId}

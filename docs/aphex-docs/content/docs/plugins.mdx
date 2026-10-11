@@ -325,11 +325,27 @@ Declare it as a `view` field and draw it with an `aphex/field/view` part:
 ```
 
 The component receives `FieldViewProps` (`field`, `documentData`, `siblingData`, `parentData`,
-`fieldPath`, `schemaType`, `readonly`) and nothing to write: a view has no value and no
-`onUpdate`. The server treats the name as data the schema never declared, so a write carrying a
+`fieldPath`, `schemaType`, `readonly`, `onUpdateSiblings`) and no value of its own: a view has
+no `onUpdate`. The server treats the name as data the schema never declared, so a write carrying a
 value under it is refused, and the generated types, the GraphQL and OpenAPI schemas and the
 new-document defaults leave it out. Before this part existed, the same slot was a string field
 whose widget never called `onUpdate`, which worked until a validator or a type generator met it.
+
+### Fill several neighbours from one action
+
+An address search that sets street, postal code, city and coordinates, or a template picker that
+fills a whole object, writes more than its own field. Both `FieldComponentProps` and
+`FieldViewProps` carry `onUpdateSiblings(patch)`, which merges `patch` into the object the field
+belongs to (the document at the top level, the inline object or array item inside one) as one
+change, so the editor saves it once and validation sees every field together:
+
+```svelte
+<button onclick={() => onUpdateSiblings?.({ street: hit.street, city: hit.city })}>
+	{hit.label}
+</button>
+```
+
+It is undefined where the field is drawn outside an editable object, so call it optionally.
 
 <Accordions>
 <Accordion title="Going further: register a whole new field type (like `type: 'color'`)">
