@@ -18,6 +18,7 @@ import { resolveMaxUploadBytes } from '../../../api/limits';
 // `dist/images/index.js`. It resolves in the monorepo (Vite does directory resolution) and
 // fails for everyone installing from npm, which is the gap this import fell through.
 import { configHashFor, resolveImageConfig } from '../../../images/index.js';
+import { ImageMetadataError } from '../../../images/strip-metadata.js';
 import type { AphexEnv } from '../index';
 
 export const assetsRouter: Hono<AphexEnv> = new Hono<AphexEnv>()
@@ -351,6 +352,12 @@ export const assetsRouter: Hono<AphexEnv> = new Hono<AphexEnv>()
 
 			return c.json({ success: true, data: asset });
 		} catch (error) {
+			if (error instanceof ImageMetadataError) {
+				return c.json(
+					{ success: false, error: 'Asset upload failed', message: error.message },
+					422
+				);
+			}
 			cmsLogger.error('Asset upload failed:', error);
 			return c.json(
 				{

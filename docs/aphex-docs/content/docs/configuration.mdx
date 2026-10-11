@@ -196,6 +196,12 @@ export default createCMSConfig({
 			default: 'false',
 			description:
 				'Let the browser upload straight to object storage, bypassing this app. Requires bucket CORS PUT from your origin.'
+		},
+		stripImageMetadata: {
+			type: 'boolean | { quality?: number }',
+			default: 'false',
+			description:
+				'Remove EXIF (GPS position, device), XMP, IPTC and text metadata from uploaded images before they are stored.'
 		}
 	}}
 />
@@ -296,6 +302,22 @@ upload: {
 It's also ignored — with a silent fallback to uploading through the app — when the storage adapter
 can't sign uploads or `security.secretEncryptionKey` is unset. Uploading through the app works
 everywhere, so the fallback is always safe.
+
+### stripImageMetadata
+
+A phone photo carries the GPS position it was taken at, the device, and often the owner's name.
+Derivatives never keep it, but `/media/:id/:filename` serves the original as uploaded. With
+`stripImageMetadata: true`, an image carrying EXIF, XMP, IPTC or PNG text is re-encoded in its own
+format before it is stored: the EXIF orientation is applied to the pixels (so a portrait photo
+stays upright once the tag is gone), the ICC profile is kept, and JPEG, WebP and AVIF are written at
+`quality` (default 90). An image without metadata keeps its bytes. The removed blocks are recorded
+on the asset as `metadata.metadataRemoved`.
+
+It fails closed. An image that carries metadata but cannot be rewritten, such as a HEIC photo (the
+prebuilt libvips has no HEVC codec), or that cannot be read at all, is refused with a 422 rather
+than stored with what the option promises to remove. Direct uploads are read back and rewritten in
+place up to 25 MB; a larger direct image upload is refused. SVG is left alone. Off by default because
+it rewrites the stored original; assets uploaded before it was turned on keep their metadata.
 
 ## email
 

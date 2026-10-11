@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { cmsLogger } from '../../../utils/logger';
+import { ImageMetadataError } from '../../../images/strip-metadata';
 import { confirmUploadRequest, createUploadUrlRequest } from '../../../api/schemas/assets';
 import { resolveFieldPrivacy } from '../../../utils/asset-privacy';
 import {
@@ -262,6 +263,9 @@ export const assetsDirectUploadRouter: Hono<AphexEnv> = new Hono<AphexEnv>()
 				return c.json({ success: true, data: asset });
 			} catch (error) {
 				const message = error instanceof Error ? error.message : 'Could not confirm upload';
+				if (error instanceof ImageMetadataError) {
+					return c.json({ success: false, error: message }, 422);
+				}
 				cmsLogger.error('[Asset API] Could not confirm direct upload:', error);
 				// Verification failures are the caller's problem (nothing was
 				// uploaded, or it was too large), not a server fault.
