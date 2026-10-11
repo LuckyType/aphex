@@ -43,9 +43,12 @@ beforeEach(() =>
 		}
 	})
 );
-afterEach(() => {
+afterEach(async () => {
 	cleanup();
 	configureStudioI18n({});
+	// bits-ui restores the body style 24 ms after a dialog's scroll lock is
+	// released; let that timer run while jsdom still has a document.
+	await new Promise((resolve) => setTimeout(resolve, 50));
 });
 
 it('names the calendar month buttons', async () => {
