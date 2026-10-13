@@ -178,17 +178,21 @@ function resolveNamedType(
  * carrying an explicit `_type` must match one of the declared entries — an
  * unrecognized `_type` is an error, never silently coerced to some other entry,
  * even when only one type is declared. The single-entry fallback only applies
- * when the item has no `_type` tag at all (untagged items in a single-type array).
+ * when the item has no `_type` tag at all: a primitive in a single-type array,
+ * or an object in an array declaring one inline object type.
  */
 function resolveArrayItemTypeRef(of: TypeReference[], item: unknown): TypeReference | undefined {
 	if (isPlainObject(item)) {
-		// An object item must say what it is. Falling back to the single declared
-		// type used to let a `_type`-less row through — it validated, was stored,
-		// and then rendered as "Unknown item" in the studio, whose array field
-		// identifies rows by `_type`. Primitives (a string array) still resolve by
-		// position below.
-		if (typeof item._type !== 'string') return undefined;
-		return of.find((ref) => ref.name === item._type || ref.type === item._type);
+		if (typeof item._type === 'string') {
+			return of.find((ref) => ref.name === item._type || ref.type === item._type);
+		}
+		// An untagged object in an array declaring one inline object type is that
+		// type: rows written by an app's own field input, or stored before tags
+		// were checked, carry no `_type`, and refusing them would make every such
+		// document unsavable. A named registered type (a page-builder block) or
+		// several declared types leave nothing to infer, so the item is refused
+		// as missing its `_type`.
+		return of.length === 1 && of[0]?.fields ? of[0] : undefined;
 	}
 	if (of.length === 1) return of[0];
 	return undefined;
