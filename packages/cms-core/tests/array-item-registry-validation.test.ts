@@ -107,4 +107,39 @@ describe('array items of registered types', () => {
 		const result = await validateDocumentData(tags, { tags: ['a', 'b'] });
 		expect(result.isValid).toBe(true);
 	});
+	it('reads an untagged object in a single inline-type array as that type', async () => {
+		const hours: SchemaType = {
+			type: 'document',
+			name: 'hours',
+			title: 'Hours',
+			fields: [
+				{
+					name: 'sessions',
+					type: 'array',
+					title: 'Sessions',
+					of: [
+						{
+							type: 'object',
+							name: 'session',
+							fields: [
+								{
+									name: 'opensAt',
+									type: 'string',
+									title: 'Opens at',
+									validation: (Rule) => Rule.required()
+								}
+							]
+						}
+					]
+				}
+			]
+		};
+
+		expect((await validateDocumentData(hours, { sessions: [{ opensAt: '09:00' }] })).isValid).toBe(
+			true
+		);
+		const missing = await validateDocumentData(hours, { sessions: [{}] });
+		expect(missing.isValid).toBe(false);
+		expect(messagesFor(missing, 'sessions')[0]).toMatch(/opensAt/);
+	});
 });
