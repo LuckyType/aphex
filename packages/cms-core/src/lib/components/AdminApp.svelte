@@ -63,6 +63,7 @@
 	import { toast } from 'svelte-sonner';
 	import { setPermissionsContext } from '../permissions-context.svelte';
 	import { computePaneLayout } from './pane-layout';
+	import { opensPreviewByDefault } from '../preview/open-by-default';
 
 	interface Props {
 		schemas: SchemaType[];
@@ -360,6 +361,30 @@
 	function exitPresentationMode() {
 		presentationModeOn = false;
 	}
+
+	// A schema with `previewOpenByDefault` opens straight into presentation
+	// mode. Decided once per opened document, so closing the preview sticks
+	// until another document opens.
+	let presentationDecidedFor: string | null = null;
+	$effect(() => {
+		if (currentView !== 'editor' || !selectedDocumentType) {
+			presentationDecidedFor = null;
+			return;
+		}
+		const opened = `${selectedDocumentType}:${isCreatingDocument ? 'new' : (editingDocumentId ?? '')}`;
+		if (opened === presentationDecidedFor) return;
+		presentationDecidedFor = opened;
+		const schema = untrack(() => schemas.find((s) => s.name === selectedDocumentType));
+		if (
+			!presentationModeOn &&
+			opensPreviewByDefault(
+				schema,
+				untrack(() => windowWidth)
+			)
+		) {
+			untrack(togglePresentationMode);
+		}
+	});
 
 	// Both modes hide the side panels and only make sense with an editor open.
 	// Leaving the editor through anything other than the back button (e.g. the

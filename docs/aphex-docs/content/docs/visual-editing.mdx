@@ -51,6 +51,8 @@ export const blogPost = defineType({
 });
 ```
 
+By default the preview waits for the Present button. For a document whose editing only makes sense beside it (a site navigation, a footer), set `previewOpenByDefault: true` and the editor opens with the preview already beside the fields. It applies on windows wide enough to show the Present button, and closing the preview keeps it closed until another document is opened.
+
 That's the entire setup. Plain text fields are now click-to-edit automatically — the CMS encodes them for you. The rest of this guide is about the values the CMS _can't_ see.
 
 ## 3. `usePreview()` — the one helper
