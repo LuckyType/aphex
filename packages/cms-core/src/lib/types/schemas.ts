@@ -516,6 +516,13 @@ export interface DocumentType {
 	previewUrl?:
 		| string
 		| ((doc: Record<string, unknown>, orgId: string | null) => string | null | undefined);
+	/**
+	 * Open the editor with the live preview beside it (presentation mode)
+	 * instead of waiting for the Present button. Needs `previewUrl`, and only
+	 * applies where that button shows (wide windows). Closing the preview
+	 * keeps it closed until another document is opened.
+	 */
+	previewOpenByDefault?: boolean;
 	createdAt?: Date | null;
 	updatedAt?: Date | null;
 }
@@ -692,6 +699,8 @@ export interface SchemaType {
 	previewUrl?:
 		| string
 		| ((doc: Record<string, unknown>, orgId: string | null) => string | null | undefined);
+	/** See DocumentType.previewOpenByDefault for full docs. */
+	previewOpenByDefault?: boolean;
 	createdAt?: Date | null;
 	updatedAt?: Date | null;
 }
