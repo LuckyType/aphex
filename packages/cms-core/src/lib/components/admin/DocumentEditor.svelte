@@ -1144,6 +1144,13 @@
 		return resolvePreviewTitle(source, schema);
 	}
 
+	// A singleton's title is usually its type's name ("Navigation"), so the type
+	// eyebrow above it would only say the same word twice.
+	function titleRepeatsType(): boolean {
+		const type = String(schema?.title || effectiveType || '');
+		return getPreviewTitle().trim().toLowerCase() === type.trim().toLowerCase();
+	}
+
 	// CRITICAL: Clear state IMMEDIATELY when switching documents to prevent cross-contamination
 	$effect(() => {
 		// This effect runs first - watching documentId and documentType
@@ -2257,8 +2264,10 @@
 		class="text-muted-foreground flex min-w-0 items-center gap-1.5 text-[11px] font-medium tracking-wider uppercase"
 	>
 		<!-- In the visual editor, a breadcrumb-style back arrow before the type · title
-		     exits visual editing (back to the document list), replacing the close X. -->
-		{#if presentationMode && onTogglePresentation}
+		     exits visual editing (back to the document list), replacing the close X.
+		     Not for a type that opens beside its preview by default: there the split
+		     view is the editor itself, and the Present button still closes it. -->
+		{#if presentationMode && onTogglePresentation && !schema?.previewOpenByDefault}
 			<button
 				type="button"
 				onclick={onTogglePresentation}
@@ -2269,10 +2278,14 @@
 				<ArrowLeft class="h-4 w-4" />
 			</button>
 		{/if}
-		<span class="shrink-0 whitespace-nowrap">{schema?.title || effectiveType}</span>
+		<!-- Outside presentation mode the <h1> below says the title; when that title is
+		     just the type's name, the eyebrow would repeat it. -->
+		{#if presentationMode || !titleRepeatsType()}
+			<span class="shrink-0 whitespace-nowrap">{schema?.title || effectiveType}</span>
+		{/if}
 		<!-- The title is only shown here in presentation mode, where there's no <h1>.
 		     In the normal editor the <h1> already renders it, so don't duplicate it. -->
-		{#if presentationMode}
+		{#if presentationMode && !titleRepeatsType()}
 			<span class="shrink-0" aria-hidden="true">·</span>
 			<span class="max-w-[24rem] min-w-0 truncate">{getPreviewTitle()}</span>
 		{/if}
