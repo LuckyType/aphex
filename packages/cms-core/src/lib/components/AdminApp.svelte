@@ -71,6 +71,12 @@
 		schemaError?: { message: string } | null;
 		title?: string;
 		tabTitle?: string;
+		/**
+		 * The heading of the content types panel (and its collapsed label and the
+		 * phone breadcrumb). Defaults to the translated "Content"; an app that
+		 * shows a subset of its types under another name passes that name.
+		 */
+		typesTitle?: string;
 		graphqlSettings?: { endpoint: string; enableGraphiQL: boolean } | null;
 		isReadOnly?: boolean;
 		/**
@@ -104,6 +110,7 @@
 		schemaError = null,
 		title = 'Aphex CMS',
 		tabTitle = undefined,
+		typesTitle = undefined,
 		graphqlSettings = null,
 		isReadOnly = false,
 		capabilities = [],
@@ -114,6 +121,8 @@
 		plugins = [],
 		blockPreviews = {}
 	}: Props = $props();
+
+	const typesHeading = $derived(typesTitle ?? i18n.t('Content'));
 
 	// One resolver over the (client-side) plugins, reused for every part kind.
 	const partResolver = $derived(createPartResolver(plugins));
@@ -1238,7 +1247,7 @@
 	<title
 		>{tabTitle ??
 			(activeTab.value === 'structure'
-				? i18n.t('Content')
+				? typesHeading
 				: activeTab.value === 'media'
 					? i18n.t('Media')
 					: 'Vision')}{tabTitle ? '' : ` - ${title}`}</title
@@ -1272,7 +1281,7 @@
 								d="M15 19l-7-7 7-7"
 							/>
 						</svg>
-						{i18n.t('Content')}
+						{typesHeading}
 					</button>
 					<span class="text-muted-foreground mx-2">/</span>
 					<span class="text-sm font-medium">
@@ -1303,7 +1312,7 @@
 							: i18n.t('Document')}
 					</span>
 				{:else}
-					<span class="text-sm font-medium">{i18n.t('Content')}</span>
+					<span class="text-sm font-medium">{typesHeading}</span>
 				{/if}
 			</div>
 		</div>
@@ -1321,7 +1330,7 @@
 									documentTypes.find((t) => t.name === selectedDocumentType)?.title ||
 										selectedDocumentType
 								)
-							: i18n.t('Content')}
+							: typesHeading}
 					</h1>
 				{/if}
 				{#key `${currentView}-${selectedDocumentType}`}
@@ -1369,7 +1378,7 @@
 											<div
 												class="text-foreground -mt-2 text-sm font-medium whitespace-nowrap [writing-mode:vertical-rl]"
 											>
-												{i18n.t('Content')}
+												{typesHeading}
 											</div>
 										</div>
 									</button>
@@ -1379,7 +1388,7 @@
 											<h2
 												class="text-muted-foreground border-rule mt-2 mb-3 hidden px-2 pb-3 text-sm font-medium sm:block sm:border-b"
 											>
-												{i18n.t('Content')}
+												{typesHeading}
 											</h2>
 											{#each groupedDocumentTypes as bucket (bucket.name ?? '__ungrouped__')}
 												{#if bucket.name}
