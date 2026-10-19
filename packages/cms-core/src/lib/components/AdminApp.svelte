@@ -1391,7 +1391,8 @@
 												{typesHeading}
 											</h2>
 											{#each groupedDocumentTypes as bucket (bucket.name ?? '__ungrouped__')}
-												{#if bucket.name}
+												<!-- A group named like the panel heading would repeat it right below. -->
+												{#if bucket.name && i18n.label(bucket.name) !== typesHeading}
 													<div
 														class="text-muted-foreground mt-3 mb-1 px-2 text-xs font-semibold tracking-wide uppercase first:mt-0"
 													>
