@@ -2,6 +2,7 @@
 	import * as i18n from '../../i18n/index';
 	import { studioExtensions, type StudioPublishRefusal } from '../../studio-extensions';
 	import { isFieldVisible } from '../../schema-utils/visibility';
+	import { fieldInGroup, visibleFieldGroups } from '../../schema-utils/field-groups';
 	import { tick, untrack } from 'svelte';
 	import { Button } from '@aphexcms/ui/shadcn/button';
 	import { Badge } from '@aphexcms/ui/shadcn/badge';
@@ -879,19 +880,30 @@
 	// matches (supports string or string[]).
 	let activeGroup = $state<string>('all');
 
+	const visibleGroups = $derived(
+		visibleFieldGroups(schema?.groups, schema?.fields ?? [], documentData, (f) =>
+			hiddenFieldNames.has(f.name)
+		)
+	);
+
 	$effect(() => {
 		if (!schema?.groups?.length) {
 			activeGroup = 'all';
 			return;
 		}
-		const defaultGroup = schema.groups.find((g) => g.default && !g.hidden);
+		const defaultGroup = untrack(() => visibleGroups).find((g) => g.default);
 		activeGroup = defaultGroup?.name ?? 'all';
 	});
 
-	function fieldInGroup(field: { group?: string | string[] }, groupName: string): boolean {
-		if (groupName === 'all') return true;
-		if (!field.group) return false;
-		return Array.isArray(field.group) ? field.group.includes(groupName) : field.group === groupName;
+	// The open tab lost its last visible field: show every field rather than an empty pane.
+	$effect(() => {
+		if (activeGroup !== 'all' && !visibleGroups.some((g) => g.name === activeGroup)) {
+			activeGroup = 'all';
+		}
+	});
+
+	function fieldInActiveGroup(field: { group?: string | string[] }): boolean {
+		return activeGroup === 'all' || fieldInGroup(field, activeGroup);
 	}
 
 	function syntaxHighlightJson(json: string): string {
@@ -2419,7 +2431,6 @@
 			     never scroll away or get clipped by a field (previous sticky-inside-scroll
 			     approach was fragile across field types). Only the fields below scroll. -->
 			{#if schema && schema.groups && schema.groups.length > 0}
-				{@const visibleGroups = schema.groups.filter((g) => !g.hidden)}
 				<div
 					class="border-rule/60 flex shrink-0 [scrollbar-width:none] items-center gap-1 overflow-x-auto border-b px-4 py-2 lg:px-6 [&::-webkit-scrollbar]:hidden"
 				>
@@ -2566,7 +2577,7 @@
 							onerror={(error) =>
 								cmsLogger.error('[DocumentEditor]', 'Error in editor content:', error)}
 						>
-							{#each schema.fields.filter((f) => fieldInGroup(f, activeGroup) && !hiddenFieldNames.has(f.name)) as field (field.name)}
+							{#each schema.fields.filter((f) => fieldInActiveGroup(f) && !hiddenFieldNames.has(f.name)) as field (field.name)}
 								{@const viewData =
 									isPreviewingVersion && activePreview
 										? activePreview.data
