@@ -2,7 +2,11 @@
 	import * as i18n from '../../i18n/index';
 	import { studioExtensions, type StudioPublishRefusal } from '../../studio-extensions';
 	import { isFieldVisible } from '../../schema-utils/visibility';
-	import { fieldInGroup, visibleFieldGroups } from '../../schema-utils/field-groups';
+	import {
+		fieldGroupTabsNeeded,
+		fieldInGroup,
+		visibleFieldGroups
+	} from '../../schema-utils/field-groups';
 	import { tick, untrack } from 'svelte';
 	import { Button } from '@aphexcms/ui/shadcn/button';
 	import { Badge } from '@aphexcms/ui/shadcn/badge';
@@ -875,7 +879,7 @@
 		focusable?.focus();
 	}
 
-	// Field group tabs — only render when schema declares `groups`.
+	// Field group tabs: only when the schema declares `groups` and they split the fields (`showGroupTabs`).
 	// 'all' = show every field; otherwise filter to fields whose `group`
 	// matches (supports string or string[]).
 	let activeGroup = $state<string>('all');
@@ -902,8 +906,15 @@
 		}
 	});
 
+	// One group holding every rendered field would only repeat "All fields".
+	const showGroupTabs = $derived(
+		fieldGroupTabsNeeded(visibleGroups, schema?.fields ?? [], documentData, (f) =>
+			hiddenFieldNames.has(f.name)
+		)
+	);
+
 	function fieldInActiveGroup(field: { group?: string | string[] }): boolean {
-		return activeGroup === 'all' || fieldInGroup(field, activeGroup);
+		return !showGroupTabs || activeGroup === 'all' || fieldInGroup(field, activeGroup);
 	}
 
 	function syntaxHighlightJson(json: string): string {
@@ -2430,7 +2441,7 @@
 			<!-- Field Group Tabs — a fixed header OUTSIDE the scroll container, so they
 			     never scroll away or get clipped by a field (previous sticky-inside-scroll
 			     approach was fragile across field types). Only the fields below scroll. -->
-			{#if schema && schema.groups && schema.groups.length > 0}
+			{#if schema && showGroupTabs}
 				<div
 					class="border-rule/60 flex shrink-0 [scrollbar-width:none] items-center gap-1 overflow-x-auto border-b px-4 py-2 lg:px-6 [&::-webkit-scrollbar]:hidden"
 				>

@@ -6,7 +6,7 @@
  * Run: pnpm -F @aphexcms/cms-core test
  */
 import { describe, expect, it } from 'vitest';
-import { visibleFieldGroups } from '../src/lib/schema-utils/field-groups';
+import { fieldGroupTabsNeeded, visibleFieldGroups } from '../src/lib/schema-utils/field-groups';
 import type { Field, FieldGroup } from '../src/lib/types/schemas';
 
 const groups: FieldGroup[] = [
@@ -53,5 +53,28 @@ describe('visibleFieldGroups', () => {
 			{ name: 'price', type: 'number', title: 'Price', group: ['general', 'food'] }
 		];
 		expect(names(visibleFieldGroups(groups, shared, {}))).toEqual(['general', 'food']);
+	});
+});
+
+describe('fieldGroupTabsNeeded', () => {
+	const tabs = (data: Record<string, unknown>, list: Field[] = fields) =>
+		fieldGroupTabsNeeded(visibleFieldGroups(groups, list, data), list, data);
+
+	it('shows no tabs when one group holds every field the editor renders', () => {
+		const grouped = fields.filter((f) => f.name !== 'note');
+		expect(tabs({ kind: 'service' }, grouped)).toBe(false);
+	});
+
+	it('shows them once a second group applies', () => {
+		const grouped = fields.filter((f) => f.name !== 'note');
+		expect(tabs({ kind: 'food' }, grouped)).toBe(true);
+	});
+
+	it('shows them while a field outside the one group still renders under All fields', () => {
+		expect(tabs({ kind: 'service' })).toBe(true);
+	});
+
+	it('shows none with no group left', () => {
+		expect(fieldGroupTabsNeeded([], fields, {})).toBe(false);
 	});
 });
