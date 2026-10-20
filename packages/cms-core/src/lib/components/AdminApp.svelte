@@ -281,6 +281,14 @@
 	// Client-side routing state
 	let currentView = $state<'dashboard' | 'documents' | 'editor'>('dashboard');
 	let selectedDocumentType = $state<string | null>(null);
+	// The open type's list heading, as the phone breadcrumb names it.
+	const openTypePlural = $derived(
+		pluralize(
+			documentTypes.find((t) => t.name === selectedDocumentType)?.title ??
+				selectedDocumentType ??
+				''
+		)
+	);
 	// The app's tree for the open type, which takes the list pane's place.
 	const currentTree = $derived(studioDocumentTree(selectedDocumentType));
 	// Goes up on every write the editor makes, so the tree can re-read.
@@ -1283,13 +1291,12 @@
 						</svg>
 						{typesHeading}
 					</button>
-					<span class="text-muted-foreground mx-2">/</span>
-					<span class="text-sm font-medium">
-						{pluralize(
-							documentTypes.find((t) => t.name === selectedDocumentType)?.title ||
-								selectedDocumentType
-						)}
-					</span>
+					<!-- An app that names the types panel after its one type would read
+					     "Pages / Pages": the back link already says it. -->
+					{#if openTypePlural !== typesHeading}
+						<span class="text-muted-foreground mx-2">/</span>
+						<span class="text-sm font-medium">{openTypePlural}</span>
+					{/if}
 				{:else if mobileView === 'editor'}
 					<Button
 						onclick={navigateBack}
