@@ -4,6 +4,7 @@ import { authToContext } from '../../../local-api/auth-helpers';
 import { cmsLogger } from '../../../utils/logger';
 import { hasCapability } from '../../../types/capabilities';
 import { RevisionConflictError } from '../../../db/interfaces/index';
+import { DocumentPolicyError } from '../../../local-api/policies';
 import { listVersionsQuery, restoreVersionRequest } from '../../../api/schemas/documents';
 import type { AphexEnv } from '../index';
 
@@ -156,6 +157,12 @@ export const documentVersionsRouter: Hono<AphexEnv> = new Hono<AphexEnv>()
 				);
 			}
 
+			// The lock and `beforeWrite` policies hold for a restore as for a save.
+			const stored = await databaseAdapter.findByDocIdAdvanced?.(context.organizationId, id);
+			if (stored) {
+				await localAPI.getCollection?.(stored.type)?.assertRestorable(context, id, versionNumber);
+			}
+
 			const document = await localAPI.versionService.restoreVersion(
 				databaseAdapter,
 				context.organizationId,
@@ -175,6 +182,18 @@ export const documentVersionsRouter: Hono<AphexEnv> = new Hono<AphexEnv>()
 				message: `Restored to version ${versionNumber}`
 			});
 		} catch (error) {
+			if (error instanceof DocumentPolicyError) {
+				return c.json(
+					{
+						success: false,
+						error: 'Refused by policy',
+						message: error.message,
+						operation: error.operation,
+						lockedFields: error.lockedFields
+					},
+					409
+				);
+			}
 			cmsLogger.error('Failed to restore document version:', error);
 			if (error instanceof RevisionConflictError) {
 				return c.json(

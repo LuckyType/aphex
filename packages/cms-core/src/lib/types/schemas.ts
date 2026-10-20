@@ -621,15 +621,38 @@ export interface SchemaHooks<TData = Record<string, unknown>> {
 	beforeValidate?: DocumentHook<TData>[];
 }
 
+/**
+ * Who is performing a write, as a policy sees it: enough to refuse a change
+ * only some writers may make, without importing runtime auth types.
+ */
+export interface PolicyWriter {
+	organizationId: string;
+	userId?: string;
+	/**
+	 * The writer's effective organization role (an instance role such as
+	 * `super_admin` reads as `owner`), or null when the request carries no
+	 * session (an API key, an anonymous call). Absent on a system write.
+	 */
+	role?: string | null;
+	/** True for a system write (`overrideAccess`): a seed, a script, a job. */
+	system?: boolean;
+}
+
 /** What a policy sees of the document it judges. */
 export interface DocumentPolicyContext<TData = Record<string, unknown>> {
-	operation: 'publish' | 'unpublish' | 'delete';
+	operation: 'create' | 'update' | 'publish' | 'unpublish' | 'delete';
+	/** Empty on a create that has no id yet. */
 	documentId: string;
-	/** The draft about to be published, or the current draft for unpublish and delete. */
+	/**
+	 * The draft about to be published, the current draft for unpublish and
+	 * delete, or the draft a create or update is about to store.
+	 */
 	data: TData;
 	/** What is published right now, or null when nothing is. */
 	publishedData: TData | null;
-	context: { organizationId: string; userId?: string };
+	/** The stored draft before a create or update (null on create); absent for the other operations. */
+	previousData?: TData | null;
+	context: PolicyWriter;
 	schema: SchemaType;
 	/**
 	 * The adapter the collection writes through, for a policy that judges the
@@ -660,6 +683,12 @@ export type DocumentPolicy<TData = Record<string, unknown>> = (
  * another page already serves, deleting the one the site routes to).
  */
 export interface DocumentPolicies<TData = Record<string, unknown>> {
+	/**
+	 * Before a create or an update stores its draft, after the hooks and
+	 * validation: refuse a change the writer may not make (a field only some
+	 * roles may set, at any depth), which field `access` cannot express.
+	 */
+	beforeWrite?: DocumentPolicy<TData>[];
 	beforePublish?: DocumentPolicy<TData>[];
 	beforeUnpublish?: DocumentPolicy<TData>[];
 	beforeDelete?: DocumentPolicy<TData>[];

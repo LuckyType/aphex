@@ -1,6 +1,6 @@
 /**
- * The reject-only policy seam: `beforePublish`, `beforeUnpublish` and
- * `beforeDelete` on a schema or on `CMSConfig.policies` run inside
+ * The reject-only policy seam: `beforeWrite`, `beforePublish`,
+ * `beforeUnpublish` and `beforeDelete` on a schema or on `CMSConfig.policies` run inside
  * CollectionAPI, so every path (Local API, REST, GraphQL, MCP, jobs) obeys
  * them, and a schema `lock` holds on the server: an update that changes a
  * locked field, or a delete of a locked document, is refused.
@@ -15,6 +15,7 @@ import { documentsByIdRouter } from '../src/lib/server/api/routes/documents-by-i
 import type { CMSInstances } from '../src/lib/hooks';
 import type { Auth } from '../src/lib/types/auth';
 import type { DocumentPolicyContext, SchemaType } from '../src/lib/types/schemas';
+import type { LocalAPIContext } from '../src/lib/local-api/types';
 import { fakeCollection, fakeStore, systemCtx } from './helpers/fake-collection';
 
 const page: SchemaType = {
@@ -194,5 +195,112 @@ describe('policy refusals over REST', () => {
 			{ aphexCMS: cms(new DocumentPolicyError('delete', 'Unpublish it first')), auth: sessionAuth }
 		);
 		expect(del.status).toBe(409);
+	});
+});
+
+describe('beforeWrite policies', () => {
+	const session = (organizationRole: string, role = 'editor'): LocalAPIContext => ({
+		organizationId: 'org-1',
+		user: { id: 'user-2', email: 'c@d.com', name: 'C' } as LocalAPIContext['user'],
+		auth: {
+			type: 'session',
+			organizationId: 'org-1',
+			organizationRole,
+			user: { id: 'user-2', email: 'c@d.com', name: 'C', role }
+		} as unknown as Auth
+	});
+
+	// Only an owner may change `embed`; anyone may change the rest.
+	const ownersOnly = ({ data, previousData, context }: DocumentPolicyContext) =>
+		!context.system && context.role !== 'owner' && data.embed !== (previousData?.embed ?? undefined)
+			? 'Only an owner may change the embed'
+			: undefined;
+	const withEmbed: SchemaType = {
+		...page,
+		fields: [...page.fields, { name: 'embed', type: 'string', title: 'Embed' }],
+		policies: { beforeWrite: [ownersOnly] }
+	};
+
+	it('hands the policy the writer, the stored draft and the draft to store', async () => {
+		const seen: DocumentPolicyContext[] = [];
+		const pages = fakeCollection(
+			{ ...withEmbed, policies: { beforeWrite: [(ctx) => void seen.push(ctx)] } },
+			fakeStore()
+		);
+		const created = await pages.create(session('admin'), { title: 'A', slug: '/a' });
+		await pages.update(session('owner'), created.document.id, { title: 'B' });
+		await pages.update(systemCtx, created.document.id, { title: 'C' });
+		expect(seen.map((ctx) => [ctx.operation, ctx.context.role, ctx.context.system])).toEqual([
+			['create', 'admin', undefined],
+			['update', 'owner', undefined],
+			['update', undefined, true]
+		]);
+		expect(seen[0].previousData).toBeNull();
+		expect(seen[1]).toMatchObject({ previousData: { title: 'A' }, data: { title: 'B' } });
+	});
+
+	it('reads an instance role as owner', async () => {
+		const pages = fakeCollection(withEmbed, fakeStore());
+		await expect(
+			pages.create(session('admin', 'super_admin'), { title: 'A', slug: '/a', embed: '<b>' })
+		).resolves.toBeTruthy();
+	});
+
+	it('refuses a create and an update the writer may not make, and stores nothing', async () => {
+		const store = fakeStore();
+		const pages = fakeCollection(withEmbed, store);
+		const err = await pages
+			.create(session('admin'), { title: 'A', slug: '/a', embed: '<b>' })
+			.catch((e) => e);
+		expect(err).toBeInstanceOf(DocumentPolicyError);
+		expect(err.operation).toBe('create');
+		expect(store.docs.size).toBe(0);
+
+		const created = await pages.create(session('owner'), { title: 'A', slug: '/a', embed: '<b>' });
+		const id = created.document.id;
+		await expect(pages.update(session('admin'), id, { embed: '<i>' })).rejects.toThrow(
+			'Only an owner may change the embed'
+		);
+		expect(store.docs.get(id)!.draftData).toMatchObject({ embed: '<b>' });
+		// Leaving the guarded field as it is stays allowed.
+		await expect(pages.update(session('admin'), id, { title: 'B' })).resolves.toBeTruthy();
+	});
+
+	it('refuses restoring a version the writer could not have saved', async () => {
+		const store = fakeStore();
+		const versions = new Map<number, Record<string, unknown>>();
+		Object.assign(store.adapter, {
+			async getDocumentVersion(_org: string, _id: string, n: number) {
+				return versions.has(n) ? { data: versions.get(n) } : null;
+			}
+		});
+		const pages = fakeCollection(withEmbed, store);
+		const created = await pages.create(session('owner'), { title: 'A', slug: '/a', embed: '<b>' });
+		versions.set(1, { title: 'A', slug: '/a', embed: '<script>' });
+		versions.set(2, { title: 'Old', slug: '/a', embed: '<b>' });
+
+		await expect(pages.assertRestorable(session('admin'), created.document.id, 1)).rejects.toThrow(
+			DocumentPolicyError
+		);
+		await expect(
+			pages.assertRestorable(session('admin'), created.document.id, 2)
+		).resolves.toBeUndefined();
+		await expect(
+			pages.assertRestorable(session('owner'), created.document.id, 1)
+		).resolves.toBeUndefined();
+	});
+
+	it('refuses restoring a version that changes a locked field', async () => {
+		const store = fakeStore();
+		Object.assign(store.adapter, {
+			async getDocumentVersion() {
+				return { data: { title: 'Home', slug: '/old-home' } };
+			}
+		});
+		const pages = fakeCollection(page, store);
+		const home = await pages.create(systemCtx, { title: 'Home', slug: '/' }, { publish: true });
+		await expect(pages.assertRestorable(systemCtx, home.document.id, 1)).rejects.toThrow(
+			'The home page address is fixed'
+		);
 	});
 });
