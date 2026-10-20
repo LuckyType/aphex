@@ -35,6 +35,29 @@ import SchemaField from '../src/lib/components/admin/SchemaField.svelte';
 afterEach(() => cleanup());
 
 describe('SchemaField', () => {
+	it('names a checkbox once, beside it, with its description under it', () => {
+		render(SchemaField, {
+			props: {
+				field: {
+					name: 'featured',
+					type: 'boolean',
+					title: 'Featured',
+					description: 'Shown first.'
+				} as never,
+				value: false,
+				documentData: {},
+				onUpdate: () => {}
+			}
+		});
+		expect(screen.getAllByText('Featured')).toHaveLength(1);
+		expect(screen.getByRole('checkbox', { name: 'Featured' })).toBeInTheDocument();
+		const description = screen.getByText('Shown first.');
+		expect(
+			screen.getByRole('checkbox').compareDocumentPosition(description) &
+				Node.DOCUMENT_POSITION_FOLLOWING
+		).toBeTruthy();
+	});
+
 	const email = {
 		name: 'email',
 		type: 'string',
