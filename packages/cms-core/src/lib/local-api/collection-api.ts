@@ -267,7 +267,7 @@ export class CollectionAPI<T = Document> {
 	 * transaction, on every path, since every path bottoms out here.
 	 */
 	private async enforcePolicies(
-		operation: 'publish' | 'unpublish' | 'delete',
+		operation: 'create' | 'update' | 'publish' | 'unpublish' | 'delete',
 		document: Pick<Document, 'id' | 'draftData' | 'publishedData'>,
 		context: LocalAPIContext,
 		data?: Record<string, unknown>
@@ -745,6 +745,14 @@ export class CollectionAPI<T = Document> {
 		);
 		this.assertStructurallyValid(validationResult);
 
+		// beforeWrite policies: refuse a draft this writer may not store.
+		await this.enforcePolicies(
+			'create',
+			{ id: options?.id ?? '', draftData: null, publishedData: null },
+			context,
+			validationResult.normalizedData
+		);
+
 		if (options?.publish) {
 			await this.permissions.canPublish(context, this.collectionName);
 
@@ -1018,6 +1026,9 @@ export class CollectionAPI<T = Document> {
 			);
 		}
 
+		// beforeWrite policies: refuse a draft this writer may not store.
+		await this.enforcePolicies('update', existingDoc, context, validationResult.normalizedData);
+
 		// Update draft with normalized data (dates in ISO format)
 		// Use VersionService for atomic save + version creation if available
 		// RevisionConflictError propagates un-swallowed — a stale caller (a second
@@ -1116,6 +1127,42 @@ export class CollectionAPI<T = Document> {
 			document: transformDocument<T>(document, 'draft'),
 			validation: validationResult
 		};
+	}
+
+	/**
+	 * Refuse restoring `versionNumber` to the draft when an update storing the
+	 * same data would be refused: the schema's lock or a `beforeWrite` policy.
+	 * A restore writes the draft without the update path, so the version routes
+	 * call this first; nothing is written here.
+	 */
+	async assertRestorable(
+		context: LocalAPIContext,
+		id: string,
+		versionNumber: number
+	): Promise<void> {
+		const existingDoc = await this.findOwnDocById(context.organizationId, id);
+		if (!existingDoc) return;
+		const version = await this.databaseAdapter.getDocumentVersion?.(
+			context.organizationId,
+			id,
+			versionNumber
+		);
+		if (!version) return;
+		const data = (version.data ?? {}) as Record<string, unknown>;
+		const lock = this.lockFor(existingDoc);
+		const lockedChanges = lockedFieldChanges(
+			lock,
+			existingDoc.draftData as Record<string, unknown> | null,
+			data
+		);
+		if (lock && lockedChanges.length > 0) {
+			throw new DocumentPolicyError(
+				'update',
+				`Cannot change locked field(s) ${lockedChanges.map((f) => `"${f}"`).join(', ')}: ${lock.reason}`,
+				lockedChanges
+			);
+		}
+		await this.enforcePolicies('update', existingDoc, context, data);
 	}
 
 	/**
