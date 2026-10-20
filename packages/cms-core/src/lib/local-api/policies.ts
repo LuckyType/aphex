@@ -3,11 +3,14 @@
 // hooks transform, these refuse, and neither reacts.
 import type { DatabaseAdapter } from '../db/interfaces/index';
 import type { Document } from '../types/document';
+import type { Auth } from '../types/auth';
+import { effectiveOrganizationRole } from '../types/capabilities';
 import type {
 	DocumentLock,
 	DocumentPolicies,
 	DocumentPolicy,
 	DocumentPolicyContext,
+	PolicyWriter,
 	SchemaType
 } from '../types/schemas';
 
@@ -19,7 +22,7 @@ import type {
  */
 export class DocumentPolicyError extends Error {
 	constructor(
-		readonly operation: 'update' | 'publish' | 'unpublish' | 'delete',
+		readonly operation: 'create' | 'update' | 'publish' | 'unpublish' | 'delete',
 		readonly reason: string,
 		/** The locked fields the write tried to change, when a lock refused it. */
 		readonly lockedFields: readonly string[] = []
@@ -30,6 +33,8 @@ export class DocumentPolicyError extends Error {
 }
 
 const phaseOf = {
+	create: 'beforeWrite',
+	update: 'beforeWrite',
 	publish: 'beforePublish',
 	unpublish: 'beforeUnpublish',
 	delete: 'beforeDelete'
@@ -55,12 +60,35 @@ export async function runDocumentPolicies(
 	}
 }
 
+/** What a policy may know of the caller: its org, user and effective role. */
+export function policyWriter(context: {
+	organizationId: string;
+	user?: { id: string } | null;
+	auth?: Auth;
+	overrideAccess?: boolean;
+}): PolicyWriter {
+	if (context.overrideAccess) {
+		return { organizationId: context.organizationId, userId: context.user?.id, system: true };
+	}
+	return {
+		organizationId: context.organizationId,
+		userId: context.user?.id,
+		role: context.auth ? effectiveOrganizationRole(context.auth) : null
+	};
+}
+
 /** The policy context for a stored document about to change state. */
 export function policyContext(
 	operation: DocumentPolicyContext['operation'],
 	schema: SchemaType,
 	document: Pick<Document, 'id' | 'draftData' | 'publishedData'>,
-	context: { organizationId: string; user?: { id: string } | null; actorId?: string | null },
+	context: {
+		organizationId: string;
+		user?: { id: string } | null;
+		actorId?: string | null;
+		auth?: Auth;
+		overrideAccess?: boolean;
+	},
 	databaseAdapter: DatabaseAdapter,
 	data?: Record<string, unknown>
 ): DocumentPolicyContext {
@@ -69,7 +97,10 @@ export function policyContext(
 		documentId: document.id,
 		data: data ?? (document.draftData as Record<string, unknown>) ?? {},
 		publishedData: (document.publishedData as Record<string, unknown> | null) ?? null,
-		context: { organizationId: context.organizationId, userId: context.user?.id },
+		...(operation === 'create' || operation === 'update'
+			? { previousData: (document.draftData as Record<string, unknown> | null) ?? null }
+			: {}),
+		context: policyWriter(context),
 		schema,
 		databaseAdapter
 	};
