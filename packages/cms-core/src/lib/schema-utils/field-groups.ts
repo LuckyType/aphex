@@ -30,3 +30,26 @@ export function visibleFieldGroups(
 			)
 	);
 }
+
+/**
+ * Whether the editor needs its field group tabs at all. With one group left
+ * that holds every field the editor would render, "All fields" and that
+ * group show the same fields, so the two tabs only take room.
+ */
+export function fieldGroupTabsNeeded(
+	visibleGroups: FieldGroup[],
+	fields: Field[],
+	documentData: Record<string, unknown> | undefined,
+	isHidden: (field: Field) => boolean = () => false
+): boolean {
+	const [first, ...rest] = visibleGroups;
+	if (!first) return false;
+	if (rest.length > 0) return true;
+	const only = first.name;
+	return fields.some(
+		(field) =>
+			!fieldInGroup(field, only) &&
+			!isHidden(field) &&
+			isFieldVisible(field, documentData, documentData)
+	);
+}
