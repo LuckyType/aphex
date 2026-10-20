@@ -182,6 +182,11 @@
 
 	// Computed values
 	const hasErrors = $derived(validationErrors.filter((e) => e.level === 'error').length > 0);
+	// A checkbox carries its own label beside it (BooleanField), so the title
+	// above it would say the same words twice. Its description goes inline
+	// under it: an info icon would sit alone on the row the title leaves empty.
+	const checkboxLabelled = $derived(field.type === 'boolean' && !CustomInput);
+	const tooltipDescription = $derived(descriptionMode === 'tooltip' && !checkboxLabelled);
 	const validationClasses = $derived(getValidationClasses(hasErrors));
 
 	/**
@@ -208,45 +213,49 @@
 
 {#if visible}
 	<div class="space-y-2" data-field-path={fieldPath} onfocusout={validateOnLeave}>
-		<div class="flex items-center justify-between">
-			<div class="flex items-center gap-1.5">
-				<Label for={field.name}>
-					{field.title}
-					{#if isFieldRequired(field)}
-						<span class="text-destructive">*</span>
+		{#if !checkboxLabelled || hasErrors}
+			<div class="flex items-center justify-between">
+				<div class="flex items-center gap-1.5">
+					{#if !checkboxLabelled}
+						<Label for={field.name}>
+							{field.title}
+							{#if isFieldRequired(field)}
+								<span class="text-destructive">*</span>
+							{/if}
+						</Label>
 					{/if}
-				</Label>
 
-				<!-- In tooltip mode (object subfields) the description hides behind an info
+					<!-- In tooltip mode (object subfields) the description hides behind an info
 			     icon on desktop to keep the group tidy. Desktop only — touch has no hover
 			     and the tooltip is unreliable there, so on mobile the description falls
 			     back to the inline line below (see `lg:hidden` on the <p>). -->
-				{#if descriptionMode === 'tooltip' && field.description}
-					<Tooltip.Provider delayDuration={150}>
-						<Tooltip.Root>
-							<Tooltip.Trigger
-								class="text-muted-foreground/60 hover:text-foreground focus-visible:text-foreground -my-1 hidden cursor-help rounded p-1 transition-colors outline-none lg:inline-flex"
-								aria-label={i18n.t('More info about {title}', { title: field.title })}
-							>
-								<Info class="size-3.5" />
-							</Tooltip.Trigger>
-							<Tooltip.Content class="max-w-xs text-xs leading-relaxed">
-								{field.description}
-							</Tooltip.Content>
-						</Tooltip.Root>
-					</Tooltip.Provider>
+					{#if tooltipDescription && field.description}
+						<Tooltip.Provider delayDuration={150}>
+							<Tooltip.Root>
+								<Tooltip.Trigger
+									class="text-muted-foreground/60 hover:text-foreground focus-visible:text-foreground -my-1 hidden cursor-help rounded p-1 transition-colors outline-none lg:inline-flex"
+									aria-label={i18n.t('More info about {title}', { title: field.title })}
+								>
+									<Info class="size-3.5" />
+								</Tooltip.Trigger>
+								<Tooltip.Content class="max-w-xs text-xs leading-relaxed">
+									{field.description}
+								</Tooltip.Content>
+							</Tooltip.Root>
+						</Tooltip.Provider>
+					{/if}
+				</div>
+
+				{#if hasErrors}
+					<CircleAlert class="text-destructive size-4 shrink-0" aria-hidden="true" />
 				{/if}
 			</div>
-
-			{#if hasErrors}
-				<CircleAlert class="text-destructive size-4 shrink-0" aria-hidden="true" />
-			{/if}
-		</div>
+		{/if}
 
 		<!-- Inline description: always in inline mode; in tooltip mode only on mobile
 	     (`lg:hidden`), where the desktop info icon is hidden. -->
-		{#if field.description}
-			<p class="text-muted-foreground text-sm {descriptionMode === 'tooltip' ? 'lg:hidden' : ''}">
+		{#if field.description && !checkboxLabelled}
+			<p class="text-muted-foreground text-sm {tooltipDescription ? 'lg:hidden' : ''}">
 				{field.description}
 			</p>
 		{/if}
@@ -371,5 +380,10 @@
 				</div>
 			{/snippet}
 		</svelte:boundary>
+
+		<!-- Under its checkbox, which already names it. -->
+		{#if field.description && checkboxLabelled}
+			<p class="text-muted-foreground text-sm">{field.description}</p>
+		{/if}
 	</div>
 {/if}
