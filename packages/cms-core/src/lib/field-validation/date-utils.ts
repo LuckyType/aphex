@@ -3,6 +3,7 @@ import dayjs from 'dayjs';
 import customParseFormat from 'dayjs/plugin/customParseFormat';
 import utc from 'dayjs/plugin/utc';
 import { cmsLogger } from '../utils/logger';
+import { fieldDateFormat, fieldTimeFormat } from '../utils/date-format';
 
 dayjs.extend(customParseFormat);
 dayjs.extend(utc);
@@ -143,7 +144,7 @@ export function normalizeDateFields(
 	for (const field of schema.fields) {
 		if (field.type === 'date' && normalizedData[field.name]) {
 			const dateField = field as DateField;
-			const userFormat = dateField.options?.dateFormat || 'YYYY-MM-DD';
+			const userFormat = fieldDateFormat(dateField);
 			const dateValue = normalizedData[field.name];
 
 			cmsLogger.debug(`[normalizeDateFields] Processing DATE field "${field.name}"`, {
@@ -162,8 +163,8 @@ export function normalizeDateFields(
 			}
 		} else if (field.type === 'datetime' && normalizedData[field.name]) {
 			const dateTimeField = field as DateTimeField;
-			const dateFormat = dateTimeField.options?.dateFormat || 'YYYY-MM-DD';
-			const timeFormat = dateTimeField.options?.timeFormat || 'HH:mm';
+			const dateFormat = fieldDateFormat(dateTimeField);
+			const timeFormat = fieldTimeFormat(dateTimeField);
 			const dateTimeValue = normalizedData[field.name];
 
 			cmsLogger.debug(`[normalizeDateFields] Processing DATETIME field "${field.name}"`, {

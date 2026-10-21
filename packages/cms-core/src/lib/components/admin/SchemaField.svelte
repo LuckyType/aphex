@@ -26,6 +26,7 @@
 		convertDateToUserFormat,
 		convertDateTimeToUserFormat
 	} from '../../field-validation/date-utils';
+	import { fieldDateFormat, fieldTimeFormat } from '../../utils/date-format';
 
 	// Leaf/reference/custom-input fields resolve through the shared FieldInput;
 	// object/array containers recurse here.
@@ -146,7 +147,7 @@
 		let valueForValidation = currentValue;
 		if (field.type === 'date' && currentValue && typeof currentValue === 'string') {
 			const dateField = field as DateFieldType;
-			const userFormat = dateField.options?.dateFormat || 'YYYY-MM-DD';
+			const userFormat = fieldDateFormat(dateField);
 			cmsLogger.debug('[SchemaField.performValidation]', `Converting DATE field "${field.name}"`, {
 				currentValue,
 				userFormat
@@ -157,8 +158,8 @@
 			});
 		} else if (field.type === 'datetime' && currentValue && typeof currentValue === 'string') {
 			const dateTimeField = field as DateTimeFieldType;
-			const dateFormat = dateTimeField.options?.dateFormat || 'YYYY-MM-DD';
-			const timeFormat = dateTimeField.options?.timeFormat || 'HH:mm';
+			const dateFormat = fieldDateFormat(dateTimeField);
+			const timeFormat = fieldTimeFormat(dateTimeField);
 			cmsLogger.debug(
 				'[SchemaField.performValidation]',
 				`Converting DATETIME field "${field.name}"`,

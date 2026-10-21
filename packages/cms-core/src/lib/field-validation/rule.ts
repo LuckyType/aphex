@@ -2,6 +2,7 @@
 import dayjs from 'dayjs';
 import customParseFormat from 'dayjs/plugin/customParseFormat';
 import { cmsLogger } from '../utils/logger';
+import { dateFormatHint } from '../utils/date-format';
 
 // Enable strict parsing
 dayjs.extend(customParseFormat);
@@ -398,7 +399,7 @@ export class Rule {
 
 					if (!parsed.isValid()) {
 						cmsLogger.debug('[Rule.validate] DATE validation FAILED - invalid format');
-						return `Invalid date format. Expected: ${format}`;
+						return `Invalid date format. Expected: ${dateFormatHint(format)}`;
 					}
 					// Verify the parsed date matches the input (catches invalid dates like 2025-02-31)
 					if (parsed.format(format) !== value) {
@@ -406,7 +407,7 @@ export class Rule {
 							expected: value,
 							got: parsed.format(format)
 						});
-						return `Invalid date. Expected format: ${format}`;
+						return `Invalid date. Expected format: ${dateFormatHint(format)}`;
 					}
 					cmsLogger.debug('[Rule.validate] DATE validation PASSED');
 				}
@@ -434,7 +435,7 @@ export class Rule {
 
 					if (!parsed.isValid()) {
 						cmsLogger.debug('[Rule.validate] DATETIME validation FAILED - invalid format');
-						return `Invalid datetime format. Expected: ${format}`;
+						return `Invalid datetime format. Expected: ${dateFormatHint(format)}`;
 					}
 					// Verify the parsed datetime matches the input (catches invalid dates like 2025-02-31 23:59)
 					if (parsed.format(format) !== value) {
@@ -442,7 +443,7 @@ export class Rule {
 							expected: value,
 							got: parsed.format(format)
 						});
-						return `Invalid datetime. Expected format: ${format}`;
+						return `Invalid datetime. Expected format: ${dateFormatHint(format)}`;
 					}
 					cmsLogger.debug('[Rule.validate] DATETIME validation PASSED');
 				}
