@@ -5,6 +5,7 @@
 		orderedListPage,
 		studioDocumentTree,
 		studioExtensions,
+		createTitleField,
 		studioDocumentList,
 		studioListOrderings
 	} from '../studio-extensions';
@@ -63,7 +64,7 @@
 	import { toast } from 'svelte-sonner';
 	import { setPermissionsContext } from '../permissions-context.svelte';
 	import { computePaneLayout } from './pane-layout';
-	import { opensPreviewByDefault } from '../preview/open-by-default';
+	import { opensPreview, rememberPreview, rememberedPreview } from '../preview/open-by-default';
 
 	interface Props {
 		schemas: SchemaType[];
@@ -312,6 +313,48 @@
 	let docSearchInputEl = $state<HTMLInputElement | null>(null);
 	let docSearchTimeout: ReturnType<typeof setTimeout>;
 
+	// A list with `createWithTitle` asks for the title before the editor opens.
+	let titleFormOpen = $state(false);
+	let newTitle = $state('');
+	let newTitleInputEl = $state<HTMLInputElement | null>(null);
+	// What the new document starts with, handed to the editor until it is stored.
+	let createValues = $state<Record<string, unknown> | null>(null);
+
+	function startCreate(docType: string) {
+		if (createTitleField(docType)) {
+			newTitle = '';
+			titleFormOpen = true;
+			tick().then(() => newTitleInputEl?.focus());
+			return;
+		}
+		createValues = null;
+		void navigateToCreateDocument(docType);
+	}
+
+	function submitNewTitle(docType: string) {
+		const field = createTitleField(docType);
+		const text = newTitle.trim();
+		if (!field || !text) return;
+		createValues = { [field]: text };
+		titleFormOpen = false;
+		void navigateToCreateDocument(docType);
+	}
+
+	function newTitleLabel(docType: string): string {
+		const field = createTitleField(docType);
+		const title = schemas
+			.find((s) => s.name === docType)
+			?.fields.find((f) => f.name === field)?.title;
+		return title ?? i18n.t('Title');
+	}
+
+	// Another type's list closes the form.
+	$effect(() => {
+		// eslint-disable-next-line @typescript-eslint/no-unused-expressions -- reactive dependency
+		selectedDocumentType;
+		titleFormOpen = false;
+	});
+
 	function toggleDocSearch() {
 		if (docSearchOpen) {
 			docSearchOpen = false;
@@ -379,9 +422,21 @@
 		presentationModeOn = false;
 	}
 
-	// A schema with `previewOpenByDefault` opens straight into presentation
-	// mode. Decided once per opened document, so closing the preview sticks
-	// until another document opens.
+	// The preview button and Esc are someone's choice, kept per document type
+	// so the next document of that type opens the same way.
+	function choosePresentationMode() {
+		togglePresentationMode();
+		if (selectedDocumentType) rememberPreview(selectedDocumentType, presentationModeOn);
+	}
+
+	function chooseExitPresentationMode() {
+		exitPresentationMode();
+		if (selectedDocumentType) rememberPreview(selectedDocumentType, false);
+	}
+
+	// A document opens with the preview its type was last left with, else as
+	// the schema's `previewOpenByDefault` says. Decided once per opened
+	// document, so a choice made in it sticks until another document opens.
 	let presentationDecidedFor: string | null = null;
 	$effect(() => {
 		if (currentView !== 'editor' || !selectedDocumentType) {
@@ -392,13 +447,14 @@
 		if (opened === presentationDecidedFor) return;
 		presentationDecidedFor = opened;
 		const schema = untrack(() => schemas.find((s) => s.name === selectedDocumentType));
-		if (
-			!presentationModeOn &&
-			opensPreviewByDefault(
-				schema,
-				untrack(() => windowWidth)
-			)
-		) {
+		const remembered = rememberedPreview(selectedDocumentType);
+		const open = opensPreview(
+			schema,
+			untrack(() => windowWidth),
+			remembered
+		);
+		// Without a choice for the type, an open preview stays open, as before.
+		if (open !== untrack(() => presentationModeOn) && (open || remembered === false)) {
 			untrack(togglePresentationMode);
 		}
 	});
@@ -420,7 +476,7 @@
 		if (typeof window === 'undefined') return;
 		const handler = (e: KeyboardEvent) => {
 			if (e.key === 'Escape' && presentationModeOn) {
-				exitPresentationMode();
+				chooseExitPresentationMode();
 			}
 			if (e.key === 'Escape' && focusModeOn) {
 				exitFocusMode();
@@ -1536,7 +1592,10 @@
 															{pluralize(currentDocType?.title || selectedDocumentType)}
 														</h2>
 														<p class="text-muted-foreground text-xs">
-															{i18n.tn(docTotalDocs, '{count} document', '{count} documents')}
+															{i18n.tn(docTotalDocs, '{count} {type}', '{count} {types}', {
+																type: currentDocType?.title || typeLabel(selectedDocumentType),
+																types: pluralize(currentDocType?.title || selectedDocumentType)
+															})}
 														</p>
 													</div>
 												</div>
@@ -1554,7 +1613,7 @@
 														{#if studioDocumentList(selectedDocumentType).createLabel}
 															<Button
 																size="sm"
-																onclick={() => navigateToCreateDocument(selectedDocumentType!)}
+																onclick={() => startCreate(selectedDocumentType!)}
 																class="h-8 gap-1.5 px-3"
 															>
 																<Plus class="h-3.5 w-3.5" aria-hidden="true" />
@@ -1564,7 +1623,7 @@
 															<Button
 																size="sm"
 																variant="ghost"
-																onclick={() => navigateToCreateDocument(selectedDocumentType!)}
+																onclick={() => startCreate(selectedDocumentType!)}
 																class="h-8 w-8 p-0"
 																title={i18n.t('Create new document')}
 															>
@@ -1711,6 +1770,49 @@
 													</Popover.Root>
 												</div>
 											</div>
+
+											{#if titleFormOpen && selectedDocumentType}
+												{@const formType = selectedDocumentType}
+												<form
+													class="mt-2 flex items-end gap-1.5"
+													data-create-with-title
+													onsubmit={(e) => {
+														e.preventDefault();
+														submitNewTitle(formType);
+													}}
+												>
+													<label class="flex min-w-0 flex-1 flex-col gap-1 text-xs font-medium">
+														{newTitleLabel(formType)}
+														<Input
+															bind:ref={newTitleInputEl}
+															bind:value={newTitle}
+															class="h-8 text-sm"
+															onkeydown={(e) => {
+																if (e.key === 'Escape') titleFormOpen = false;
+															}}
+														/>
+													</label>
+													<Button
+														type="submit"
+														size="sm"
+														class="h-8 px-3"
+														disabled={!newTitle.trim()}
+													>
+														{i18n.t('Create')}
+													</Button>
+													<Button
+														type="button"
+														size="sm"
+														variant="ghost"
+														class="h-8 w-8 p-0"
+														title={i18n.t('Cancel')}
+														aria-label={i18n.t('Cancel')}
+														onclick={() => (titleFormOpen = false)}
+													>
+														<X class="h-3.5 w-3.5" aria-hidden="true" />
+													</Button>
+												</form>
+											{/if}
 
 											{#if docSearchOpen}
 												<div class="relative mt-2">
@@ -1975,10 +2077,11 @@
 										documentType={selectedDocumentType!}
 										documentId={editingDocumentId}
 										isCreating={isCreatingDocument}
+										initialValues={isCreatingDocument ? createValues : null}
 										focusMode={focusModeOn}
 										onToggleFocus={toggleFocusMode}
 										presentationMode={presentationModeOn}
-										onTogglePresentation={togglePresentationMode}
+										onTogglePresentation={choosePresentationMode}
 										hideActionBar={presentationModeOn && editorStack.length > 0}
 										refreshToken={baseRefreshToken}
 										reloadToken={editorReloads}
@@ -2001,6 +2104,7 @@
 											// stacked reference editor) because the old ?action=create
 											// gets carried forward.
 											if (isCreatingDocument) {
+												createValues = null;
 												// Update local state FIRST so the URL Effect's EDIT branch
 												// sees consistent values when goto fires it.
 												isCreatingDocument = false;

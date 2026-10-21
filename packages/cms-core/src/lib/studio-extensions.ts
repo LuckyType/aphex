@@ -50,6 +50,13 @@ export interface StudioDocumentList {
 	createLabel?: () => string;
 	/** The hint the empty list shows, in place of the generic one. */
 	emptyText?: () => string;
+	/**
+	 * Asks for the new document's title before creating it: the create button
+	 * opens a one-line form in the list, and Enter opens the editor with the
+	 * text already in `field` (`title` when true), so the document is stored
+	 * with its title from the first save. Escape closes the form.
+	 */
+	createWithTitle?: boolean | { field: string };
 }
 
 /** One document as the document list shows it. */
@@ -246,7 +253,12 @@ export function studioDocumentList(type: string | null | undefined): StudioDocum
 	const entry = type ? current.documentLists?.[type] : undefined;
 	if (!entry) return {};
 	return typeof entry === 'function' ||
-		!('component' in entry || 'createLabel' in entry || 'emptyText' in entry)
+		!(
+			'component' in entry ||
+			'createLabel' in entry ||
+			'emptyText' in entry ||
+			'createWithTitle' in entry
+		)
 		? { component: entry as Component<StudioDocumentListProps> }
 		: (entry as StudioDocumentList);
 }
@@ -282,4 +294,11 @@ export function orderedListPage<Row extends StudioDocumentListRow>(
 export function studioDocumentTree(type: string | null | undefined): StudioDocumentTree | null {
 	if (!type) return null;
 	return current.documentTrees?.find((tree) => tree.types.includes(type)) ?? null;
+}
+
+/** The field `createWithTitle` fills for `type`, or null when the list creates without asking. */
+export function createTitleField(type: string | null | undefined): string | null {
+	const ask = studioDocumentList(type).createWithTitle;
+	if (!ask) return null;
+	return ask === true ? 'title' : ask.field;
 }
