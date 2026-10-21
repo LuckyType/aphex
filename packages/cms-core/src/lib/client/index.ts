@@ -32,6 +32,16 @@ export {
 } from '../admin/field-components.svelte';
 // A custom input reports when its field counts as touched (`fieldErrors: 'touched'`).
 export { useFieldTouch } from '../field-touch-context.svelte';
+// A custom input that edits an item in a panel names it in the editor's breadcrumbs.
+export {
+	EditorTrail,
+	setEditorTrail,
+	useEditorTrail,
+	getEditorTrail,
+	type EditorCrumb,
+	type EditorTrailEntry,
+	type EditorTrailHandle
+} from '../editor-trail.svelte';
 // Admin URL navigation — typed intents, shareable via context (plugin tools can navigate).
 export {
 	createAdminNav,
@@ -56,6 +66,7 @@ export * from '../schema-utils/index';
 export { default as DocumentEditor } from '../components/admin/DocumentEditor.svelte';
 export { default as AgentChat } from '../components/admin/AgentChat.svelte';
 export { default as SchemaField } from '../components/admin/SchemaField.svelte';
+export { default as EditorBreadcrumbs } from '../components/admin/EditorBreadcrumbs.svelte';
 export { default as PluginSettingsPanel } from '../components/admin/PluginSettingsPanel.svelte';
 
 // Inline editor previews for custom rich-text block types (app-owned presentation).
