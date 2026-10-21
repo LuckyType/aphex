@@ -18,6 +18,7 @@
 	} from '../../field-validation/utils';
 	import { isFieldVisible } from '../../schema-utils/visibility';
 	import { getSchemaContext } from '../../schema-context.svelte';
+	import { focusLeavesField, getFieldTouchContext } from '../../field-touch-context.svelte';
 	import type { SchemaType } from '../../types/index';
 	import { cmsLogger } from '../../utils/logger';
 	import { useFieldComponents, useFieldViews } from '../../admin/field-components.svelte';
@@ -180,8 +181,13 @@
 		validationErrors = result.errors;
 	}
 
+	// An editor that holds errors back until the field was touched
+	// (`fieldErrors: 'touched'`) still checks it, but shows nothing yet.
+	const fieldTouch = getFieldTouchContext();
+	const shownErrors = $derived(!fieldTouch || fieldTouch.shows(fieldPath) ? validationErrors : []);
+
 	// Computed values
-	const hasErrors = $derived(validationErrors.filter((e) => e.level === 'error').length > 0);
+	const hasErrors = $derived(shownErrors.filter((e) => e.level === 'error').length > 0);
 	// A checkbox carries its own label beside it (BooleanField), so the title
 	// above it would say the same words twice. Its description goes inline
 	// under it: an info icon would sit alone on the row the title leaves empty.
@@ -207,6 +213,7 @@
 	function validateOnLeave(event: FocusEvent) {
 		const wrapper = event.currentTarget as HTMLElement;
 		if (event.relatedTarget instanceof Node && wrapper.contains(event.relatedTarget)) return;
+		if (focusLeavesField(wrapper, event.relatedTarget)) fieldTouch?.touch(fieldPath);
 		void performValidation(value);
 	}
 </script>
@@ -261,9 +268,9 @@
 		{/if}
 
 		<!-- Validation errors display -->
-		{#if validationErrors.length > 0}
+		{#if shownErrors.length > 0}
 			<div class="space-y-2">
-				{#each validationErrors as error, index (index)}
+				{#each shownErrors as error, index (index)}
 					<Alert.Root
 						variant={error.level === 'error'
 							? 'destructive'

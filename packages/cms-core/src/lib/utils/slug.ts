@@ -46,3 +46,23 @@ export function slugSourceTitle(
 		siblingFields?.find((f) => f.name === source) ?? documentFields?.find((f) => f.name === source);
 	return field?.title || source;
 }
+
+/**
+ * The slug a field that follows its source moves to when the source changes
+ * from `before` to `source`, or null to leave it. The slug follows while it is
+ * empty or still reads as the old source made into a slug; once someone typed
+ * their own, it stays.
+ */
+export function followedSlug(
+	current: unknown,
+	before: unknown,
+	source: unknown,
+	slugify: (text: string) => string = generateSlug
+): string | null {
+	if (source === before) return null;
+	const shown = typeof current === 'string' ? current : '';
+	const following = shown === '' || (typeof before === 'string' && shown === slugify(before));
+	if (!following) return null;
+	const next = typeof source === 'string' ? slugify(source) : '';
+	return next === shown ? null : next;
+}

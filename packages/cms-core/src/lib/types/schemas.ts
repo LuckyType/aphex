@@ -266,6 +266,11 @@ export interface BooleanField extends BaseField {
 export interface SlugField extends BaseField {
 	type: 'slug';
 	source?: string;
+	/**
+	 * Turns the source's text into the slug, for "Generate" and for following
+	 * the source. Defaults to `generateSlug`.
+	 */
+	slugify?: (text: string) => string;
 	maxLength?: number;
 	initialValue?: string | (() => string | Promise<string>);
 }

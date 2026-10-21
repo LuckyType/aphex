@@ -3,6 +3,8 @@
 	import { studioExtensions, type StudioPublishRefusal } from '../../studio-extensions';
 	import { isFieldVisible } from '../../schema-utils/visibility';
 	import {
+		fieldGroupTab,
+		fieldGroupTabCount,
 		fieldGroupTabsNeeded,
 		fieldInGroup,
 		visibleFieldGroups
@@ -15,12 +17,14 @@
 	import { ApiError, isRevisionConflict } from '../../api/client';
 	import SchemaField from './SchemaField.svelte';
 	import { findOrphanedFields, type OrphanedField } from '../../schema-utils/cleanup';
-	import type { SchemaType } from '../../types/schemas.js';
+	import type { FieldGroup, SchemaType } from '../../types/schemas.js';
 	import { Rule } from '../../field-validation/rule';
 	import { validateDocumentData } from '../../field-validation/utils';
 	import { hasUnpublishedChanges } from '../../utils/content-hash';
 	import { setSchemaContext } from '../../schema-context.svelte';
-	import { setSaveStateContext } from '../../save-state-context.svelte';
+	import { hasBeenPublished, setSaveStateContext } from '../../save-state-context.svelte';
+	import { documentErrorsShown, setFieldTouchContext } from '../../field-touch-context.svelte';
+	import { SvelteSet } from 'svelte/reactivity';
 	import { usePermissions } from '../../permissions-context.svelte';
 	import AdminSlot from './AdminSlot.svelte';
 	import ScheduleDialog from './ScheduleDialog.svelte';
@@ -691,11 +695,10 @@
 		} = {}
 	) {
 		focusedFieldName = fieldName;
-		// Switch to the field's group so it's visible before scrolling
+		// Switch to the field's tab so it's visible before scrolling
 		const field = schema?.fields.find((f) => f.name === fieldName);
-		if (field?.group) {
-			const group = Array.isArray(field.group) ? field.group[0] : field.group;
-			if (group) activeGroup = group;
+		if (field && showGroupTabs && !fieldInActiveGroup(field)) {
+			activeGroup = fieldGroupTab(field, visibleGroups, allFieldsTab);
 		}
 		await tick();
 		const container = document.querySelector<HTMLElement>(`[data-field-name="${fieldName}"]`);
@@ -881,8 +884,11 @@
 
 	// Field group tabs: only when the schema declares `groups` and they split the fields (`showGroupTabs`).
 	// 'all' = show every field; otherwise filter to fields whose `group`
-	// matches (supports string or string[]).
+	// matches (supports string or string[]). The app may draw them as a tab bar
+	// and leave "All fields" out (`configureStudio({ fieldGroups })`).
 	let activeGroup = $state<string>('all');
+	const groupTabsStyle = studioExtensions().fieldGroups?.style ?? 'buttons';
+	const allFieldsTab = studioExtensions().fieldGroups?.allFields ?? true;
 
 	const visibleGroups = $derived(
 		visibleFieldGroups(schema?.groups, schema?.fields ?? [], documentData, (f) =>
@@ -908,13 +914,61 @@
 
 	// One group holding every rendered field would only repeat "All fields".
 	const showGroupTabs = $derived(
-		fieldGroupTabsNeeded(visibleGroups, schema?.fields ?? [], documentData, (f) =>
-			hiddenFieldNames.has(f.name)
+		fieldGroupTabsNeeded(
+			visibleGroups,
+			schema?.fields ?? [],
+			documentData,
+			(f) => hiddenFieldNames.has(f.name),
+			allFieldsTab
 		)
 	);
 
+	// Without "All fields", 'all' (no default group, or the open one emptied) is the first tab.
+	const shownGroup = $derived(
+		activeGroup === 'all' && !allFieldsTab ? (visibleGroups[0]?.name ?? 'all') : activeGroup
+	);
+
 	function fieldInActiveGroup(field: { group?: string | string[] }): boolean {
-		return !showGroupTabs || activeGroup === 'all' || fieldInGroup(field, activeGroup);
+		return (
+			!showGroupTabs ||
+			shownGroup === 'all' ||
+			fieldInGroup(field, shownGroup) ||
+			fieldGroupTab(field, visibleGroups, allFieldsTab) === shownGroup
+		);
+	}
+
+	// Arrow keys, Home and End move between the tabs, as in any tab bar.
+	function groupTabKeydown(event: KeyboardEvent) {
+		const tabs = [...(allFieldsTab ? ['all'] : []), ...visibleGroups.map((g) => g.name)];
+		const at = tabs.indexOf(shownGroup);
+		const next =
+			event.key === 'ArrowRight'
+				? tabs[(at + 1) % tabs.length]
+				: event.key === 'ArrowLeft'
+					? tabs[(at - 1 + tabs.length) % tabs.length]
+					: event.key === 'Home'
+						? tabs[0]
+						: event.key === 'End'
+							? tabs[tabs.length - 1]
+							: undefined;
+		if (next === undefined) return;
+		event.preventDefault();
+		const bar = event.currentTarget as HTMLElement;
+		activeGroup = next;
+		void tick().then(() =>
+			bar.querySelector<HTMLElement>(`[data-field-group-tab="${next}"]`)?.focus()
+		);
+	}
+
+	function groupTabCount(tab: string): number {
+		return fieldGroupTabCount(
+			tab,
+			visibleGroups,
+			schema?.fields ?? [],
+			documentData,
+			allFieldsTab,
+			(f) => hiddenFieldNames.has(f.name)
+		);
 	}
 
 	function syntaxHighlightJson(json: string): string {
@@ -1119,6 +1173,27 @@
 		},
 		get savedAgoText() {
 			return savedAgoText;
+		},
+		get published() {
+			return hasBeenPublished(fullDocument?._meta);
+		}
+	});
+
+	// Errors held back until a field is touched (`fieldErrors: 'touched'`): the
+	// paths touched since the document opened, and whether a publish was tried.
+	const touchedFields = new SvelteSet<string>();
+	let publishAttempted = $state(false);
+	const allErrorsShown = $derived(
+		documentErrorsShown({
+			mode: studioExtensions().fieldErrors,
+			publishAttempted,
+			meta: fullDocument?._meta
+		})
+	);
+	setFieldTouchContext({
+		shows: (path) => allErrorsShown || touchedFields.has(path),
+		touch: (path) => {
+			touchedFields.add(path);
 		}
 	});
 
@@ -1143,8 +1218,12 @@
 	// A schema's `lock` can hold a document against deletion and some fields
 	// against edits (DocumentType.lock).
 	const lock = $derived(schema?.lock?.(documentId ?? null, fullDocument) ?? null);
+	// While errors are held back, Publish stays enabled: clicking it is what shows them.
 	const canPublish = $derived(
-		(hasUnpublishedContent || isUnpublished) && !saving && documentId && !hasValidationErrors
+		(hasUnpublishedContent || isUnpublished) &&
+			!saving &&
+			documentId &&
+			(!hasValidationErrors || !allErrorsShown)
 	);
 
 	// The schedule button mirrors the inline action button's enabled state (permission is checked
@@ -1202,6 +1281,8 @@
 			perspective = 'draft';
 			publishedData = null;
 			previewingVersion = null;
+			touchedFields.clear();
+			publishAttempted = false;
 
 			// Cancel pending auto-save
 			if (autoSaveTimer) {
@@ -1627,6 +1708,7 @@
 		}
 
 		// Check for validation errors before publishing (Sanity-style)
+		publishAttempted = true;
 		const invalid = await validateAllFields();
 
 		if (invalid.length > 0) {
@@ -2074,6 +2156,32 @@
 	const [beforeTitle, afterTitle] = i18n.tParts('Inspecting {title}', 'title');
 </script>
 
+{#snippet groupTab(name: string, title: string, icon?: FieldGroup['icon'])}
+	{@const selected = shownGroup === name}
+	<button
+		type="button"
+		role="tab"
+		id="field-group-tab-{name}"
+		aria-selected={selected}
+		tabindex={selected ? 0 : -1}
+		data-field-group-tab={name}
+		onclick={() => (activeGroup = name)}
+		class="text-muted-foreground hover:text-foreground aria-selected:border-primary aria-selected:text-foreground focus-visible:ring-ring/50 flex shrink-0 cursor-pointer items-center gap-1.5 border-b-2 border-transparent px-1.5 pt-2.5 pb-2 text-sm font-medium whitespace-nowrap outline-none focus-visible:ring-[3px]"
+	>
+		{#if icon}
+			{@const Icon = icon}
+			<Icon class="h-4 w-4" aria-hidden="true" />
+		{/if}
+		{title}
+		<span
+			class="bg-muted rounded-full px-1.5 text-[0.7rem] leading-4 tabular-nums"
+			aria-hidden="true"
+		>
+			{groupTabCount(name)}
+		</span>
+	</button>
+{/snippet}
+
 {#snippet editorActions()}
 	<div class="flex shrink-0 items-center gap-2">
 		{#if saving}
@@ -2441,27 +2549,47 @@
 			<!-- Field Group Tabs — a fixed header OUTSIDE the scroll container, so they
 			     never scroll away or get clipped by a field (previous sticky-inside-scroll
 			     approach was fragile across field types). Only the fields below scroll. -->
-			{#if schema && showGroupTabs}
+			{#if schema && showGroupTabs && groupTabsStyle === 'tabs'}
+				<!-- The tab bar the app picks with `fieldGroups.style: 'tabs'`, each tab with
+				     the number of fields it shows. Arrow keys move between tabs. -->
+				<div
+					role="tablist"
+					aria-label={i18n.t('Field groups')}
+					data-field-group-tabs
+					tabindex={-1}
+					onkeydown={groupTabKeydown}
+					class="border-rule/60 flex shrink-0 [scrollbar-width:none] items-center gap-1 overflow-x-auto border-b px-3 lg:px-5 [&::-webkit-scrollbar]:hidden"
+				>
+					{#if allFieldsTab}
+						{@render groupTab('all', i18n.t('All fields'))}
+					{/if}
+					{#each visibleGroups as group (group.name)}
+						{@render groupTab(group.name, group.title, group.icon)}
+					{/each}
+				</div>
+			{:else if schema && showGroupTabs}
 				<div
 					class="border-rule/60 flex shrink-0 [scrollbar-width:none] items-center gap-1 overflow-x-auto border-b px-4 py-2 lg:px-6 [&::-webkit-scrollbar]:hidden"
 				>
-					<button
-						type="button"
-						aria-pressed={activeGroup === 'all'}
-						onclick={() => (activeGroup = 'all')}
-						class="cursor-pointer rounded-md px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors {activeGroup ===
-						'all'
-							? 'bg-muted text-foreground'
-							: 'text-muted-foreground hover:text-foreground'}"
-					>
-						{i18n.t('All fields')}
-					</button>
+					{#if allFieldsTab}
+						<button
+							type="button"
+							aria-pressed={shownGroup === 'all'}
+							onclick={() => (activeGroup = 'all')}
+							class="cursor-pointer rounded-md px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors {shownGroup ===
+							'all'
+								? 'bg-muted text-foreground'
+								: 'text-muted-foreground hover:text-foreground'}"
+						>
+							{i18n.t('All fields')}
+						</button>
+					{/if}
 					{#each visibleGroups as group (group.name)}
 						<button
 							type="button"
-							aria-pressed={activeGroup === group.name}
+							aria-pressed={shownGroup === group.name}
 							onclick={() => (activeGroup = group.name)}
-							class="flex cursor-pointer items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors {activeGroup ===
+							class="flex cursor-pointer items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors {shownGroup ===
 							group.name
 								? 'bg-muted text-foreground'
 								: 'text-muted-foreground hover:text-foreground'}"
