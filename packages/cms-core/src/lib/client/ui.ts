@@ -45,6 +45,16 @@ export {
 } from '../admin/field-components.svelte';
 // A custom input reports when its field counts as touched (`fieldErrors: 'touched'`).
 export { useFieldTouch } from '../field-touch-context.svelte';
+// A custom input that edits an item in a panel names it in the editor's breadcrumbs.
+export {
+	EditorTrail,
+	setEditorTrail,
+	useEditorTrail,
+	getEditorTrail,
+	type EditorCrumb,
+	type EditorTrailEntry,
+	type EditorTrailHandle
+} from '../editor-trail.svelte';
 
 // Admin URL navigation
 export {
