@@ -10,7 +10,9 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
 	configureStudio,
 	createTitleField,
+	createWithTitleValues,
 	orderedGroups,
+	studioListActions,
 	studioDocumentList,
 	studioDocumentTree,
 	studioScriptNonce,
@@ -128,5 +130,43 @@ describe('createTitleField', () => {
 		expect(studioDocumentList('page').createWithTitle).toBe(true);
 		expect(createTitleField('page')).toBe('title');
 		expect(createTitleField('product')).toBe('name');
+	});
+});
+
+describe('createWithTitleValues', () => {
+	it('is null for a list that creates without asking', () => {
+		expect(createWithTitleValues('page', 'About us')).toBeNull();
+	});
+
+	it('puts the title into its field, with what the list derives from it', () => {
+		configureStudio({
+			documentLists: {
+				page: {
+					createWithTitle: { values: (title) => ({ heading: title, title: 'ignored' }) }
+				},
+				product: { createWithTitle: { field: 'name' } }
+			}
+		});
+		expect(createTitleField('page')).toBe('title');
+		expect(createWithTitleValues('page', 'About us')).toEqual({
+			heading: 'About us',
+			title: 'About us'
+		});
+		expect(createWithTitleValues('product', 'Tea')).toEqual({ name: 'Tea' });
+	});
+});
+
+describe('studioListActions', () => {
+	it('lists none unless the list adds some', () => {
+		expect(studioListActions('page')).toEqual([]);
+	});
+
+	it("returns the list's actions, from a list that sets only actions", () => {
+		const run = () => {};
+		configureStudio({
+			documentLists: { page: { actions: () => [{ name: 'tidy', title: 'Tidy', run }] } }
+		});
+		expect(studioDocumentList('page').component).toBeUndefined();
+		expect(studioListActions('page')).toEqual([{ name: 'tidy', title: 'Tidy', run }]);
 	});
 });

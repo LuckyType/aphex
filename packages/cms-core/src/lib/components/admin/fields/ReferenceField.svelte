@@ -170,9 +170,10 @@
 			const results = await Promise.all(
 				targetTypes.map((docType) => documents.list({ docType, limit: PICKER_LIMIT }))
 			);
-			allDocs = results.flatMap((result) =>
+			const listed = results.flatMap((result) =>
 				result.success && result.data ? (result.data as any[]) : []
 			);
+			allDocs = referenceField.order ? referenceField.order(listed) : listed;
 		} catch {
 			toast.error(i18n.t('Failed to load documents'));
 		} finally {

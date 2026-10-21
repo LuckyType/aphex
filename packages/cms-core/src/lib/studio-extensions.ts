@@ -54,9 +54,25 @@ export interface StudioDocumentList {
 	 * Asks for the new document's title before creating it: the create button
 	 * opens a one-line form in the list, and Enter opens the editor with the
 	 * text already in `field` (`title` when true), so the document is stored
-	 * with its title from the first save. Escape closes the form.
+	 * with its title from the first save. Escape closes the form. `values`
+	 * adds what else the new document starts with, derived from the title
+	 * (a heading that repeats it).
 	 */
-	createWithTitle?: boolean | { field: string };
+	createWithTitle?:
+		| boolean
+		| { field?: string; values?: (title: string) => Record<string, unknown> };
+	/**
+	 * Actions the list's menu offers above its orderings (say, clearing out
+	 * leftover drafts). The list re-reads its documents once one has run.
+	 */
+	actions?: () => readonly StudioListAction[];
+}
+
+/** One entry of a document list's menu (`StudioDocumentList.actions`). */
+export interface StudioListAction {
+	name: string;
+	title: string;
+	run: () => void | Promise<void>;
 }
 
 /** One document as the document list shows it. */
@@ -69,6 +85,14 @@ export interface StudioDocumentListRow {
 	status: string;
 	hasChanges: boolean;
 	updatedAt: Date | null;
+	/** Set on every row cms-core lists; optional for rows an app builds itself. */
+	createdAt?: Date | null;
+	/**
+	 * True when no data of the document names it, so `title` is only its
+	 * type's title: a list can call it untitled rather than "Page". Set on
+	 * every row cms-core lists.
+	 */
+	untitled?: boolean;
 	badge?: StudioListBadge | null;
 }
 
@@ -233,6 +257,22 @@ export interface StudioExtensions {
 	 * asked for a `view` field, whose `input` names its slot.
 	 */
 	defaultInput?: (field: Field) => string | undefined;
+	/**
+	 * Called after the document editor published a document, with whether
+	 * it was the document's first publish: an app can offer the next step
+	 * (put a new page into a menu, announce it).
+	 */
+	afterPublish?: (published: StudioPublished) => void;
+}
+
+/** What `afterPublish` receives. */
+export interface StudioPublished {
+	type: string;
+	id: string;
+	/** True when the document had never been published before. */
+	firstPublish: boolean;
+	/** The published content, without `_meta`. */
+	document: Record<string, unknown>;
 }
 
 /** Where a field's description shows: under its label, or behind an info icon. */
@@ -285,7 +325,8 @@ export function studioDocumentList(type: string | null | undefined): StudioDocum
 			'component' in entry ||
 			'createLabel' in entry ||
 			'emptyText' in entry ||
-			'createWithTitle' in entry
+			'createWithTitle' in entry ||
+			'actions' in entry
 		)
 		? { component: entry as Component<StudioDocumentListProps> }
 		: (entry as StudioDocumentList);
@@ -328,7 +369,27 @@ export function studioDocumentTree(type: string | null | undefined): StudioDocum
 export function createTitleField(type: string | null | undefined): string | null {
 	const ask = studioDocumentList(type).createWithTitle;
 	if (!ask) return null;
-	return ask === true ? 'title' : ask.field;
+	return ask === true ? 'title' : (ask.field ?? 'title');
+}
+
+/**
+ * What a new document of `type` starts with when the list asked for
+ * `title`: the title in its field, plus the list's `values` for it.
+ */
+export function createWithTitleValues(
+	type: string | null | undefined,
+	title: string
+): Record<string, unknown> | null {
+	const field = createTitleField(type);
+	if (!field) return null;
+	const ask = studioDocumentList(type).createWithTitle;
+	const extra = typeof ask === 'object' ? (ask.values?.(title) ?? {}) : {};
+	return { ...extra, [field]: title };
+}
+
+/** The actions `type`'s list menu offers, none when the app adds none. */
+export function studioListActions(type: string | null | undefined): readonly StudioListAction[] {
+	return studioDocumentList(type).actions?.() ?? [];
 }
 
 /**

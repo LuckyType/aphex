@@ -391,6 +391,12 @@ export interface ReferenceField extends BaseField {
 	type: 'reference';
 	to: Array<{ type: string }>;
 	initialValue?: any | (() => any | Promise<any>);
+	/**
+	 * The order the picker offers documents in before anything is typed (and
+	 * the order of its matches), say documents nothing links to yet first.
+	 * Receives the listed documents, each with its `id`.
+	 */
+	order?: <Doc extends { id: string }>(documents: readonly Doc[]) => Doc[];
 }
 
 export interface AnnotationDefinition {
