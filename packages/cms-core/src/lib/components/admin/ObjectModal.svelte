@@ -64,6 +64,22 @@
 		}
 	});
 
+	const uid = $props.id();
+	const titleId = `object-modal-title-${uid}`;
+	const title = $derived(
+		i18n.t('Edit {title}', {
+			title: schema.title ?? schema.name.charAt(0).toUpperCase() + schema.name.slice(1)
+		})
+	);
+
+	/**
+	 * Moves focus into the dialog as it opens, so Escape reaches it and a screen
+	 * reader starts reading at its title. A field that took focus itself keeps it.
+	 */
+	function focusOnOpen(node: HTMLElement) {
+		if (!node.contains(document.activeElement)) node.focus({ preventScroll: true });
+	}
+
 	const backdropZ = $derived(50 + Math.max(myDepth - 1, 0) * 10);
 	const panelZ = $derived(backdropZ + 1);
 
@@ -103,29 +119,34 @@
 </script>
 
 {#if open}
+	<!-- The backdrop is not a control: Escape and a click beside the dialog close
+	     it, and a screen reader reaches the close button by its name. -->
+	<!-- svelte-ignore a11y_click_events_have_key_events -->
+	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div
 		class="bg-background/80 absolute inset-0 flex items-center justify-center p-4 lg:p-6"
 		style="z-index: {backdropZ}"
 		onclick={handleBackdropClick}
 		onkeydown={handleKeydown}
-		role="button"
-		tabindex="-1"
 	>
-		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<div
 			class="border-border bg-background max-h-full w-full max-w-3xl cursor-default overflow-auto rounded-lg border shadow-lg"
 			style="z-index: {panelZ}"
+			role="dialog"
+			aria-modal="true"
+			aria-labelledby={titleId}
+			tabindex="-1"
+			{@attach focusOnOpen}
 			onclick={(e) => e.stopPropagation()}
-			onkeydown={(e) => e.stopPropagation()}
+			onkeydown={(e) => {
+				if (e.key === 'Escape') handleKeydown(e);
+				e.stopPropagation();
+			}}
 		>
 			<div
 				class="border-border bg-background sticky top-0 z-10 flex items-center justify-between gap-3 border-b px-4 py-2"
 			>
-				<span class="text-sm font-medium"
-					>{i18n.t('Edit {title}', {
-						title: schema.title ?? schema.name.charAt(0).toUpperCase() + schema.name.slice(1)
-					})}</span
-				>
+				<h2 id={titleId} class="text-sm font-medium">{title}</h2>
 				<div class="flex items-center gap-2">
 					{#if saveState}
 						{#if saveState.saving}
@@ -151,8 +172,20 @@
 							</span>
 						{/if}
 					{/if}
-					<Button variant="ghost" size="icon" class="h-7 w-7" onclick={onClose}>
-						<svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+					<Button
+						variant="ghost"
+						size="icon"
+						class="h-7 w-7"
+						aria-label={i18n.t('Close')}
+						onclick={onClose}
+					>
+						<svg
+							class="h-3.5 w-3.5"
+							aria-hidden="true"
+							fill="none"
+							viewBox="0 0 24 24"
+							stroke="currentColor"
+						>
 							<path
 								stroke-linecap="round"
 								stroke-linejoin="round"
