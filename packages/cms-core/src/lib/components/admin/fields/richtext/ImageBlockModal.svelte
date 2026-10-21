@@ -34,30 +34,45 @@
 		if (e.target === e.currentTarget) onClose();
 	}
 
+	const uid = $props.id();
+	const titleId = `image-block-title-${uid}`;
+
 	function handleKeydown(e: KeyboardEvent) {
 		if (e.key === 'Escape') onClose();
 	}
 </script>
 
 {#if open}
+	<!-- The backdrop is not a control: Escape and a click beside the dialog close it. -->
+	<!-- svelte-ignore a11y_click_events_have_key_events -->
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div
 		class="bg-background/80 absolute inset-0 z-50 flex items-center justify-center p-4 lg:p-6"
 		onclick={handleBackdropClick}
 		onkeydown={handleKeydown}
-		role="button"
-		tabindex="-1"
 	>
-		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<div
 			class="border-border bg-background w-full max-w-lg overflow-hidden rounded-lg border shadow-lg"
+			role="dialog"
+			aria-modal="true"
+			aria-labelledby={titleId}
+			tabindex="-1"
 			onclick={(e) => e.stopPropagation()}
-			onkeydown={(e) => e.stopPropagation()}
+			onkeydown={(e) => {
+				if (e.key === 'Escape') handleKeydown(e);
+				e.stopPropagation();
+			}}
 		>
 			<div class="border-border flex items-center justify-between border-b px-4 py-2">
-				<span class="text-sm font-medium">{i18n.t('Edit image')}</span>
-				<Button variant="ghost" size="icon" class="h-7 w-7" onclick={onClose}>
-					<X class="h-3.5 w-3.5" />
+				<h2 id={titleId} class="text-sm font-medium">{i18n.t('Edit image')}</h2>
+				<Button
+					variant="ghost"
+					size="icon"
+					class="h-7 w-7"
+					aria-label={i18n.t('Close')}
+					onclick={onClose}
+				>
+					<X class="h-3.5 w-3.5" aria-hidden="true" />
 				</Button>
 			</div>
 
