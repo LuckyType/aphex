@@ -1,6 +1,7 @@
 import type { ArrayField, Field, SchemaType, TypeReference } from '../types/index';
 import { Rule, type ValidationContext } from './rule';
 import { normalizeDateFields } from './date-utils';
+import { fieldDateFormat, fieldTimeFormat } from '../utils/date-format';
 import { cmsLogger } from '../utils/logger';
 import { isFieldVisible } from '../schema-utils/visibility';
 import { isViewField } from '../schema-utils/view-fields';
@@ -510,7 +511,7 @@ export async function validateField(
 	// Add automatic validation for date/datetime/url fields based on type
 	if (field.type === 'date') {
 		const dateField = field as any;
-		const dateFormat = dateField.options?.dateFormat || 'YYYY-MM-DD';
+		const dateFormat = fieldDateFormat(dateField);
 		cmsLogger.debug('[validateField]', `Adding automatic DATE validation for "${field.name}"`, {
 			dateFormat
 		});
@@ -529,8 +530,8 @@ export async function validateField(
 		);
 	} else if (field.type === 'datetime') {
 		const dateTimeField = field as any;
-		const dateFormat = dateTimeField.options?.dateFormat || 'YYYY-MM-DD';
-		const timeFormat = dateTimeField.options?.timeFormat || 'HH:mm';
+		const dateFormat = fieldDateFormat(dateTimeField);
+		const timeFormat = fieldTimeFormat(dateTimeField);
 		cmsLogger.debug('[validateField]', `Adding automatic DATETIME validation for "${field.name}"`, {
 			dateFormat,
 			timeFormat
