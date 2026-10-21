@@ -13,6 +13,7 @@
 	import ImageField from './ImageField.svelte';
 	import ReferenceField from './ReferenceField.svelte';
 	import FieldInput from './FieldInput.svelte';
+	import { fieldInputKey } from '../../../studio-extensions';
 	import { newArrayItem } from '../../../utils/field-defaults';
 	import { createSortable, isSortable } from '@dnd-kit/svelte/sortable';
 	import { arrayMove } from '@dnd-kit/helpers';
@@ -127,7 +128,8 @@
 	// `input`; keep the compact inline inputs for plain string/number/boolean.
 	const COMPACT_TYPES = ['string', 'number', 'boolean', 'text'];
 	const useResolvedItemInput = $derived(
-		!!field.of?.[0]?.input || (!!primitiveType && !COMPACT_TYPES.includes(primitiveType))
+		!!fieldInputKey(primitiveItemField) ||
+			(!!primitiveType && !COMPACT_TYPES.includes(primitiveType))
 	);
 
 	// Synthetic ReferenceField definition reused for every row in an

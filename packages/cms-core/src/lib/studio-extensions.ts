@@ -208,7 +208,26 @@ export interface StudioExtensions {
 	 * Publish button stays enabled, so clicking it is what reveals them.
 	 */
 	fieldErrors?: 'always' | 'touched';
+	/**
+	 * How a field shows its description, the same in a document, a nested
+	 * object, the object modal and an app's own panels: `'inline'` as a line
+	 * under the label, `'tooltip'` behind an info icon beside it. Receives the
+	 * mode the place asks for (`'tooltip'` inside an object, `'inline'`
+	 * elsewhere), which stays when this is unset.
+	 */
+	fieldDescription?: (field: Field, requested: FieldDescriptionMode) => FieldDescriptionMode;
+	/**
+	 * The `input` a field without its own gets: an `aphex/field/component` key,
+	 * so an app can draw every boolean (or every short list) with one widget of
+	 * its own rather than naming it on each field. Return undefined for the
+	 * built-in input; a key no part registers falls back to it too. Never
+	 * asked for a `view` field, whose `input` names its slot.
+	 */
+	defaultInput?: (field: Field) => string | undefined;
 }
+
+/** Where a field's description shows: under its label, or behind an info icon. */
+export type FieldDescriptionMode = 'inline' | 'tooltip';
 
 let current: StudioExtensions = {};
 
@@ -301,4 +320,22 @@ export function createTitleField(type: string | null | undefined): string | null
 	const ask = studioDocumentList(type).createWithTitle;
 	if (!ask) return null;
 	return ask === true ? 'title' : ask.field;
+}
+
+/**
+ * The `input` key `field` is drawn with: its own, else the app's
+ * `defaultInput` for it.
+ */
+export function fieldInputKey(field: Field): string | undefined {
+	if (field.input) return field.input;
+	if (field.type === 'view') return undefined;
+	return current.defaultInput?.(field);
+}
+
+/** How `field` shows its description where the place asks for `requested`. */
+export function fieldDescriptionMode(
+	field: Field,
+	requested: FieldDescriptionMode
+): FieldDescriptionMode {
+	return current.fieldDescription?.(field, requested) ?? requested;
 }

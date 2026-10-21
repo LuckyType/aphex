@@ -1,6 +1,6 @@
 <script lang="ts">
 	import * as i18n from '../../i18n/index';
-	import { studioExtensions } from '../../studio-extensions';
+	import { fieldDescriptionMode, fieldInputKey, studioExtensions } from '../../studio-extensions';
 	import { Label } from '@aphexcms/ui/shadcn/label';
 	import * as Alert from '@aphexcms/ui/shadcn/alert';
 	import * as Tooltip from '@aphexcms/ui/shadcn/tooltip';
@@ -73,7 +73,8 @@
 		 * How to present `field.description`. `'inline'` (default) shows it as a line
 		 * under the label; `'tooltip'` shows an info icon that reveals it on hover/focus.
 		 * Object containers pass `'tooltip'` to their subfields so nested groups don't
-		 * become a wall of help text.
+		 * become a wall of help text. An app's `fieldDescription` extension has the
+		 * last word, so one rule holds in every place a field is drawn.
 		 */
 		descriptionMode?: 'inline' | 'tooltip';
 	}
@@ -105,7 +106,8 @@
 	// Plugin-provided input widget for this field's `input` key, if any. When set,
 	// it replaces the built-in renderer for the field's type.
 	const fieldComponents = useFieldComponents();
-	const CustomInput = $derived(field.input ? fieldComponents(field.input) : undefined);
+	const inputKey = $derived(fieldInputKey(field));
+	const CustomInput = $derived(inputKey ? fieldComponents(inputKey) : undefined);
 
 	// A `view` field is a display slot drawn by its `aphex/field/view` part: no
 	// value, no update, and nothing to validate.
@@ -193,7 +195,9 @@
 	// above it would say the same words twice. Its description goes inline
 	// under it: an info icon would sit alone on the row the title leaves empty.
 	const checkboxLabelled = $derived(field.type === 'boolean' && !CustomInput);
-	const tooltipDescription = $derived(descriptionMode === 'tooltip' && !checkboxLabelled);
+	const tooltipDescription = $derived(
+		fieldDescriptionMode(field, descriptionMode) === 'tooltip' && !checkboxLabelled
+	);
 	const validationClasses = $derived(getValidationClasses(hasErrors));
 
 	/**
@@ -305,6 +309,7 @@
 						siblingData={scope}
 						{parentData}
 						{onUpdateSiblings}
+						onOpenDocument={onOpenReference}
 						{fieldPath}
 						{schemaType}
 						{readonly}
