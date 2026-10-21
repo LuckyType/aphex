@@ -2850,18 +2850,20 @@
 								);
 							}}
 							class="hover:bg-muted flex cursor-pointer items-center gap-1.5 rounded px-2 py-1 transition-colors"
+							role="switch"
+							aria-checked={previewEditMode}
 							title={previewEditMode ? i18n.t('Disable edit mode') : i18n.t('Enable edit mode')}
 						>
-							<!-- Toggle pill -->
+							<!-- Toggle pill, coloured like the shared Switch so it reads in both themes -->
 							<div
 								class="relative h-[14px] w-6 rounded-full transition-colors {previewEditMode
 									? 'bg-primary'
-									: 'bg-muted-foreground/30'}"
+									: 'bg-input dark:bg-input/80'}"
 							>
 								<div
-									class="absolute top-[2px] h-[10px] w-[10px] rounded-full bg-white shadow transition-all {previewEditMode
-										? 'left-[12px]'
-										: 'left-[2px]'}"
+									class="absolute top-[2px] h-[10px] w-[10px] rounded-full shadow transition-all {previewEditMode
+										? 'bg-primary-foreground left-[12px]'
+										: 'bg-background dark:bg-foreground left-[2px]'}"
 								></div>
 							</div>
 							<span
