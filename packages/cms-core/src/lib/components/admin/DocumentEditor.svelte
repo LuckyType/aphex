@@ -123,6 +123,12 @@
 		organizationId?: string | null;
 		/** Build-time plugins; their document-action parts render in the toolbar. */
 		plugins?: CMSPlugin[];
+		/**
+		 * Values a new document starts with on top of its field defaults (the
+		 * title a list asked for first). They count as edits, so the first
+		 * autosave stores the document with them.
+		 */
+		initialValues?: Record<string, unknown> | null;
 	}
 
 	let {
@@ -150,7 +156,8 @@
 		reloadToken = 0,
 		onTogglePresentation,
 		organizationId = null,
-		plugins = []
+		plugins = [],
+		initialValues = null
 	}: Props = $props();
 
 	// Set schema context for child components (ArrayField, etc.)
@@ -1462,7 +1469,7 @@
 			}
 		}
 
-		documentData = initialData;
+		documentData = { ...initialData, ...(untrack(() => initialValues) ?? {}) };
 		initialDocumentData = structuredClone(initialData);
 		fullDocument = null;
 		hasUnsavedChanges = false;

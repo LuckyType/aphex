@@ -9,6 +9,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import {
 	configureStudio,
+	createTitleField,
 	orderedGroups,
 	studioDocumentList,
 	studioDocumentTree,
@@ -107,5 +108,25 @@ describe('studioDocumentTree', () => {
 		const other: StudioDocumentTree = { types: ['dish'], component };
 		configureStudio({ documentTrees: [menu, other] });
 		expect(studioDocumentTree('dish')).toBe(menu);
+	});
+});
+
+describe('createTitleField', () => {
+	it('asks for nothing unless the list says so', () => {
+		configureStudio({ documentLists: { page: { createLabel: () => 'New page' } } });
+		expect(createTitleField('page')).toBeNull();
+		expect(createTitleField('post')).toBeNull();
+	});
+
+	it('fills `title`, or the field the list names', () => {
+		configureStudio({
+			documentLists: {
+				page: { createWithTitle: true },
+				product: { createWithTitle: { field: 'name' } }
+			}
+		});
+		expect(studioDocumentList('page').createWithTitle).toBe(true);
+		expect(createTitleField('page')).toBe('title');
+		expect(createTitleField('product')).toBe('name');
 	});
 });
