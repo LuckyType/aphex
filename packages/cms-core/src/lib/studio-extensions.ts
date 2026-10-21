@@ -77,6 +77,15 @@ export interface StudioDocumentListProps {
 	/** The id of the open document, if any. */
 	activeId: string | null | undefined;
 	onselect: (id: string) => void;
+	/**
+	 * Call after the list itself wrote a document (say, reordered it by
+	 * dragging), as a tree calls its own: the rows are read again, and the
+	 * editor re-reads the document when it is the one open, so its next save
+	 * neither conflicts nor carries the old values back.
+	 */
+	onwritten: (id: string) => void;
+	/** True when the signed-in user may not edit, as the editor reads it. */
+	isReadOnly: boolean;
 }
 
 export interface StudioDocumentTreeProps {
