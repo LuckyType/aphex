@@ -8,10 +8,16 @@
 	import Calendar from '../StudioCalendar.svelte';
 	import * as Popover from '@aphexcms/ui/shadcn/popover';
 	import type { DateTimeField } from '../../../types/schemas';
-	import { cmsLogger } from '../../../utils/logger';
+	import { untrack } from 'svelte';
 	import dayjs from 'dayjs';
 	import customParseFormat from 'dayjs/plugin/customParseFormat';
 	import utc from 'dayjs/plugin/utc';
+	import {
+		dateFormatHint,
+		fieldDateFormat,
+		fieldTimeFormat,
+		parseDateTimeInput
+	} from '../../../utils/date-format';
 
 	// Enable strict parsing and UTC
 	dayjs.extend(customParseFormat);
@@ -37,60 +43,63 @@
 		readonly = false
 	}: Props = $props();
 
-	// Get date and time formats from options or use defaults
-	const dateFormat = $derived(field.options?.dateFormat || 'YYYY-MM-DD');
-	const timeFormat = $derived(field.options?.timeFormat || 'HH:mm');
+	// The field's own formats, else the Studio locale's (DD.MM.YYYY HH:mm in German).
+	const dateFormat = $derived(fieldDateFormat(field));
+	const timeFormat = $derived(fieldTimeFormat(field));
 	const displayFormat = $derived(`${dateFormat} ${timeFormat}`);
 
 	// Track local input value for display
 	let inputValue = $state('');
 	let timeValue = $state('00:00');
 
-	// Convert stored ISO value to display format
-	// Only update if the formatted value is different to avoid overwriting user input
+	/**
+	 * The stored moment, read only from an ISO datetime: `Date` would read a
+	 * half-typed "2" as February 2001 and overwrite the entry with it.
+	 */
+	function stored(text: string | null): dayjs.Dayjs | null {
+		if (!text || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(text)) return null;
+		const datetime = dayjs(text);
+		return datetime.isValid() ? datetime : null;
+	}
+
+	function toStored(local: dayjs.Dayjs): string {
+		return local.utc().format('YYYY-MM-DDTHH:mm:ss[Z]');
+	}
+
+	// Show the stored value in the display format. Text that already names the
+	// stored moment (typed as "24.12.26 18", say) stays as typed while focus is
+	// here; leaving the field writes it out in full.
 	$effect(() => {
+		const [date, time, display] = [dateFormat, timeFormat, displayFormat];
 		if (!value || value === '') {
-			if (inputValue !== '') {
+			if (untrack(() => inputValue) !== '') {
 				inputValue = '';
 				timeValue = '00:00';
 			}
-		} else {
-			// Parse the datetime value
-			const datetime = dayjs(value);
-			if (datetime.isValid()) {
-				const formatted = datetime.format(displayFormat);
-				const time = datetime.format('HH:mm');
-				// Only update if different to avoid overwriting user's in-progress typing
-				if (inputValue !== formatted) {
-					inputValue = formatted;
-				}
-				if (timeValue !== time) {
-					timeValue = time;
-				}
-			} else {
-				// Value is not ISO (might be user's in-progress input or invalid)
-				if (inputValue !== value) {
-					inputValue = value;
-				}
-			}
+			return;
 		}
+		const datetime = stored(value);
+		if (!datetime) {
+			// Not a datetime: an unfinished or invalid entry, kept for validation to name.
+			if (untrack(() => inputValue) !== value) inputValue = value;
+			return;
+		}
+		const typed = untrack(() => parseDateTimeInput(inputValue, date, time));
+		if (!typed || toStored(typed) !== toStored(datetime)) {
+			inputValue = datetime.format(display);
+		}
+		const pickerTime = datetime.format('HH:mm');
+		if (untrack(() => timeValue) !== pickerTime) timeValue = pickerTime;
 	});
 
 	// Convert string value to DateValue for calendar
 	const dateValue = $derived.by(() => {
-		if (!value || value === '') return undefined;
-
-		try {
-			// Parse datetime and extract just the date part
-			const datetime = dayjs(value);
-			if (datetime.isValid()) {
-				return parseDate(datetime.format('YYYY-MM-DD'));
-			}
-		} catch (err) {
-			cmsLogger.error('Failed to parse datetime:', value, err);
-		}
-		return undefined;
+		const datetime = stored(value);
+		return datetime ? parseDate(datetime.format('YYYY-MM-DD')) : undefined;
 	});
+
+	// The month the calendar shows, set to the field's day each time it opens.
+	let calendarMonth = $state<DateValue | undefined>(undefined);
 
 	// Handle date selection from calendar
 	function handleDateChange(newValue: DateValue | undefined) {
@@ -99,9 +108,7 @@
 		} else {
 			// Combine selected date with current time and convert to UTC
 			const dateStr = newValue.toString(); // YYYY-MM-DD
-			const localDatetime = dayjs(`${dateStr} ${timeValue}`, 'YYYY-MM-DD HH:mm');
-			const utcDatetime = localDatetime.utc().format('YYYY-MM-DDTHH:mm:ss[Z]');
-			onUpdate(utcDatetime);
+			onUpdate(toStored(dayjs(`${dateStr} ${timeValue}`, 'YYYY-MM-DD HH:mm')));
 		}
 	}
 
@@ -111,25 +118,26 @@
 		const displayValue = target.value;
 		inputValue = displayValue;
 
-		if (displayValue === '') {
+		if (displayValue.trim() === '') {
 			onUpdate(null);
 			return;
 		}
 
-		// Parse according to the chosen format (date + time)
-		const parsed = dayjs(displayValue, displayFormat, true);
-
-		if (parsed.isValid()) {
-			// Convert to ISO datetime UTC
-			const utcDatetime = parsed.utc().format('YYYY-MM-DDTHH:mm:ss[Z]');
-			onUpdate(utcDatetime);
-			// Update time value for picker
+		const parsed = parseDateTimeInput(displayValue, dateFormat, timeFormat);
+		if (parsed) {
+			onUpdate(toStored(parsed));
 			timeValue = parsed.format('HH:mm');
 		} else {
-			// Still update with the invalid value so autosave triggers
-			// Validation will catch the error
+			// An unparsable entry is still written, so autosave keeps it and
+			// validation names the format it expects.
 			onUpdate(displayValue);
 		}
+	}
+
+	function handleBlur(event: FocusEvent) {
+		const parsed = parseDateTimeInput(inputValue, dateFormat, timeFormat);
+		if (parsed) inputValue = parsed.format(displayFormat);
+		onBlur?.(event);
 	}
 
 	// Handle time input changes
@@ -138,16 +146,11 @@
 		if (!newTime) return;
 		timeValue = newTime;
 
-		// If we have a date, update the datetime
-		if (value && value !== '') {
-			const datetime = dayjs(value);
-			if (datetime.isValid()) {
-				// Get the local date and combine with new time, then convert to UTC
-				const dateStr = datetime.format('YYYY-MM-DD');
-				const localDatetime = dayjs(`${dateStr} ${newTime}`, 'YYYY-MM-DD HH:mm');
-				const utcDatetime = localDatetime.utc().format('YYYY-MM-DDTHH:mm:ss[Z]');
-				onUpdate(utcDatetime);
-			}
+		// If we have a date, combine its local day with the new time
+		const datetime = stored(value);
+		if (datetime) {
+			const dateStr = datetime.format('YYYY-MM-DD');
+			onUpdate(toStored(dayjs(`${dateStr} ${newTime}`, 'YYYY-MM-DD HH:mm')));
 		}
 	}
 
@@ -156,16 +159,11 @@
 		const now = dayjs();
 		timeValue = now.format('HH:mm');
 
-		// If we have a date, update the datetime
-		if (value && value !== '') {
-			const datetime = dayjs(value);
-			if (datetime.isValid()) {
-				// Get the local date and combine with current time, then convert to UTC
-				const dateStr = datetime.format('YYYY-MM-DD');
-				const localDatetime = dayjs(`${dateStr} ${timeValue}`, 'YYYY-MM-DD HH:mm');
-				const utcDatetime = localDatetime.utc().format('YYYY-MM-DDTHH:mm:ss[Z]');
-				onUpdate(utcDatetime);
-			}
+		// If we have a date, combine its local day with the current time
+		const datetime = stored(value);
+		if (datetime) {
+			const dateStr = datetime.format('YYYY-MM-DD');
+			onUpdate(toStored(dayjs(`${dateStr} ${timeValue}`, 'YYYY-MM-DD HH:mm')));
 		}
 	}
 </script>
@@ -175,25 +173,31 @@
 		<Input
 			id={field.name}
 			type="text"
-			placeholder={displayFormat}
+			placeholder={dateFormatHint(displayFormat)}
 			value={inputValue}
 			oninput={handleInputChange}
-			onblur={onBlur}
+			onblur={handleBlur}
 			onfocus={onFocus}
 			class="flex-1 {validationClasses}"
 			disabled={readonly}
 		/>
-		<Popover.Root>
+		<Popover.Root
+			onOpenChange={(isOpen) => {
+				if (isOpen) calendarMonth = dateValue;
+			}}
+		>
 			<Popover.Trigger
 				class="border-input bg-background ring-offset-background hover:bg-accent hover:text-accent-foreground focus-visible:ring-ring inline-flex h-10 w-10 items-center justify-center rounded-md border text-sm font-medium whitespace-nowrap transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50"
 				disabled={readonly}
+				aria-label={i18n.t('Open calendar')}
 			>
-				<CalendarIcon class="h-4 w-4" />
+				<CalendarIcon class="h-4 w-4" aria-hidden="true" />
 			</Popover.Trigger>
 			<Popover.Content class="w-auto p-0">
 				<Calendar
 					type="single"
 					value={dateValue}
+					bind:placeholder={calendarMonth}
 					onValueChange={handleDateChange}
 					captionLayout="dropdown"
 					locale={i18n.locale()}

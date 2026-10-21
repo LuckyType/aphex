@@ -6,9 +6,10 @@
 	import Calendar from '../StudioCalendar.svelte';
 	import * as Popover from '@aphexcms/ui/shadcn/popover';
 	import type { DateField } from '../../../types/schemas';
-	import { cmsLogger } from '../../../utils/logger';
+	import { untrack } from 'svelte';
 	import dayjs from 'dayjs';
 	import customParseFormat from 'dayjs/plugin/customParseFormat';
+	import { dateFormatHint, fieldDateFormat, parseDateInput } from '../../../utils/date-format';
 
 	// Enable strict parsing
 	dayjs.extend(customParseFormat);
@@ -33,34 +34,29 @@
 		readonly = false
 	}: Props = $props();
 
-	// Get date format from options or use default
-	const dateFormat = $derived(field.options?.dateFormat || 'YYYY-MM-DD');
+	// The field's own format, else the Studio locale's (DD.MM.YYYY in German).
+	const dateFormat = $derived(fieldDateFormat(field));
 
 	// Track local input value for display
 	let inputValue = $state('');
 
-	// Convert stored ISO value to display format
-	// Only update if the formatted value is different to avoid overwriting user input
+	// Show the stored ISO value in the display format. Text that already names
+	// the stored day (typed as 5.3.26, say) stays as typed while focus is here;
+	// leaving the field writes it out in full.
 	$effect(() => {
+		const format = dateFormat;
 		if (!value || value === '') {
-			if (inputValue !== '') {
-				inputValue = '';
-			}
-		} else {
-			// Convert ISO (YYYY-MM-DD) to display format
-			const date = dayjs(value, 'YYYY-MM-DD', true);
-			if (date.isValid()) {
-				const formatted = date.format(dateFormat);
-				// Only update if different to avoid overwriting user's in-progress typing
-				if (inputValue !== formatted) {
-					inputValue = formatted;
-				}
-			} else {
-				// Value is not ISO (might be user's in-progress input or invalid)
-				if (inputValue !== value) {
-					inputValue = value;
-				}
-			}
+			if (inputValue !== '') inputValue = '';
+			return;
+		}
+		const date = dayjs(value, 'YYYY-MM-DD', true);
+		if (!date.isValid()) {
+			// Not ISO: an unfinished or invalid entry, kept for validation to name.
+			if (untrack(() => inputValue) !== value) inputValue = value;
+			return;
+		}
+		if (untrack(() => parseDateInput(inputValue, format)) !== value) {
+			inputValue = date.format(format);
 		}
 	});
 
@@ -71,11 +67,13 @@
 		try {
 			// Value is stored as ISO date string (YYYY-MM-DD)
 			return parseDate(value);
-		} catch (err) {
-			cmsLogger.error('Failed to parse date:', value, err);
+		} catch {
 			return undefined;
 		}
 	});
+
+	// The month the calendar shows, set to the field's day each time it opens.
+	let calendarMonth = $state<DateValue | undefined>(undefined);
 
 	// Handle date selection from calendar
 	function handleDateChange(newValue: DateValue | undefined) {
@@ -94,23 +92,21 @@
 		const displayValue = target.value;
 		inputValue = displayValue;
 
-		if (displayValue === '') {
+		if (displayValue.trim() === '') {
 			onUpdate(null);
 			return;
 		}
 
-		// Parse according to the chosen format
-		const parsed = dayjs(displayValue, dateFormat, true);
+		const iso = parseDateInput(displayValue, dateFormat);
+		// An unparsable entry is still written, so autosave keeps it and
+		// validation names the format it expects.
+		onUpdate(iso ?? displayValue);
+	}
 
-		if (parsed.isValid()) {
-			// Convert to ISO for storage
-			const isoString = parsed.format('YYYY-MM-DD');
-			onUpdate(isoString);
-		} else {
-			// Still update with the invalid value so autosave triggers
-			// Validation will catch the error
-			onUpdate(displayValue);
-		}
+	function handleBlur(event: FocusEvent) {
+		const iso = parseDateInput(inputValue, dateFormat);
+		if (iso) inputValue = dayjs(iso, 'YYYY-MM-DD', true).format(dateFormat);
+		onBlur?.(event);
 	}
 </script>
 
@@ -119,25 +115,31 @@
 		<Input
 			id={field.name}
 			type="text"
-			placeholder={dateFormat}
+			placeholder={dateFormatHint(dateFormat)}
 			value={inputValue}
 			oninput={handleInputChange}
-			onblur={onBlur}
+			onblur={handleBlur}
 			onfocus={onFocus}
 			class="flex-1 {validationClasses}"
 			disabled={readonly}
 		/>
-		<Popover.Root>
+		<Popover.Root
+			onOpenChange={(isOpen) => {
+				if (isOpen) calendarMonth = dateValue;
+			}}
+		>
 			<Popover.Trigger
 				class="border-input bg-background ring-offset-background hover:bg-accent hover:text-accent-foreground focus-visible:ring-ring inline-flex h-10 w-10 items-center justify-center rounded-md border text-sm font-medium whitespace-nowrap transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50"
 				disabled={readonly}
+				aria-label={i18n.t('Open calendar')}
 			>
-				<CalendarIcon class="h-4 w-4" />
+				<CalendarIcon class="h-4 w-4" aria-hidden="true" />
 			</Popover.Trigger>
 			<Popover.Content class="w-auto p-0">
 				<Calendar
 					type="single"
 					value={dateValue}
+					bind:placeholder={calendarMonth}
 					onValueChange={handleDateChange}
 					captionLayout="dropdown"
 					locale={i18n.locale()}
