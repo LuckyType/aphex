@@ -411,12 +411,18 @@ export interface PreviewConfig {
 		/** Dot-path into the document data (e.g. `seo.title`), NOT a literal. */
 		title?: string;
 		subtitle?: string;
+		/**
+		 * Dot-path to an `image` or `file` field. An array row shows the image as a
+		 * thumbnail (a file as its icon), and its alt text or file name when the
+		 * row has no title of its own.
+		 */
 		media?: string;
 	} & Record<string, string>;
 	prepare?: (selection: Record<string, unknown>) => {
 		title?: string;
 		subtitle?: string;
-		media?: string;
+		/** An image or file value (`{ asset: { _ref } }`), or an image address. */
+		media?: unknown;
 	};
 }
 
