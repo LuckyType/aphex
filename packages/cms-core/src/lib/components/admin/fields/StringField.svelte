@@ -129,7 +129,9 @@
 
 	// For Select component - derive trigger content
 	const selectedItem = $derived(listItems.find((item) => item.value === value));
-	const triggerContent = $derived(selectedItem?.title ?? field.placeholder ?? field.title);
+	// The field's title is its label's, never the empty choice's: an empty
+	// select that repeats the label reads as filled in.
+	const triggerContent = $derived(selectedItem?.title ?? field.placeholder ?? i18n.t('Select…'));
 
 	function handleInputChange(event: Event) {
 		const target = event.target as HTMLInputElement;
@@ -245,7 +247,7 @@
 	<Input
 		id={field.name}
 		value={value || ''}
-		placeholder={field.placeholder || field.title}
+		placeholder={field.placeholder}
 		oninput={handleInputChange}
 		onblur={onBlur}
 		onfocus={onFocus}
