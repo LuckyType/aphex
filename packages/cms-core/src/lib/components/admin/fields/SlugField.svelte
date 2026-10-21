@@ -3,8 +3,10 @@
 	import { Input } from '@aphexcms/ui/shadcn/input';
 	import { Button } from '@aphexcms/ui/shadcn/button';
 	import type { Field, SchemaType, SlugField } from '../../../types/schemas';
-	import { generateSlug, slugSourceTitle } from '../../../utils/index';
+	import { untrack } from 'svelte';
+	import { followedSlug, generateSlug, slugSourceTitle } from '../../../utils/index';
 	import { getSchemaContext } from '../../../schema-context.svelte';
+	import { getSaveStateContext } from '../../../save-state-context.svelte';
 
 	interface Props {
 		field: SlugField;
@@ -61,6 +63,23 @@
 		)
 	);
 
+	const slugify = $derived(field.slugify ?? generateSlug);
+
+	// The slug follows its source while it is empty or still the source made
+	// into a slug, so typing a title fills the address. It stops once someone
+	// types their own, and never moves on a document published before, whose
+	// address may already be linked; "Generate" stays for those.
+	const saveState = getSaveStateContext();
+	let previousSource: unknown = untrack(() => (value ? sourceValue : undefined));
+	$effect(() => {
+		const source = sourceValue;
+		const before = previousSource;
+		previousSource = source;
+		if (readonly || saveState?.published) return;
+		const next = untrack(() => followedSlug(value, before, source, slugify));
+		if (next !== null) onUpdate(next);
+	});
+
 	function handleInputChange(event: Event) {
 		const target = event.target as HTMLInputElement;
 		onUpdate(target.value);
@@ -69,7 +88,7 @@
 	// Generate slug from source field
 	function generateSlugFromSource() {
 		if (sourceValue && typeof sourceValue === 'string') {
-			const generatedSlug = generateSlug(sourceValue);
+			const generatedSlug = slugify(sourceValue);
 			onUpdate(generatedSlug);
 		}
 	}

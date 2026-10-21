@@ -126,6 +126,21 @@ export interface StudioListOrdering {
 	sort: (rows: readonly StudioDocumentListRow[]) => StudioDocumentListRow[];
 }
 
+/** How the document editor shows a schema's field groups. */
+export interface StudioFieldGroups {
+	/**
+	 * `'buttons'` (the default): a row of filter buttons. `'tabs'`: a tab bar
+	 * (`role="tablist"`), each tab with the number of fields it shows.
+	 */
+	style?: 'buttons' | 'tabs';
+	/**
+	 * False leaves out the "All fields" choice. The default group (or the
+	 * first) opens, and a field in no shown group sits under the first tab.
+	 * Defaults to true.
+	 */
+	allFields?: boolean;
+}
+
 export interface StudioExtensions {
 	/** A badge beside a document's title in the document list. */
 	listBadge?: (type: string, id: string) => StudioListBadge | null;
@@ -175,6 +190,17 @@ export interface StudioExtensions {
 	 * types always come first.
 	 */
 	groupOrder?: readonly string[];
+	/** How the document editor shows field groups; filter buttons with "All fields" when left out. */
+	fieldGroups?: StudioFieldGroups;
+	/**
+	 * When the editor shows a field's validation errors. `'always'` (the
+	 * default) shows them whenever a check runs, on load and after every
+	 * autosave. `'touched'` holds them back until the field was visited and
+	 * left, its input reported it touched (`useFieldTouch`), a publish was
+	 * attempted, or the document has been published before. Until then the
+	 * Publish button stays enabled, so clicking it is what reveals them.
+	 */
+	fieldErrors?: 'always' | 'touched';
 }
 
 let current: StudioExtensions = {};

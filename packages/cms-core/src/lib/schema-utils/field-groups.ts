@@ -34,17 +34,21 @@ export function visibleFieldGroups(
 /**
  * Whether the editor needs its field group tabs at all. With one group left
  * that holds every field the editor would render, "All fields" and that
- * group show the same fields, so the two tabs only take room.
+ * group show the same fields, so the two tabs only take room. Without "All
+ * fields" (`allFields` false) a single group is one tab holding everything,
+ * so tabs need two groups.
  */
 export function fieldGroupTabsNeeded(
 	visibleGroups: FieldGroup[],
 	fields: Field[],
 	documentData: Record<string, unknown> | undefined,
-	isHidden: (field: Field) => boolean = () => false
+	isHidden: (field: Field) => boolean = () => false,
+	allFields = true
 ): boolean {
 	const [first, ...rest] = visibleGroups;
 	if (!first) return false;
 	if (rest.length > 0) return true;
+	if (!allFields) return false;
 	const only = first.name;
 	return fields.some(
 		(field) =>
@@ -52,4 +56,42 @@ export function fieldGroupTabsNeeded(
 			!isHidden(field) &&
 			isFieldVisible(field, documentData, documentData)
 	);
+}
+
+/**
+ * The tab a field shows under: the first visible group it belongs to. A field
+ * in none of them shows under "All fields" (`'all'`), or, where the editor
+ * leaves "All fields" out, under the first tab, so no field is unreachable.
+ */
+export function fieldGroupTab(
+	field: { group?: string | string[] },
+	visibleGroups: FieldGroup[],
+	allFields: boolean
+): string {
+	const own = visibleGroups.find((group) => fieldInGroup(field, group.name));
+	if (own) return own.name;
+	return allFields ? 'all' : (visibleGroups[0]?.name ?? 'all');
+}
+
+/**
+ * How many fields the tab named `tab` shows: those the editor would render
+ * whose `fieldGroupTab` is `tab` (every rendered field for `'all'`), counted
+ * as the panels' tabs count theirs.
+ */
+export function fieldGroupTabCount(
+	tab: string,
+	visibleGroups: FieldGroup[],
+	fields: Field[],
+	documentData: Record<string, unknown> | undefined,
+	allFields: boolean,
+	isHidden: (field: Field) => boolean = () => false
+): number {
+	return fields.filter(
+		(field) =>
+			!isHidden(field) &&
+			isFieldVisible(field, documentData, documentData) &&
+			(tab === 'all' ||
+				fieldInGroup(field, tab) ||
+				fieldGroupTab(field, visibleGroups, allFields) === tab)
+	).length;
 }
