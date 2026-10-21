@@ -30,6 +30,8 @@ export {
 	useFieldComponents,
 	type FieldComponentLookup
 } from '../admin/field-components.svelte';
+// A custom input reports when its field counts as touched (`fieldErrors: 'touched'`).
+export { useFieldTouch } from '../field-touch-context.svelte';
 // Admin URL navigation — typed intents, shareable via context (plugin tools can navigate).
 export {
 	createAdminNav,
