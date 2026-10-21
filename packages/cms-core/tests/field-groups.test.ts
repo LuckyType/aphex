@@ -10,6 +10,7 @@ import {
 	fieldGroupTab,
 	fieldGroupTabCount,
 	fieldGroupTabsNeeded,
+	fieldsetHeading,
 	visibleFieldGroups
 } from '../src/lib/schema-utils/field-groups';
 import type { Field, FieldGroup } from '../src/lib/types/schemas';
@@ -117,5 +118,32 @@ describe('field group tabs without "All fields"', () => {
 		expect(fieldGroupTabsNeeded(one, tabFields, {}, () => false, false)).toBe(false);
 		expect(fieldGroupTabsNeeded(one, tabFields, {}, () => false, true)).toBe(true);
 		expect(fieldGroupTabsNeeded(tabGroups, tabFields, {}, () => false, false)).toBe(true);
+	});
+});
+
+describe('fieldsetHeading', () => {
+	const fieldsets = [
+		{ name: 'layout', title: 'Layout' },
+		{ name: 'style', title: 'Style' }
+	];
+
+	it('heads the first field of each run of one fieldset', () => {
+		const fields = [
+			{ name: 'a' },
+			{ name: 'b', fieldset: 'layout' },
+			{ name: 'c', fieldset: 'layout' },
+			{ name: 'd', fieldset: 'style' }
+		];
+		expect(fields.map((field, i) => fieldsetHeading(fieldsets, field, fields[i - 1]))).toEqual([
+			null,
+			'Layout',
+			null,
+			'Style'
+		]);
+	});
+
+	it('has no heading for a fieldset the schema does not declare', () => {
+		expect(fieldsetHeading(fieldsets, { fieldset: 'other' }, undefined)).toBeNull();
+		expect(fieldsetHeading(undefined, { fieldset: 'layout' }, undefined)).toBeNull();
 	});
 });
