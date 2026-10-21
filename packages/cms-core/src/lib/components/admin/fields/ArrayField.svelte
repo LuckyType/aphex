@@ -74,6 +74,7 @@
 	}: Props = $props();
 
 	const schemas = getSchemaContext();
+	const uid = $props.id();
 
 	function getSchemaForType(typeName: string): SchemaType | null {
 		const inlineDef = field.of?.find(
@@ -1121,8 +1122,11 @@
 	/>
 {/if}
 
-<!-- Image upload modal -->
+<!-- Image upload modal. The backdrop is not a control: Escape and a click
+     beside the dialog close it, as the object modal's does. -->
 {#if imageModalOpen}
+	<!-- svelte-ignore a11y_click_events_have_key_events -->
+	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div
 		class="bg-background/80 fixed top-12 right-0 bottom-0 left-0 z-40 flex items-center justify-center p-6 sm:absolute sm:top-0 sm:p-4"
 		onclick={(e) => {
@@ -1131,14 +1135,17 @@
 		onkeydown={(e) => {
 			if (e.key === 'Escape') handleImageModalClose();
 		}}
-		role="button"
-		tabindex="-1"
 	>
-		<Card.Root class="flex max-h-[85vh] w-full max-w-2xl flex-col shadow-lg">
+		<Card.Root
+			class="flex max-h-[85vh] w-full max-w-2xl flex-col shadow-lg"
+			role="dialog"
+			aria-modal="true"
+			aria-labelledby="{uid}-image-title"
+		>
 			<Card.Header class="border-b">
 				<div class="flex items-center justify-between">
 					<div>
-						<Card.Title
+						<Card.Title id="{uid}-image-title"
 							>{imageModalIndex !== null
 								? i18n.t('Edit Image')
 								: i18n.t('{title} - Add Image', { title: field.title })}</Card.Title
@@ -1149,8 +1156,19 @@
 								: i18n.t('Upload a new image to add to the array')}</Card.Description
 						>
 					</div>
-					<Button variant="ghost" size="icon" onclick={handleImageModalClose}>
-						<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+					<Button
+						variant="ghost"
+						size="icon"
+						aria-label={i18n.t('Close')}
+						onclick={handleImageModalClose}
+					>
+						<svg
+							class="h-4 w-4"
+							aria-hidden="true"
+							fill="none"
+							viewBox="0 0 24 24"
+							stroke="currentColor"
+						>
 							<path
 								stroke-linecap="round"
 								stroke-linejoin="round"
@@ -1181,6 +1199,8 @@
 
 <!-- Text editing modal -->
 {#if textModalOpen}
+	<!-- svelte-ignore a11y_click_events_have_key_events -->
+	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div
 		class="bg-background/80 fixed top-12 right-0 bottom-0 left-0 z-[100] flex items-center justify-center p-6 sm:absolute sm:top-0 sm:p-4"
 		onclick={(e) => {
@@ -1189,15 +1209,29 @@
 		onkeydown={(e) => {
 			if (e.key === 'Escape') handleTextModalClose();
 		}}
-		role="button"
-		tabindex="-1"
 	>
-		<Card.Root class="flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden shadow-lg">
+		<Card.Root
+			class="flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden shadow-lg"
+			role="dialog"
+			aria-modal="true"
+			aria-labelledby="{uid}-text-title"
+		>
 			<Card.Header class="border-b">
 				<div class="flex items-center justify-between">
-					<Card.Title>{i18n.t('Edit Text')}</Card.Title>
-					<Button variant="ghost" size="icon" onclick={handleTextModalClose}>
-						<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+					<Card.Title id="{uid}-text-title">{i18n.t('Edit Text')}</Card.Title>
+					<Button
+						variant="ghost"
+						size="icon"
+						aria-label={i18n.t('Close')}
+						onclick={handleTextModalClose}
+					>
+						<svg
+							class="h-4 w-4"
+							aria-hidden="true"
+							fill="none"
+							viewBox="0 0 24 24"
+							stroke="currentColor"
+						>
 							<path
 								stroke-linecap="round"
 								stroke-linejoin="round"
