@@ -120,6 +120,21 @@ describe('focusLeavesField', () => {
 		dialog.remove();
 	});
 
+	it("stays inside for focus in a docked panel marked as the field's", () => {
+		const field = document.createElement('div');
+		const panel = document.createElement('section');
+		panel.setAttribute('data-field-panel', '');
+		const back = document.createElement('button');
+		panel.append(back);
+		const elsewhere = document.createElement('button');
+		document.body.append(field, panel, elsewhere);
+		expect(focusLeavesField(field, back)).toBe(false);
+		expect(focusLeavesField(field, elsewhere)).toBe(true);
+		field.remove();
+		panel.remove();
+		elsewhere.remove();
+	});
+
 	it('leaves for focus elsewhere in the dialog that holds the field', () => {
 		const dialog = document.createElement('div');
 		dialog.setAttribute('role', 'dialog');
