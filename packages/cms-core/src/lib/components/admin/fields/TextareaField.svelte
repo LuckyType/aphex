@@ -31,7 +31,7 @@
 <Textarea
 	id={field.name}
 	value={value || ''}
-	placeholder={field.title}
+	placeholder={field.placeholder}
 	rows={field.rows}
 	oninput={handleInputChange}
 	onblur={onBlur}
