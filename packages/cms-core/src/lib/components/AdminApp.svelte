@@ -744,6 +744,18 @@
 		}
 	});
 
+	/**
+	 * The singleton type whose id is being looked up for `?docType=<singleton>`.
+	 * Plain, not `$state`: the URL effect reads it only to start one lookup per
+	 * arrival, and must not rerun when it clears.
+	 */
+	let singletonResolving: string | null = null;
+
+	// The editor pane is open on nothing: a singleton's id is still resolving.
+	const resolvingSingleton = $derived(
+		currentView === 'editor' && !editingDocumentId && !isCreatingDocument
+	);
+
 	// Watch URL params for bookmarkable navigation
 	$effect(() => {
 		const url = page.url;
@@ -856,7 +868,22 @@
 			// `?docType=<singleton>` without a docId.
 			const docTypeSchema = schemas.find((s) => s.name === docType);
 			if (docTypeSchema?.singleton) {
-				navigateToDocumentType(docType);
+				// Switch to the singleton's own layout now, while its id resolves:
+				// left as it was, the previous screen (another type's list) stayed
+				// on show for the whole round trip. The editor pane waits empty
+				// (`resolvingSingleton`) until the id arrives as `docId`.
+				if (singletonResolving !== docType) {
+					singletonResolving = docType;
+					currentView = 'editor';
+					mobileView = 'editor';
+					editingDocumentId = null;
+					isCreatingDocument = false;
+					editorStack = [];
+					selectedDocumentType = docType;
+					navigateToDocumentType(docType).finally(() => {
+						if (singletonResolving === docType) singletonResolving = null;
+					});
+				}
 				return;
 			}
 			currentView = 'documents';
@@ -2101,7 +2128,12 @@
 							{/if}
 
 							<!-- Primary Editor Panel -->
-							{#if primaryEditorState.visible}
+							{#if primaryEditorState.visible && resolvingSingleton}
+								<div
+									class="{windowWidth < 620 ? 'w-screen' : 'flex-1'} h-full"
+									aria-busy="true"
+								></div>
+							{:else if primaryEditorState.visible}
 								<!-- `overflow-y` is `auto` normally but `hidden` in presentation mode, and that
 								     is load-bearing rather than cosmetic. The stacked reference panel below is
 								     an `absolute inset-y-0` sibling inside this box, and for a *scroll
