@@ -24,6 +24,9 @@
 	import { setSchemaContext } from '../../schema-context.svelte';
 	import { hasBeenPublished, setSaveStateContext } from '../../save-state-context.svelte';
 	import { documentErrorsShown, setFieldTouchContext } from '../../field-touch-context.svelte';
+	import { type EditorCrumb, EditorTrail, setEditorTrail } from '../../editor-trail.svelte';
+	import { pluralize } from '../../utils/pluralize';
+	import EditorBreadcrumbs from './EditorBreadcrumbs.svelte';
 	import { SvelteSet } from 'svelte/reactivity';
 	import { usePermissions } from '../../permissions-context.svelte';
 	import AdminSlot from './AdminSlot.svelte';
@@ -1203,6 +1206,23 @@
 			touchedFields.add(path);
 		}
 	});
+
+	// The way to what the editor shows: the list, the document, and the panels
+	// inputs open inside it (an item, an item inside that one), so the
+	// breadcrumbs name every level and the back arrow goes up one at a time.
+	// A singleton has no list to go back to.
+	const trailRoot = $derived.by((): EditorCrumb[] => {
+		const typeTitle = String(schema?.title || effectiveType || '');
+		const doc: EditorCrumb = {
+			label: getPreviewTitle() || typeTitle,
+			select: () => trail.closeAll()
+		};
+		if (schema?.singleton) return [doc];
+		const list = presentationMode && !schema?.previewOpenByDefault ? onTogglePresentation : onBack;
+		return [{ label: i18n.plural(typeTitle, pluralize), select: list }, doc];
+	});
+	const trail = new EditorTrail(() => trailRoot);
+	setEditorTrail(trail);
 
 	let orphanedFields = $state<OrphanedField[]>([]);
 	let showOrphanedFields = $state(false);
@@ -2410,36 +2430,33 @@
 {/snippet}
 
 {#snippet editorBreadcrumb()}
-	<div
-		class="text-muted-foreground flex min-w-0 items-center gap-1.5 text-[11px] font-medium tracking-wider uppercase"
-	>
-		<!-- In the visual editor, a breadcrumb-style back arrow before the type · title
-		     exits visual editing (back to the document list), replacing the close X.
-		     Not for a type that opens beside its preview by default: there the split
-		     view is the editor itself, and the Present button still closes it. -->
-		{#if presentationMode && onTogglePresentation && !schema?.previewOpenByDefault}
-			<button
-				type="button"
-				onclick={onTogglePresentation}
-				class="hover:text-foreground hover:bg-muted -ml-1 flex shrink-0 cursor-pointer items-center rounded p-1 transition-colors"
-				title={i18n.t('Exit visual editing')}
-				aria-label={i18n.t('Exit visual editing')}
-			>
-				<ArrowLeft class="h-4 w-4" />
-			</button>
-		{/if}
-		<!-- Outside presentation mode the <h1> below says the title; when that title is
-		     just the type's name, the eyebrow would repeat it. -->
-		{#if presentationMode || !titleRepeatsType()}
-			<span class="shrink-0 whitespace-nowrap">{schema?.title || effectiveType}</span>
-		{/if}
-		<!-- The title is only shown here in presentation mode, where there's no <h1>.
-		     In the normal editor the <h1> already renders it, so don't duplicate it. -->
-		{#if presentationMode && !titleRepeatsType()}
-			<span class="shrink-0" aria-hidden="true">·</span>
-			<span class="max-w-[24rem] min-w-0 truncate">{getPreviewTitle()}</span>
-		{/if}
-	</div>
+	{#if presentationMode}
+		<!-- In the visual editor: the list, the document and every panel open in it,
+		     with a back arrow that goes up one level, and out of visual editing (back
+		     to the list) once no panel is open. Not for a type that opens beside its
+		     preview by default: there the split view is the editor itself, and the
+		     Present button still closes it. -->
+		<EditorBreadcrumbs
+			class="text-muted-foreground text-xs font-medium"
+			crumbs={trail.crumbs}
+			onUp={trail.open
+				? () => trail.up()
+				: onTogglePresentation && !schema?.previewOpenByDefault
+					? onTogglePresentation
+					: null}
+			upLabel={trail.open ? i18n.t('Back') : i18n.t('Exit visual editing')}
+		/>
+	{:else}
+		<div
+			class="text-muted-foreground flex min-w-0 items-center gap-1.5 text-[11px] font-medium tracking-wider uppercase"
+		>
+			<!-- The <h1> below says the title; when that title is just the type's name,
+			     the eyebrow would repeat it. -->
+			{#if !titleRepeatsType()}
+				<span class="shrink-0 whitespace-nowrap">{schema?.title || effectiveType}</span>
+			{/if}
+		</div>
+	{/if}
 {/snippet}
 
 {#if presentationMode}
