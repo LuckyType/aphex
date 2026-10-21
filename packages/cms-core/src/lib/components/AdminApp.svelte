@@ -41,7 +41,7 @@
 	import MediaBrowser from './admin/MediaBrowser.svelte';
 	import ConfirmDialogHost from './admin/confirm-dialog/ConfirmDialogHost.svelte';
 	import { documents, organizations } from '../api/index';
-	import { getCollectionVersion } from '../document-refresh.svelte';
+	import { getCollectionVersion, notifyCollectionChanged } from '../document-refresh.svelte';
 	import {
 		FileText,
 		Ellipsis,
@@ -1864,6 +1864,11 @@
 													rows={documentsList}
 													activeId={editingDocumentId}
 													onselect={(id) => navigateToEditDocument(id, selectedDocumentType!)}
+													onwritten={(id) => {
+														if (id === editingDocumentId) editorReloads++;
+														notifyCollectionChanged(selectedDocumentType!);
+													}}
+													{isReadOnly}
 												/>
 											{:else if documentsList.length > 0}
 												{#each documentsList as doc, index (index)}
