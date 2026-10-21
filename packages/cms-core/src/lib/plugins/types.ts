@@ -316,6 +316,12 @@ export interface FieldComponentProps {
 	onUpdateSiblings?: (patch: Record<string, unknown>) => void;
 	/** The document's type name (e.g. `'author'`) — for widgets that vary by type. */
 	schemaType?: string;
+	/**
+	 * Opens a document in the editor stacked beside this one (in its place on a
+	 * phone), with the way back here: what opening a reference does. Undefined
+	 * where no editor holds this field.
+	 */
+	onOpenDocument?: (documentId: string, documentType: string) => void;
 }
 
 /**
@@ -354,6 +360,12 @@ export interface FieldViewProps {
 	/** The document's type name. */
 	schemaType?: string;
 	readonly?: boolean;
+	/**
+	 * Opens a document in the editor stacked beside this one (in its place on a
+	 * phone), with the way back here: what opening a reference does. Undefined
+	 * where no editor holds this field.
+	 */
+	onOpenDocument?: (documentId: string, documentType: string) => void;
 }
 
 /**
