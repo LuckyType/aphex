@@ -74,6 +74,7 @@ describe('localizeSchema', () => {
 		title: 'Page',
 		description: 'A page',
 		groups: [{ name: 'seo', title: 'SEO' }],
+		fieldsets: [{ name: 'look', title: 'Style' }],
 		orderings: [{ name: 'byTitle', title: 'Title', by: [] }],
 		lock: () => null,
 		preview: { title: 'Settings', select: { subtitle: 'kind' } },
@@ -130,7 +131,8 @@ describe('localizeSchema', () => {
 			Normal: 'Absatz',
 			Bold: 'Fett',
 			Title: 'Titel',
-			Settings: 'Einstellungen'
+			Settings: 'Einstellungen',
+			Style: 'Stil'
 		};
 		configureStudioI18n({ label: (text) => de[text] ?? text });
 		const out = localizeSchema(schema);
@@ -138,6 +140,7 @@ describe('localizeSchema', () => {
 		expect(out.title).toBe('Seite');
 		expect(out.description).toBe('Eine Seite');
 		expect(out.groups[0]!.title).toBe('SEO');
+		expect(out.fieldsets[0]!.title).toBe('Stil');
 		expect(out.orderings[0]!.title).toBe('Titel');
 		expect(out.lock).toBe(schema.lock);
 		expect(out.preview).toEqual({ title: 'Einstellungen', select: { subtitle: 'kind' } });

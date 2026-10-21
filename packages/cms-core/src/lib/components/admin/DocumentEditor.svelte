@@ -7,6 +7,7 @@
 		fieldGroupTabCount,
 		fieldGroupTabsNeeded,
 		fieldInGroup,
+		fieldsetHeading,
 		visibleFieldGroups
 	} from '../../schema-utils/field-groups';
 	import { tick, untrack } from 'svelte';
@@ -946,6 +947,11 @@
 			fieldGroupTab(field, visibleGroups, allFieldsTab) === shownGroup
 		);
 	}
+
+	// The fields the open tab shows, in schema order.
+	const formFields = $derived(
+		(schema?.fields ?? []).filter((f) => fieldInActiveGroup(f) && !hiddenFieldNames.has(f.name))
+	);
 
 	// Arrow keys, Home and End move between the tabs, as in any tab bar.
 	function groupTabKeydown(event: KeyboardEvent) {
@@ -2752,13 +2758,22 @@
 							onerror={(error) =>
 								cmsLogger.error('[DocumentEditor]', 'Error in editor content:', error)}
 						>
-							{#each schema.fields.filter((f) => fieldInActiveGroup(f) && !hiddenFieldNames.has(f.name)) as field (field.name)}
+							{#each formFields as field, index (field.name)}
 								{@const viewData =
 									isPreviewingVersion && activePreview
 										? activePreview.data
 										: isViewingPublished && publishedData
 											? publishedData
 											: documentData}
+								{@const heading = fieldsetHeading(schema.fieldsets, field, formFields[index - 1])}
+								{#if heading}
+									<h3
+										class="text-muted-foreground -mb-4 text-xs font-semibold tracking-wide uppercase"
+										data-fieldset-heading={field.fieldset}
+									>
+										{heading}
+									</h3>
+								{/if}
 								<div
 									data-field-name={field.name}
 									class="rounded-md transition-all duration-300 {focusedFieldName === field.name
