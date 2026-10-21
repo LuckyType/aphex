@@ -105,6 +105,11 @@ export interface BaseField {
 	description?: string;
 	validation?: ((rule: Rule) => Rule) | Array<(rule: Rule) => Rule>;
 	group?: string | string[];
+	/**
+	 * The `fieldsets` entry this field sits under: the document form heads each
+	 * run of fields in one fieldset with its title, so a long tab reads in parts.
+	 */
+	fieldset?: string;
 	/** Per-field access control — see FieldAccess. */
 	access?: FieldAccess;
 	/**
@@ -175,6 +180,12 @@ export interface FieldGroup {
 	icon?: typeof LucideIcon;
 	default?: boolean;
 	hidden?: boolean;
+}
+
+/** A heading over the fields that name it as their `fieldset`. */
+export interface Fieldset {
+	name: string;
+	title: string;
 }
 
 export interface DependentList {
@@ -471,6 +482,7 @@ export interface DocumentType {
 	icon?: typeof LucideIcon;
 	group?: string;
 	groups?: FieldGroup[];
+	fieldsets?: Fieldset[];
 	fields: Field[];
 	preview?: PreviewConfig;
 	/**
@@ -727,6 +739,7 @@ export interface SchemaType {
 	icon?: typeof LucideIcon;
 	group?: string;
 	groups?: FieldGroup[];
+	fieldsets?: Fieldset[];
 	fields: Field[];
 	preview?: PreviewConfig;
 	/** See DocumentType.search for full docs. */
@@ -762,6 +775,7 @@ export interface NewSchemaType {
 	icon?: typeof LucideIcon;
 	group?: string;
 	groups?: FieldGroup[];
+	fieldsets?: Fieldset[];
 	fields: Field[];
 	preview?: PreviewConfig;
 	orderings?: Ordering[];
