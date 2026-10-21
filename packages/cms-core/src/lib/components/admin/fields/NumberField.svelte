@@ -1,5 +1,4 @@
 <script lang="ts">
-	import * as i18n from '../../../i18n/index';
 	import { Input } from '@aphexcms/ui/shadcn/input';
 	import { Slider } from '@aphexcms/ui/shadcn/slider';
 	import type { NumberField } from '../../../types/schemas';
@@ -116,13 +115,7 @@
 		step={field.step ?? 'any'}
 		min={field.min}
 		max={field.max}
-		placeholder={field.description ||
-			(field.title
-				? i18n.t('Enter {titleLower}', {
-						title: field.title,
-						titleLower: field.title.toLowerCase()
-					})
-				: i18n.t('Enter number'))}
+		placeholder={field.placeholder}
 		value={inputValue}
 		oninput={handleInput}
 		onkeydown={handleKeydown}

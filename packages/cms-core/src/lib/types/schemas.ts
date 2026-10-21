@@ -244,6 +244,8 @@ export type SettingsField = StringField | TextField | NumberField | BooleanField
 
 export interface NumberField extends BaseField {
 	type: 'number';
+	/** An example shown in the empty input. The field's title is never used for it. */
+	placeholder?: string;
 	min?: number;
 	max?: number;
 	/** Increment for the slider / number input. Defaults to 1 for sliders. */
