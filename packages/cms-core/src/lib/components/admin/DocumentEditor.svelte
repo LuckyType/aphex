@@ -1789,6 +1789,7 @@
 		saving = true;
 		saveError = null;
 
+		const firstPublish = !hasBeenPublished(fullDocument?._meta);
 		let refusal: StudioPublishRefusal | null = null;
 		try {
 			const response = await documents.publish(documentId, {
@@ -1813,6 +1814,17 @@
 				// Notify parent that document was published
 				if (onPublished && documentId) {
 					onPublished(documentId);
+				}
+				// The app's next step must not turn a done publish into an error.
+				try {
+					studioExtensions().afterPublish?.({
+						type: documentType,
+						id: documentId,
+						firstPublish,
+						document: syncedData
+					});
+				} catch (err) {
+					cmsLogger.error('[Document Editor]', 'afterPublish failed', err);
 				}
 				if (showVersionHistory) {
 					loadVersions();

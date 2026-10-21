@@ -6,8 +6,11 @@
 		studioDocumentTree,
 		studioExtensions,
 		createTitleField,
+		createWithTitleValues,
+		studioListActions,
 		studioDocumentList,
-		studioListOrderings
+		studioListOrderings,
+		type StudioListAction
 	} from '../studio-extensions';
 	/**
 	 * AdminApp - Complete CMS Admin Interface
@@ -34,7 +37,12 @@
 	import { setBlockPreviews, type BlockPreviewProps } from '../admin/block-previews.svelte';
 	import AdminSlot from './admin/AdminSlot.svelte';
 	import type { UserSessionPreferences } from '../types/organization';
-	import { resolvePreviewTitle, resolvePreviewSubtitle, previewDepth } from '../utils/preview';
+	import {
+		resolveItemTitle,
+		resolvePreviewTitle,
+		resolvePreviewSubtitle,
+		previewDepth
+	} from '../utils/preview';
 	import DocumentEditor from './admin/DocumentEditor.svelte';
 	import DocumentVersionPanel from './admin/DocumentVersionPanel.svelte';
 	import DocumentsSkeleton from './admin/DocumentsSkeleton.svelte';
@@ -332,10 +340,10 @@
 	}
 
 	function submitNewTitle(docType: string) {
-		const field = createTitleField(docType);
 		const text = newTitle.trim();
-		if (!field || !text) return;
-		createValues = { [field]: text };
+		const values = text ? createWithTitleValues(docType, text) : null;
+		if (!values) return;
+		createValues = values;
 		titleFormOpen = false;
 		void navigateToCreateDocument(docType);
 	}
@@ -354,6 +362,24 @@
 		selectedDocumentType;
 		titleFormOpen = false;
 	});
+
+	// An app's list action (`StudioDocumentList.actions`) runs once at a
+	// time, and the list re-reads what it may have changed.
+	let runningListAction = $state(false);
+
+	async function runListAction(action: StudioListAction) {
+		if (runningListAction) return;
+		runningListAction = true;
+		sortDropdownOpen = false;
+		try {
+			await action.run();
+		} catch (err) {
+			toast.error(err instanceof Error ? err.message : String(err));
+		} finally {
+			runningListAction = false;
+			if (selectedDocumentType) await fetchDocuments(selectedDocumentType);
+		}
+	}
 
 	function toggleDocSearch() {
 		if (docSearchOpen) {
@@ -1158,6 +1184,7 @@
 		// The document itself IS the data, with _meta containing metadata
 
 		const title = resolvePreviewTitle(doc, schema);
+		const untitled = resolveItemTitle(doc, schema) === null;
 		const subtitle = resolvePreviewSubtitle(doc, schema) ?? undefined;
 		const badge = studioExtensions().listBadge?.(docType, doc.id) ?? null;
 
@@ -1167,6 +1194,7 @@
 		return {
 			id: doc.id,
 			title,
+			untitled,
 			subtitle,
 			slug: doc.slug,
 			badge,
@@ -1653,13 +1681,30 @@
 																	size="sm"
 																	variant="ghost"
 																	class="h-8 w-8 cursor-pointer p-0"
-																	title={i18n.t('Sort documents')}
+																	title={studioListActions(selectedDocumentType).length > 0
+																		? i18n.t('List options')
+																		: i18n.t('Sort documents')}
 																>
 																	<Ellipsis class="h-4 w-4" />
 																</Button>
 															{/snippet}
 														</Popover.Trigger>
 														<Popover.Content class="w-60 p-2">
+															{@const listActions = studioListActions(selectedDocumentType)}
+															{#if listActions.length > 0}
+																<div class="border-border mb-2 flex flex-col gap-0.5 border-b pb-2">
+																	{#each listActions as action (action.name)}
+																		<button
+																			type="button"
+																			disabled={runningListAction}
+																			onclick={() => runListAction(action)}
+																			class="hover:bg-muted rounded px-2 py-2 text-left text-sm transition-colors disabled:opacity-50"
+																		>
+																			{action.title}
+																		</button>
+																	{/each}
+																</div>
+															{/if}
 															<div class="text-muted-foreground mb-2 px-2 text-xs font-semibold">
 																{i18n.t('Sort by')}
 															</div>
