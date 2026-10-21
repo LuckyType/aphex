@@ -10,6 +10,7 @@
 	// SchemaField / ArrayField, which fall back to this component for their leaves.
 	import type { Field } from '../../../types/schemas';
 	import { useFieldComponents } from '../../../admin/field-components.svelte';
+	import { fieldInputKey } from '../../../studio-extensions';
 	import StringField from './StringField.svelte';
 	import TextareaField from './TextareaField.svelte';
 	import NumberField from './NumberField.svelte';
@@ -58,7 +59,8 @@
 	}: Props = $props();
 
 	const fieldComponents = useFieldComponents();
-	const CustomInput = $derived(field.input ? fieldComponents(field.input) : undefined);
+	const inputKey = $derived(fieldInputKey(field));
+	const CustomInput = $derived(inputKey ? fieldComponents(inputKey) : undefined);
 </script>
 
 {#if CustomInput}
@@ -72,6 +74,7 @@
 		{documentData}
 		{siblingData}
 		{schemaType}
+		onOpenDocument={onOpenReference}
 	/>
 {:else if field.type === 'string'}
 	<StringField
