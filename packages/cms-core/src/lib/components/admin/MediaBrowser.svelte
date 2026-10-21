@@ -303,6 +303,10 @@
 		 * object URLs live until the document unloads otherwise.
 		 */
 		previewUrl?: string;
+		/** The asset the upload made, once it is done. */
+		assetId?: string;
+		/** Already added to a picker's selection, so a retry run does not add it twice. */
+		selected?: boolean;
 	}
 
 	/**
@@ -979,6 +983,7 @@
 
 			item.status = 'done';
 			item.progress = 100;
+			item.assetId = uploadedId;
 		} catch (err) {
 			// A 4xx is the server judging this file unacceptable — the wrong type, too
 			// large, content it won't take — and sending the identical bytes again gets
@@ -1012,6 +1017,18 @@
 		);
 
 		isUploading = false;
+
+		// A picker choosing several selects what was just uploaded, in the order the
+		// files were given, so uploading is part of picking rather than a step before it.
+		if (selectable && multiSelect) {
+			const next = new SvelteSet(selectedIds);
+			for (const item of uploadQueue) {
+				if (item.status !== 'done' || !item.assetId || item.selected) continue;
+				next.add(item.assetId);
+				item.selected = true;
+			}
+			selectedIds = next;
+		}
 
 		// The dialog stays open when the queue drains, and the editor dismisses it.
 		//
