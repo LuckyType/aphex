@@ -6,7 +6,13 @@
 	import { Checkbox } from '@aphexcms/ui/shadcn/checkbox';
 	import * as DropdownMenu from '@aphexcms/ui/shadcn/dropdown-menu';
 	import * as Card from '@aphexcms/ui/shadcn/card';
-	import type { ArrayField as ArrayFieldType, Field, SchemaType } from '../../../types/schemas';
+	import type {
+		ArrayField as ArrayFieldType,
+		Field,
+		FileField as FileFieldType,
+		ImageField as ImageFieldType,
+		SchemaType
+	} from '../../../types/schemas';
 	import { getArrayTypes, getSchemaByName } from '../../../schema-utils/utils';
 	import { getSchemaContext } from '../../../schema-context.svelte';
 	import ObjectModal from '../ObjectModal.svelte';
@@ -32,7 +38,14 @@
 	import type { ImageValue } from '../../../types/asset';
 	import { toast } from 'svelte-sonner';
 	import AssetBrowserModal from '../AssetBrowserModal.svelte';
-	import { resolvePreviewTitle, resolvePreviewSubtitle } from '../../../utils/preview';
+	import {
+		resolveItemTitle,
+		resolvePreviewMedia,
+		resolvePreviewTitle,
+		resolvePreviewSubtitle
+	} from '../../../utils/preview';
+	import { effectiveFileType, isAcceptedFileType } from '../../../utils/file-accept';
+	import ArrayItemPreview from './ArrayItemPreview.svelte';
 	import { documents } from '../../../api/documents';
 	import { SvelteMap } from 'svelte/reactivity';
 	import { getDocumentVersion } from '../../../document-refresh.svelte';
@@ -514,6 +527,94 @@
 		editingType = null;
 		editingSchema = null;
 		editingValue = {};
+	}
+
+	/**
+	 * The one item type's `image` or `file` field its preview's `media` names,
+	 * when the array holds that one type: the field "Add images..." fills,
+	 * one new item per picked asset.
+	 */
+	const mediaTarget = $derived.by(() => {
+		if (isPrimitiveArray || isReferenceArray || isBlockArray || availableTypes.length !== 1) {
+			return null;
+		}
+		const typeName = availableTypes[0]!.name;
+		const schema = getSchemaForType(typeName);
+		const path = schema?.preview?.select?.media;
+		const mediaField = path ? schema?.fields.find((f) => f.name === path) : undefined;
+		if (!schema || !mediaField) return null;
+		if (mediaField.type !== 'image' && mediaField.type !== 'file') return null;
+		return {
+			typeName,
+			schema,
+			field: mediaField as ImageFieldType | FileFieldType,
+			kind: mediaField.type
+		};
+	});
+
+	let showMediaTargetBrowser = $state(false);
+	let mediaDragDepth = $state(0);
+
+	/** New items, one per asset in the order given, each with `assetId` in the media field. */
+	function itemsForAssets(assetIds: readonly string[]): Record<string, unknown>[] {
+		const target = mediaTarget;
+		if (!target) return [];
+		return assetIds.map((id) => {
+			const item = newArrayItem(target.schema, target.typeName, generateKey);
+			item[target.field.name] = {
+				_type: target.kind,
+				asset: { _type: 'reference', _ref: id }
+			};
+			return item;
+		});
+	}
+
+	function handleMediaTargetSelect(assetIds: string[]) {
+		if (readonly || assetIds.length === 0) return;
+		onUpdate([...keyedItems, ...itemsForAssets(assetIds)]);
+	}
+
+	async function handleMediaFiles(files: FileList | null) {
+		const target = mediaTarget;
+		if (readonly || !target || !files || files.length === 0) return;
+		const accept = target.field.accept ?? (target.kind === 'image' ? 'image/*' : undefined);
+		const accepted = Array.from(files).filter((file) =>
+			isAcceptedFileType(file.name, effectiveFileType(file.name, file.type), accept)
+		);
+		if (accepted.length < files.length) {
+			toast.error(i18n.t('Some files were not added: this list does not accept their type.'));
+		}
+		if (accepted.length === 0) return;
+
+		isMultiUploading = true;
+		uploadProgress = { current: 0, total: accepted.length };
+		const ids: string[] = [];
+		for (const file of accepted) {
+			uploadProgress.current++;
+			try {
+				const result = await assets.uploadFile(file, {
+					schemaType,
+					fieldPath: `${field.name}.${target.field.name}`
+				});
+				if (result.success && result.data?.id) ids.push(result.data.id);
+				else throw new Error(result.error);
+			} catch {
+				toast.error(i18n.t('Failed to upload {name}', { name: file.name }));
+			}
+		}
+		isMultiUploading = false;
+		uploadProgress = { current: 0, total: 0 };
+		if (ids.length > 0) onUpdate([...keyedItems, ...itemsForAssets(ids)]);
+	}
+
+	function getItemOwnTitle(item: any): string | null {
+		if (!item._type) return null;
+		return resolveItemTitle(item, getSchemaForType(item._type));
+	}
+
+	function getItemMedia(item: any): unknown {
+		if (!item._type) return undefined;
+		return resolvePreviewMedia(item, getSchemaForType(item._type));
 	}
 
 	function getItemTitle(item: any): string {
@@ -1010,24 +1111,13 @@
 								data-array-item-index={index}
 								onclick={() => handleEditItem(index)}
 							>
-								<span
-									class="text-muted-foreground flex h-5 w-5 shrink-0 items-center justify-center"
-								>
-									{#if getItemIcon(item)}
-										{@const Icon = getItemIcon(item)}
-										<Icon class="h-4 w-4" />
-									{:else}
-										<FileText class="h-4 w-4" />
-									{/if}
-								</span>
-								<span class="flex min-w-0 flex-1 flex-col">
-									<span class="truncate">{getItemTitle(item)}</span>
-									{#if getItemSubtitle(item)}
-										<span class="text-muted-foreground truncate text-xs"
-											>{getItemSubtitle(item)}</span
-										>
-									{/if}
-								</span>
+								<ArrayItemPreview
+									title={getItemOwnTitle(item)}
+									fallbackTitle={getItemTitle(item)}
+									subtitle={getItemSubtitle(item)}
+									media={getItemMedia(item)}
+									icon={getItemIcon(item)}
+								/>
 							</button>
 
 							<!-- Context menu -->
@@ -1068,7 +1158,78 @@
 
 	<!-- Add item button -->
 	{#if !readonly}
-		{#if availableTypes.length === 1}
+		{#if mediaTarget}
+			<!-- An array of items named by an image or file adds several at once: from
+			     the media library (uploads made there are picked too), or files
+			     dropped here, one row each in the order given. -->
+			{#if isMultiUploading}
+				<div
+					class="border-border/50 bg-muted/30 flex h-10 w-full items-center justify-center gap-2 rounded border border-dashed text-sm"
+				>
+					<div
+						class="border-primary h-4 w-4 animate-spin rounded-full border-2 border-t-transparent"
+					></div>
+					<span class="text-muted-foreground"
+						>{i18n.t('Uploading {current} of {total}...', {
+							current: uploadProgress.current,
+							total: uploadProgress.total
+						})}</span
+					>
+				</div>
+			{:else}
+				<div
+					class="flex gap-2 rounded {mediaDragDepth > 0 ? 'ring-primary ring-2' : ''}"
+					role="group"
+					aria-label={field.title}
+					ondragenter={(e) => {
+						if (!e.dataTransfer?.types.includes('Files')) return;
+						e.preventDefault();
+						mediaDragDepth++;
+					}}
+					ondragover={(e) => {
+						if (e.dataTransfer?.types.includes('Files')) e.preventDefault();
+					}}
+					ondragleave={() => {
+						mediaDragDepth = Math.max(0, mediaDragDepth - 1);
+					}}
+					ondrop={(e) => {
+						e.preventDefault();
+						mediaDragDepth = 0;
+						void handleMediaFiles(e.dataTransfer?.files ?? null);
+					}}
+				>
+					<button
+						class="border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted/50 flex h-10 flex-1 items-center justify-center gap-2 rounded border border-dashed text-sm transition-colors"
+						onclick={() => (showMediaTargetBrowser = true)}
+					>
+						{#if mediaTarget.kind === 'image'}
+							<ImageIcon class="h-4 w-4" />
+							{i18n.t('Add images...')}
+						{:else}
+							<Upload class="h-4 w-4" />
+							{i18n.t('Add files...')}
+						{/if}
+					</button>
+					<button
+						class="border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted/50 flex h-10 flex-1 items-center justify-center gap-2 rounded border border-dashed text-sm transition-colors"
+						onclick={() => handleTypeSelected(mediaTarget.typeName)}
+					>
+						<Plus class="h-4 w-4" />
+						{i18n.t('Add item...')}
+					</button>
+				</div>
+			{/if}
+			<AssetBrowserModal
+				bind:open={showMediaTargetBrowser}
+				onOpenChange={(v) => (showMediaTargetBrowser = v)}
+				assetTypeFilter={mediaTarget.kind}
+				accept={mediaTarget.field.accept}
+				multiSelect
+				onSelectMultiple={handleMediaTargetSelect}
+				{schemaType}
+				fieldPath="{field.name}.{mediaTarget.field.name}"
+			/>
+		{:else if availableTypes.length === 1}
 			<button
 				class="border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted/50 flex h-10 w-full items-center justify-center gap-2 rounded border border-dashed text-sm transition-colors"
 				onclick={() => handleTypeSelected(availableTypes[0]!.name)}
@@ -1127,7 +1288,6 @@
 <!-- Image upload modal. The backdrop is not a control: Escape and a click
      beside the dialog close it, as the object modal's does. -->
 {#if imageModalOpen}
-	<!-- svelte-ignore a11y_click_events_have_key_events -->
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div
 		class="bg-background/80 fixed top-12 right-0 bottom-0 left-0 z-40 flex items-center justify-center p-6 sm:absolute sm:top-0 sm:p-4"
@@ -1201,7 +1361,6 @@
 
 <!-- Text editing modal -->
 {#if textModalOpen}
-	<!-- svelte-ignore a11y_click_events_have_key_events -->
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div
 		class="bg-background/80 fixed top-12 right-0 bottom-0 left-0 z-[100] flex items-center justify-center p-6 sm:absolute sm:top-0 sm:p-4"
