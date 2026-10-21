@@ -6,7 +6,12 @@
  * Run: pnpm -F @aphexcms/cms-core test
  */
 import { describe, expect, it } from 'vitest';
-import { fieldGroupTabsNeeded, visibleFieldGroups } from '../src/lib/schema-utils/field-groups';
+import {
+	fieldGroupTab,
+	fieldGroupTabCount,
+	fieldGroupTabsNeeded,
+	visibleFieldGroups
+} from '../src/lib/schema-utils/field-groups';
 import type { Field, FieldGroup } from '../src/lib/types/schemas';
 
 const groups: FieldGroup[] = [
@@ -76,5 +81,41 @@ describe('fieldGroupTabsNeeded', () => {
 
 	it('shows none with no group left', () => {
 		expect(fieldGroupTabsNeeded([], fields, {})).toBe(false);
+	});
+});
+
+describe('field group tabs without "All fields"', () => {
+	const tabGroups: FieldGroup[] = [
+		{ name: 'colours', title: 'Colours' },
+		{ name: 'type', title: 'Type' }
+	];
+	const tabFields: Field[] = [
+		{ name: 'intro', type: 'string', title: 'Intro' },
+		{ name: 'primary', type: 'string', title: 'Primary', group: 'colours' },
+		{ name: 'accent', type: 'string', title: 'Accent', group: 'colours' },
+		{ name: 'font', type: 'string', title: 'Font', group: 'type' },
+		{ name: 'both', type: 'string', title: 'Both', group: ['colours', 'type'] }
+	];
+
+	it('puts a field of no shown group under the first tab', () => {
+		expect(fieldGroupTab(tabFields[0], tabGroups, false)).toBe('colours');
+		expect(fieldGroupTab(tabFields[0], tabGroups, true)).toBe('all');
+		expect(fieldGroupTab(tabFields[3], tabGroups, false)).toBe('type');
+	});
+
+	it('counts what each tab shows', () => {
+		const count = (tab: string, allFields: boolean) =>
+			fieldGroupTabCount(tab, tabGroups, tabFields, {}, allFields);
+		expect(count('colours', false)).toBe(4);
+		expect(count('type', false)).toBe(2);
+		expect(count('colours', true)).toBe(3);
+		expect(count('all', true)).toBe(5);
+	});
+
+	it('needs two groups for tabs, since one group is the whole form', () => {
+		const one = [tabGroups[0]];
+		expect(fieldGroupTabsNeeded(one, tabFields, {}, () => false, false)).toBe(false);
+		expect(fieldGroupTabsNeeded(one, tabFields, {}, () => false, true)).toBe(true);
+		expect(fieldGroupTabsNeeded(tabGroups, tabFields, {}, () => false, false)).toBe(true);
 	});
 });
