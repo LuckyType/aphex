@@ -159,6 +159,7 @@ interface SchemaLike {
 	description?: string;
 	fields?: readonly FieldLike[];
 	groups?: readonly { title: string }[];
+	fieldsets?: readonly { title: string }[];
 	orderings?: readonly { title: string }[];
 	preview?: { title?: unknown };
 }
@@ -199,6 +200,7 @@ function localizeType<T extends SchemaLike>(type: T): T {
 	const copy = localizeText(type);
 	if (type.fields) copy.fields = type.fields.map(localizeField);
 	if (type.groups) copy.groups = localizeTitled(type.groups);
+	if (type.fieldsets) copy.fieldsets = localizeTitled(type.fieldsets);
 	if (type.orderings) copy.orderings = localizeTitled(type.orderings);
 	if (typeof type.preview?.title === 'string') {
 		copy.preview = { ...type.preview, title: label(type.preview.title) };

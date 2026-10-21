@@ -1,4 +1,4 @@
-import type { Field, FieldGroup } from '../types/schemas';
+import type { Field, FieldGroup, Fieldset } from '../types/schemas';
 import { isFieldVisible } from './visibility';
 
 /** Whether `field` belongs to the group named `groupName` (`group` may be a string or a list). */
@@ -94,4 +94,19 @@ export function fieldGroupTabCount(
 				fieldInGroup(field, tab) ||
 				fieldGroupTab(field, visibleGroups, allFields) === tab)
 	).length;
+}
+
+/**
+ * The fieldset title the form shows over `field`: the title of the fieldset
+ * it names, when the field shown before it in the same tab (`before`) names
+ * another fieldset or none, so each run of fields in one fieldset is headed
+ * once.
+ */
+export function fieldsetHeading(
+	fieldsets: readonly Fieldset[] | undefined,
+	field: { fieldset?: string },
+	before: { fieldset?: string } | undefined
+): string | null {
+	if (!field.fieldset || before?.fieldset === field.fieldset) return null;
+	return fieldsets?.find((set) => set.name === field.fieldset)?.title ?? null;
 }
