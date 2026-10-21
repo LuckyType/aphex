@@ -79,8 +79,10 @@
 			.sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
 	);
 
-	// Only show tabs on the main /admin page
-	const showTabs = $derived(page.url.pathname === '/admin');
+	// Only show tabs on the main /admin page, and only for an app that hands
+	// over the active area: one that reaches its areas from the sidebar's own
+	// links (`?view=media`) leaves `activeTab` out and gets no tab strip.
+	const showTabs = $derived(page.url.pathname === '/admin' && !!activeTab);
 
 	// Tab-level capability gates. Structure is always visible (it's the
 	// document list — a user without `document.read` won't be on /admin at
