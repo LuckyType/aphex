@@ -97,7 +97,7 @@ const DEFAULT_TITLE_FIELDS = ['title', 'heading', 'name', 'label'];
 function runPrepare(
 	item: any,
 	schema: PreviewSource
-): { title?: string; subtitle?: string; media?: string } | null {
+): { title?: string; subtitle?: string; media?: unknown } | null {
 	const prepare = schema?.preview?.prepare;
 	if (!prepare) return null;
 	const select = schema?.preview?.select ?? {};
@@ -119,27 +119,41 @@ export function resolvePreviewTitle(
 	schema: PreviewSource,
 	defaultTypeLabel?: string
 ): string {
-	const prepared = runPrepare(item, schema);
-	if (prepared) {
-		const resolved = toPreviewString(prepared.title);
-		if (resolved) return resolved;
-	} else {
-		// Literal static override — used as-is, no data lookup.
-		const literal = toPreviewString(schema?.preview?.title);
-		if (literal) return literal;
+	return resolveItemTitle(item, schema) ?? schema?.title ?? defaultTypeLabel ?? 'Untitled';
+}
 
-		const configured = schema?.preview?.select?.title;
-		if (configured) {
-			const resolved = toPreviewString(readPath(item, configured));
-			if (resolved) return resolved;
-		} else {
-			for (const name of DEFAULT_TITLE_FIELDS) {
-				const resolved = toPreviewString(item?.[name]);
-				if (resolved) return resolved;
-			}
-		}
+/**
+ * The title the item's own data gives it, by `resolvePreviewTitle`'s
+ * precedence, or null when only the type's title would name it: a row that
+ * reads "Image", "Image", "Image" is told apart by its media instead.
+ */
+export function resolveItemTitle(item: any, schema: PreviewSource): string | null {
+	const prepared = runPrepare(item, schema);
+	if (prepared) return toPreviewString(prepared.title);
+
+	// Literal static override — used as-is, no data lookup.
+	const literal = toPreviewString(schema?.preview?.title);
+	if (literal) return literal;
+
+	const configured = schema?.preview?.select?.title;
+	if (configured) return toPreviewString(readPath(item, configured));
+	for (const name of DEFAULT_TITLE_FIELDS) {
+		const resolved = toPreviewString(item?.[name]);
+		if (resolved) return resolved;
 	}
-	return schema?.title ?? defaultTypeLabel ?? 'Untitled';
+	return null;
+}
+
+/**
+ * What `preview.select.media` (or `prepare`'s `media`) names for the item:
+ * usually an image or file value (`{ asset: { _ref } }`), undefined when the
+ * schema names none.
+ */
+export function resolvePreviewMedia(item: any, schema: PreviewSource): unknown {
+	const prepared = runPrepare(item, schema);
+	if (prepared && prepared.media !== undefined) return prepared.media;
+	const configured = schema?.preview?.select?.media;
+	return configured ? readPath(item, configured) : undefined;
 }
 
 /**
