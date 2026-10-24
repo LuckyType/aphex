@@ -65,7 +65,8 @@
 		X,
 		Lock,
 		Undo2,
-		GripVertical
+		GripVertical,
+		FileX
 	} from '@lucide/svelte';
 	import { stegaEncodeDocument } from '../../preview/stega.js';
 	import { collectAssetRefs, injectAssetData, type ResolvedAsset } from '../../preview/assets.js';
@@ -207,6 +208,9 @@
 	let fullDocument = $state<any>(null); // Store full document with publishedHash
 	let saving = $state(false);
 	let saveError = $state<string | null>(null);
+	// The open id answered 404: deleted (perhaps in another tab) or a stale link. The
+	// editor then says so instead of showing an empty form that autosaves into nothing.
+	let documentMissing = $state(false);
 	// The refusal `describePublishRefusal` described for the current `saveError`,
 	// handed to the app's ErrorBox whole; null once the error is any other text.
 	let describedRefusal = $state<StudioPublishRefusal | null>(null);
@@ -1344,6 +1348,7 @@
 			initialDocumentData = null;
 			hasUnsavedChanges = false;
 			saveError = null;
+			documentMissing = false;
 			lastSaved = null;
 			publishSuccess = null;
 			perspective = 'draft';
@@ -1450,6 +1455,7 @@
 			const response = await documents.getById(documentId);
 
 			if (response.success && response.data) {
+				documentMissing = false;
 				// Store full document for hash comparison
 				fullDocument = response.data;
 
@@ -1480,6 +1486,11 @@
 				saveError = response.error || i18n.t('Failed to load document');
 			}
 		} catch (err) {
+			if (err instanceof ApiError && err.status === 404) {
+				// The editor says so in place of the form; a toast would only repeat it.
+				documentMissing = true;
+				return;
+			}
 			toast.error(err instanceof ApiError ? err.message : i18n.t('Failed to load document'));
 			saveError = err instanceof ApiError ? err.message : i18n.t('Failed to load document');
 		}
@@ -1589,7 +1600,7 @@
 		// Debounced auto-save. Comparing against the initial-defaults snapshot (for new
 		// docs) or the saved draft (for existing docs) means any real user edit triggers
 		// save — including unchecking a boolean or clearing a field.
-		if (hasChanges && schema && canWriteCurrentDoc && !batchActive) {
+		if (hasChanges && schema && canWriteCurrentDoc && !batchActive && !documentMissing) {
 			autoSaveTimer = setTimeout(() => {
 				cmsLogger.debug('[Document Editor]', 'Auto-saving after typing pause (data changed)...', {
 					documentId
@@ -2544,7 +2555,7 @@
 	{/if}
 {/snippet}
 
-{#if presentationMode}
+{#if presentationMode && !documentMissing}
 	<AdminSlot name="navbar-start" id="editor-breadcrumb">
 		{@render editorBreadcrumb()}
 	</AdminSlot>
@@ -2553,7 +2564,26 @@
 	</AdminSlot>
 {/if}
 
-<div class="relative flex h-full w-full min-w-0 flex-col overflow-hidden">
+{#if documentMissing}
+	<!-- The open id is gone: say so, and offer the way out. The editor below stays
+	     mounted but hidden, so nothing in it can be edited or published. -->
+	<div
+		class="flex h-full w-full min-w-0 flex-col items-center justify-center gap-3 p-6 text-center"
+	>
+		<FileX class="text-muted-foreground h-10 w-10" aria-hidden="true" />
+		<h1 class="text-lg font-semibold">{i18n.t('This document no longer exists')}</h1>
+		<p class="text-muted-foreground max-w-sm text-sm">
+			{i18n.t('It may have been deleted. Choose another document from the list.')}
+		</p>
+		<Button variant="outline" onclick={onBack}>{i18n.t('Close')}</Button>
+	</div>
+{/if}
+
+<div
+	class="relative h-full w-full min-w-0 flex-col overflow-hidden {documentMissing
+		? 'hidden'
+		: 'flex'}"
+>
 	<!-- Scheduled publish/unpublish banner — a full-width strip pinned to the very top edge of
 	     the editor, above the hero header (breadcrumb + actions), so a pending schedule is the
 	     first thing seen. Inner padding matches the hero's (px-4 lg:px-6) so its text lines up
