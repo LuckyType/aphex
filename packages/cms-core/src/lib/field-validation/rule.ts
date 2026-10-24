@@ -18,9 +18,8 @@ function isIso8601DateTime(value: string): boolean {
 	return ISO_8601_DATETIME.test(value) && !Number.isNaN(Date.parse(value));
 }
 
-// The same for a date: the stored form is always ISO (`YYYY-MM-DD`), whatever the field shows.
-// Only top-level date fields are converted to the display format before validation, so a date
-// inside an array item or an object arrives here as stored and must pass as such.
+// The same for a date: the stored form is always ISO (`YYYY-MM-DD`), whatever the field shows,
+// and validation (in the editor and on publish) sees the stored form, so it must pass as such.
 function isIsoDate(value: string): boolean {
 	if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
 	const parsed = dayjs(value, 'YYYY-MM-DD', true);

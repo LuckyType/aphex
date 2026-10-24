@@ -297,6 +297,10 @@ export interface FieldComponentProps {
 	readonly?: boolean;
 	/** Validation-state CSS classes to spread onto the control (optional). */
 	validationClasses?: string;
+	/** True while the field shows an error: set `aria-invalid` on the control. */
+	invalid?: boolean;
+	/** Id of the element holding the field's shown messages: the control's `aria-describedby`. */
+	describedBy?: string;
 	/** The whole document's data — for widgets that read document-level fields (e.g. an SEO preview). */
 	documentData?: Record<string, unknown>;
 	/**

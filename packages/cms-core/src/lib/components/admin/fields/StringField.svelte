@@ -26,6 +26,8 @@
 		siblingData?: Record<string, any>;
 		onUpdate: (value: any) => void;
 		validationClasses?: string;
+		invalid?: boolean;
+		describedBy?: string;
 		onBlur?: (event: any) => void;
 		onFocus?: (event: any) => void;
 		readonly?: boolean;
@@ -38,6 +40,8 @@
 		siblingData,
 		onUpdate,
 		validationClasses,
+		invalid = false,
+		describedBy,
 		onBlur,
 		onFocus,
 		readonly = false
@@ -185,6 +189,8 @@
 			onValueChange={handleSelectChange}
 			disabled={readonly}
 			class={validationClasses}
+			aria-invalid={invalid || undefined}
+			aria-describedby={describedBy}
 		>
 			<div class={direction === 'horizontal' ? 'flex flex-wrap gap-4' : 'space-y-2'}>
 				{#each listItems as item, index (item.value)}
@@ -225,7 +231,11 @@
 			onValueChange={handleSelectChange}
 			disabled={readonly}
 		>
-			<Select.Trigger class="w-full {validationClasses}">
+			<Select.Trigger
+				class="w-full {validationClasses}"
+				aria-invalid={invalid || undefined}
+				aria-describedby={describedBy}
+			>
 				{triggerContent}
 			</Select.Trigger>
 			<Select.Content>
@@ -252,6 +262,8 @@
 		onblur={onBlur}
 		onfocus={onFocus}
 		class={validationClasses}
+		aria-invalid={invalid || undefined}
+		aria-describedby={describedBy}
 		disabled={readonly}
 	/>
 {/if}
