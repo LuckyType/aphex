@@ -92,7 +92,10 @@
 </script>
 
 <ModeWatcher nonce={studioScriptNonce()} />
-<Toaster closeButton />
+<!-- Toasts stand clear of a document editor's action bar (p-4 around h-8 buttons,
+     about 65px) so they never lie over Publish or Delete, and a pointer heading for
+     those buttons does not pause one in place. -->
+<Toaster closeButton offset={{ bottom: '5.5rem' }} mobileOffset={{ bottom: '5.25rem' }} />
 <SidebarProvider class="h-screen">
 	<AppSidebar {data} {onSignOut} {sidebarTools} onSelectTool={(id) => switchTab(`plugin:${id}`)} />
 	<SidebarInset class="flex h-full min-w-0 flex-col">
