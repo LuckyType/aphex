@@ -1899,7 +1899,11 @@
 
 	<!-- Header -->
 	<div class="border-border flex items-center justify-between border-b px-4 py-3 sm:px-6 sm:py-4">
-		<h2 class="text-base font-semibold sm:text-lg">{i18n.t('Browse Assets')}</h2>
+		<!-- The Media area's one h1; inside the asset picker dialog, whose title
+		     is the h1's place, it stays a section heading. -->
+		<svelte:element this={selectable ? 'h2' : 'h1'} class="text-base font-semibold sm:text-lg"
+			>{i18n.t('Browse Assets')}</svelte:element
+		>
 		{#if canUpload}
 			<Button
 				size="sm"
@@ -1912,8 +1916,8 @@
 					showUploadModal = true;
 				}}
 			>
-				<Upload size={16} class="sm:mr-2" />
-				<span class="hidden sm:inline">{i18n.t('Upload assets')}</span>
+				<Upload size={16} class="sm:mr-2" aria-hidden="true" />
+				<span class="sr-only sm:not-sr-only sm:inline">{i18n.t('Upload assets')}</span>
 			</Button>
 		{/if}
 	</div>
@@ -2056,8 +2060,8 @@
 			onclick={cycleSort}
 			class="text-muted-foreground hover:text-foreground flex items-center gap-1 text-xs transition-colors sm:gap-1.5"
 		>
-			<ArrowDownUp size={14} />
-			<span class="hidden sm:inline">{sortLabel}</span>
+			<ArrowDownUp size={14} aria-hidden="true" />
+			<span class="sr-only sm:not-sr-only sm:inline">{sortLabel}</span>
 		</button>
 	</div>
 
@@ -2074,7 +2078,9 @@
 							<Lock class="text-muted-foreground h-8 w-8" />
 						</div>
 						<div class="text-center">
-							<h3 class="mb-1 font-medium">{i18n.t('No access to media')}</h3>
+							<svelte:element this={selectable ? 'h3' : 'h2'} class="mb-1 font-medium"
+								>{i18n.t('No access to media')}</svelte:element
+							>
 							<p class="text-muted-foreground text-sm">
 								{i18n.t("Your role doesn't include permission to view assets.")}
 							</p>
@@ -2094,7 +2100,9 @@
 							<ImageIcon class="text-muted-foreground h-8 w-8" />
 						</div>
 						<div class="text-center">
-							<h3 class="mb-1 font-medium">{i18n.t('No assets found')}</h3>
+							<svelte:element this={selectable ? 'h3' : 'h2'} class="mb-1 font-medium"
+								>{i18n.t('No assets found')}</svelte:element
+							>
 							<p class="text-muted-foreground text-sm">
 								{searchQuery
 									? i18n.t('Try a different search term')
