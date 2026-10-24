@@ -73,3 +73,22 @@ describe('ReferenceField order', () => {
 		await vi.waitFor(() => expect(offered()).toEqual(['Home', 'About', 'Contact']));
 	});
 });
+
+describe('ReferenceField Escape', () => {
+	it('closes the results and keeps the Escape from the panel around it', async () => {
+		const field = { name: 'page', type: 'reference', title: 'Page', to: [{ type: 'page' }] };
+		render(ReferenceField, { props: { field: field as never, value: null, onUpdate: () => {} } });
+		const input = screen.getByPlaceholderText('Type to search...');
+		await fireEvent.focus(input);
+		await vi.waitFor(() => expect(offered()).toHaveLength(3));
+
+		const first = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+		input.dispatchEvent(first);
+		expect(first.defaultPrevented).toBe(true);
+		await vi.waitFor(() => expect(offered()).toEqual([]));
+
+		const second = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+		input.dispatchEvent(second);
+		expect(second.defaultPrevented).toBe(false);
+	});
+});
