@@ -29,3 +29,22 @@ export function hasBeenPublished(
 		meta?.publishedAt != null || meta?.status === 'published' || meta?.status === 'unpublished'
 	);
 }
+
+/**
+ * Why a document's schedule button is disabled, or null while it is enabled.
+ * A publish held up by shown errors is `'errors'`: the document has plenty to
+ * publish, so telling the editor there is nothing to publish sends them to make
+ * a change when they should fix a field.
+ */
+export function scheduleBlockedReason(state: {
+	enabled: boolean;
+	action: 'publish' | 'unpublish';
+	saving: boolean;
+	hasChanges: boolean;
+	hasErrors: boolean;
+}): 'saving' | 'errors' | 'nothing' | null {
+	if (state.enabled) return null;
+	if (state.saving) return 'saving';
+	if (state.action === 'publish' && state.hasChanges && state.hasErrors) return 'errors';
+	return 'nothing';
+}
