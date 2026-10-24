@@ -109,6 +109,83 @@ describe('SchemaField', () => {
 		await fireEvent.focusOut(input, { relatedTarget: document.body });
 		expect(await screen.findByRole('alert')).toHaveTextContent('Ends when it starts');
 	});
+
+	it('hands a datetime rule the stored ISO value, as the publish check does', async () => {
+		const seen: unknown[] = [];
+		const endsAt = {
+			name: 'endsAt',
+			type: 'datetime',
+			title: 'Ends',
+			options: { dateFormat: 'DD.MM.YYYY', timeFormat: 'HH:mm' },
+			validation: (Rule: { custom: (fn: (v: unknown) => unknown) => unknown }) =>
+				Rule.custom((value) => {
+					seen.push(value);
+					return 'Ends when it starts';
+				})
+		};
+		// The form DateTimeField stores.
+		const iso = '2026-10-24T11:57:00Z';
+		render(SchemaField, {
+			props: {
+				field: endsAt as never,
+				value: iso,
+				documentData: { endsAt: iso },
+				onUpdate: () => {}
+			}
+		});
+		const input = screen.getByRole('textbox');
+		await fireEvent.focusOut(input, { relatedTarget: document.body });
+		expect(await screen.findByRole('alert')).toHaveTextContent('Ends when it starts');
+		expect(seen).toContain(iso);
+		expect(seen.every((value) => value === iso)).toBe(true);
+	});
+
+	it('still flags a datetime typed in a form that never parsed', async () => {
+		const at = {
+			name: 'at',
+			type: 'datetime',
+			title: 'At',
+			options: { dateFormat: 'DD.MM.YYYY', timeFormat: 'HH:mm' }
+		};
+		render(SchemaField, {
+			props: { field: at as never, value: '31.02.2026 10:00', documentData: {}, onUpdate: () => {} }
+		});
+		await fireEvent.focusOut(screen.getByRole('textbox'), { relatedTarget: document.body });
+		expect(await screen.findByRole('alert')).toHaveTextContent(/datetime/i);
+	});
+
+	it('marks the control invalid and describes it by the shown message', async () => {
+		renderEmail('not-an-email');
+		const input = screen.getByRole('textbox');
+		expect(input).not.toHaveAttribute('aria-invalid');
+		expect(input).not.toHaveAttribute('aria-describedby');
+		await fireEvent.focusOut(input, { relatedTarget: document.body });
+		await screen.findByRole('alert');
+		expect(input).toHaveAttribute('aria-invalid', 'true');
+		expect(input).toHaveAccessibleDescription(/email/i);
+	});
+
+	it('describes a textarea by its message too', async () => {
+		const description = {
+			name: 'description',
+			type: 'text',
+			title: 'Description',
+			validation: (Rule: { max: (n: number) => unknown }) => Rule.max(3)
+		};
+		render(SchemaField, {
+			props: {
+				field: description as never,
+				value: 'too long',
+				documentData: { description: 'too long' },
+				onUpdate: () => {}
+			}
+		});
+		const textarea = screen.getByRole('textbox');
+		await fireEvent.focusOut(textarea, { relatedTarget: document.body });
+		const alert = await screen.findByRole('alert');
+		expect(textarea).toHaveAttribute('aria-invalid', 'true');
+		expect(textarea.getAttribute('aria-describedby')).toBe(alert.parentElement?.id);
+	});
 });
 
 describe('DocumentVersionPanel', () => {

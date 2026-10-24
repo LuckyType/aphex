@@ -7,6 +7,8 @@
 		value: any;
 		onUpdate: (value: any) => void;
 		validationClasses?: string;
+		invalid?: boolean;
+		describedBy?: string;
 		onBlur?: (event: any) => void;
 		onFocus?: (event: any) => void;
 		readonly?: boolean;
@@ -17,6 +19,8 @@
 		value,
 		onUpdate,
 		validationClasses,
+		invalid = false,
+		describedBy,
 		onBlur,
 		onFocus,
 		readonly = false
@@ -37,5 +41,7 @@
 	onblur={onBlur}
 	onfocus={onFocus}
 	class="{field.rows ? 'field-sizing-fixed' : 'min-h-[100px]'} {validationClasses}"
+	aria-invalid={invalid || undefined}
+	aria-describedby={describedBy}
 	disabled={readonly}
 />

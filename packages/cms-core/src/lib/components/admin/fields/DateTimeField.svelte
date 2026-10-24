@@ -28,6 +28,8 @@
 		value: string | null; // Always stored as ISO datetime UTC YYYY-MM-DDTHH:mm:ssZ
 		onUpdate: (value: string | null) => void;
 		validationClasses?: string;
+		invalid?: boolean;
+		describedBy?: string;
 		onBlur?: (event: any) => void;
 		onFocus?: (event: any) => void;
 		readonly?: boolean;
@@ -38,6 +40,8 @@
 		value,
 		onUpdate,
 		validationClasses,
+		invalid = false,
+		describedBy,
 		onBlur,
 		onFocus,
 		readonly = false
@@ -179,6 +183,8 @@
 			onblur={handleBlur}
 			onfocus={onFocus}
 			class="flex-1 {validationClasses}"
+			aria-invalid={invalid || undefined}
+			aria-describedby={describedBy}
 			disabled={readonly}
 		/>
 		<Popover.Root
