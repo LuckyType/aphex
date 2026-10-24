@@ -976,6 +976,16 @@
 		);
 	}
 
+	// Whether `tab` holds a field whose error the form shows (all fields for 'all').
+	function groupShowsError(tab: string): boolean {
+		return invalidFieldNames.some((name) => {
+			if (!allErrorsShown && !touchedFields.has(name)) return false;
+			const field = schema?.fields.find((f) => f.name === name);
+			if (!field) return false;
+			return tab === 'all' || fieldGroupTab(field, visibleGroups, allFieldsTab) === tab;
+		});
+	}
+
 	function groupTabCount(tab: string): number {
 		return fieldGroupTabCount(
 			tab,
@@ -1173,6 +1183,8 @@
 	// the batch's caller is responsible for one explicit `flushSave` before/at `endBatch()`.
 	let batchActive = $state(false);
 	let hasValidationErrors = $state(false);
+	// The top-level fields the last check found invalid, so a tab can say it holds one.
+	let invalidFieldNames = $state<string[]>([]);
 	// Snapshot of the default-initialized data for a brand-new (unsaved) document.
 	// Used to detect real user edits without relying on "is the value truthy" heuristics,
 	// so unchecking a boolean counts as a change and booleans with initialValue: true
@@ -1762,6 +1774,13 @@
 					description: detail
 				}
 			);
+			// Every field it names sits on another tab: open the first one's, or
+			// the refusal points at nothing the editor can see.
+			const shown = invalid.some((f) => {
+				const field = schema?.fields.find((candidate) => candidate.name === f.name);
+				return field && fieldInActiveGroup(field);
+			});
+			if (!shown) void focusFieldByName(invalid[0]!.name);
 			return;
 		}
 
@@ -2107,6 +2126,7 @@
 		}
 
 		hasValidationErrors = invalid.length > 0;
+		invalidFieldNames = invalid.map((f) => f.name);
 		return invalid;
 	}
 
@@ -2224,7 +2244,19 @@
 		>
 			{groupTabCount(name)}
 		</span>
+		{@render groupErrorMark(name)}
 	</button>
+{/snippet}
+
+{#snippet groupErrorMark(name: string)}
+	{#if groupShowsError(name)}
+		<span
+			class="bg-destructive inline-block h-1.5 w-1.5 shrink-0 rounded-full align-middle"
+			data-group-error
+			aria-hidden="true"
+		></span>
+		<span class="sr-only">{i18n.t('Has errors')}</span>
+	{/if}
 {/snippet}
 
 {#snippet editorActions()}
@@ -2624,6 +2656,7 @@
 								: 'text-muted-foreground hover:text-foreground'}"
 						>
 							{i18n.t('All fields')}
+							{@render groupErrorMark('all')}
 						</button>
 					{/if}
 					{#each visibleGroups as group (group.name)}
@@ -2641,6 +2674,7 @@
 								<Icon class="h-4 w-4" />
 							{/if}
 							{group.title}
+							{@render groupErrorMark(group.name)}
 						</button>
 					{/each}
 				</div>
@@ -3167,7 +3201,8 @@
 							>
 								{#if saving}
 									{i18n.t('Publishing...')}
-								{:else if isUnpublished}
+								{:else if isUnpublished || !hasBeenPublished(fullDocument?._meta)}
+									<!-- A document no Guest has seen has no changes to publish, only itself. -->
 									{i18n.t('Publish')}
 								{:else if !hasUnpublishedContent}
 									{i18n.t('Published')}
