@@ -21,6 +21,8 @@
 		schemaType?: string;
 		onUpdate: (value: any) => void;
 		validationClasses?: string;
+		invalid?: boolean;
+		describedBy?: string;
 		onBlur?: (event: any) => void;
 		onFocus?: (event: any) => void;
 		readonly?: boolean;
@@ -35,6 +37,8 @@
 		schemaType,
 		onUpdate,
 		validationClasses,
+		invalid = false,
+		describedBy,
 		onBlur,
 		onFocus,
 		readonly = false
@@ -104,6 +108,8 @@
 			onblur={onBlur}
 			onfocus={onFocus}
 			class="flex-1 {validationClasses}"
+			aria-invalid={invalid || undefined}
+			aria-describedby={describedBy}
 			disabled={readonly}
 		/>
 		<Button

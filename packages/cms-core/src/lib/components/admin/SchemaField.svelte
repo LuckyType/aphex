@@ -5,11 +5,7 @@
 	import * as Alert from '@aphexcms/ui/shadcn/alert';
 	import * as Tooltip from '@aphexcms/ui/shadcn/tooltip';
 	import { CircleAlert, Info } from '@lucide/svelte';
-	import type {
-		Field,
-		DateField as DateFieldType,
-		DateTimeField as DateTimeFieldType
-	} from '../../types/schemas';
+	import type { Field } from '../../types/schemas';
 	import {
 		isFieldRequired,
 		validateField,
@@ -22,11 +18,6 @@
 	import type { SchemaType } from '../../types/index';
 	import { cmsLogger } from '../../utils/logger';
 	import { useFieldComponents, useFieldViews } from '../../admin/field-components.svelte';
-	import {
-		convertDateToUserFormat,
-		convertDateTimeToUserFormat
-	} from '../../field-validation/date-utils';
-	import { fieldDateFormat, fieldTimeFormat } from '../../utils/date-format';
 
 	// Leaf/reference/custom-input fields resolve through the shared FieldInput;
 	// object/array containers recurse here.
@@ -145,39 +136,11 @@
 			}
 		);
 
-		// Convert date/datetime values from ISO to user format for validation
-		let valueForValidation = currentValue;
-		if (field.type === 'date' && currentValue && typeof currentValue === 'string') {
-			const dateField = field as DateFieldType;
-			const userFormat = fieldDateFormat(dateField);
-			cmsLogger.debug('[SchemaField.performValidation]', `Converting DATE field "${field.name}"`, {
-				currentValue,
-				userFormat
-			});
-			valueForValidation = convertDateToUserFormat(currentValue, userFormat);
-			cmsLogger.debug('[SchemaField.performValidation]', `DATE converted`, {
-				valueForValidation
-			});
-		} else if (field.type === 'datetime' && currentValue && typeof currentValue === 'string') {
-			const dateTimeField = field as DateTimeFieldType;
-			const dateFormat = fieldDateFormat(dateTimeField);
-			const timeFormat = fieldTimeFormat(dateTimeField);
-			cmsLogger.debug(
-				'[SchemaField.performValidation]',
-				`Converting DATETIME field "${field.name}"`,
-				{
-					currentValue,
-					dateFormat,
-					timeFormat
-				}
-			);
-			valueForValidation = convertDateTimeToUserFormat(currentValue, dateFormat, timeFormat);
-			cmsLogger.debug('[SchemaField.performValidation]', `DATETIME converted`, {
-				valueForValidation
-			});
-		}
-
-		const result = await validateField(field, valueForValidation, context);
+		// The stored value, exactly as the publish check (validateDocumentData) sees
+		// it, so a custom rule on a date or datetime reads ISO here too. The built-in
+		// format checks accept ISO whatever the display format, and text that never
+		// parsed is stored as typed, so they still flag it.
+		const result = await validateField(field, currentValue, context);
 		cmsLogger.debug('[SchemaField.performValidation]', `Validation result for "${field.name}"`, {
 			errors: result.errors
 		});
@@ -199,6 +162,11 @@
 		fieldDescriptionMode(field, descriptionMode) === 'tooltip' && !checkboxLabelled
 	);
 	const validationClasses = $derived(getValidationClasses(hasErrors));
+	// The control points at the shown messages, so a screen reader focusing it hears
+	// that it is wrong and why, not only its label and value.
+	const uid = $props.id();
+	const messagesId = `${uid}-messages`;
+	const describedBy = $derived(shownErrors.length > 0 ? messagesId : undefined);
 
 	/**
 	 * Conditional visibility. `scope` is the object this field belongs to, which is
@@ -274,7 +242,7 @@
 
 		<!-- Validation errors display -->
 		{#if shownErrors.length > 0}
-			<div class="space-y-2">
+			<div id={messagesId} class="space-y-2">
 				{#each shownErrors as error, index (index)}
 					<Alert.Root
 						variant={error.level === 'error'
@@ -366,6 +334,8 @@
 					{onUpdateSiblings}
 					{readonly}
 					{validationClasses}
+					invalid={hasErrors}
+					{describedBy}
 					{documentData}
 					siblingData={scope}
 					{siblingFields}

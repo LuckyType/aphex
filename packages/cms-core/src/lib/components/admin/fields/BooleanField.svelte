@@ -7,11 +7,22 @@
 		value: any;
 		onUpdate: (value: any) => void;
 		validationClasses?: string;
+		invalid?: boolean;
+		describedBy?: string;
 		onBlur?: (event: any) => void;
 		readonly?: boolean;
 	}
 
-	let { field, value, onUpdate, validationClasses, onBlur, readonly = false }: Props = $props();
+	let {
+		field,
+		value,
+		onUpdate,
+		validationClasses,
+		invalid = false,
+		describedBy,
+		onBlur,
+		readonly = false
+	}: Props = $props();
 
 	function handleBooleanChange(event: Event) {
 		const target = event.target as HTMLInputElement;
@@ -27,6 +38,8 @@
 		onchange={handleBooleanChange}
 		onblur={onBlur}
 		class="border-input h-4 w-4 rounded border {validationClasses}"
+		aria-invalid={invalid || undefined}
+		aria-describedby={describedBy}
 		disabled={readonly}
 	/>
 	<Label for={field.name} class="text-sm font-normal">

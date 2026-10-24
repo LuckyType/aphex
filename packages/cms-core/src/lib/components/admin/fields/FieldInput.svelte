@@ -31,6 +31,10 @@
 		onUpdateSiblings?: (patch: Record<string, any>) => void;
 		readonly?: boolean;
 		validationClasses?: string;
+		/** True while the field shows an error; forwarded as the control's `aria-invalid`. */
+		invalid?: boolean;
+		/** Id of the field's shown messages; forwarded as the control's `aria-describedby`. */
+		describedBy?: string;
 		documentData?: Record<string, any>;
 		/** The object scope this field lives in — see StringField's `siblingData`. */
 		siblingData?: Record<string, any>;
@@ -49,6 +53,8 @@
 		onUpdateSiblings,
 		readonly = false,
 		validationClasses,
+		invalid,
+		describedBy,
 		documentData,
 		siblingData,
 		siblingFields,
@@ -70,6 +76,8 @@
 		{onUpdate}
 		{onUpdateSiblings}
 		{validationClasses}
+		{invalid}
+		{describedBy}
 		{readonly}
 		{documentData}
 		{siblingData}
@@ -84,10 +92,20 @@
 		{siblingData}
 		{onUpdate}
 		{validationClasses}
+		{invalid}
+		{describedBy}
 		{readonly}
 	/>
 {:else if field.type === 'text'}
-	<TextareaField {field} {value} {onUpdate} {validationClasses} {readonly} />
+	<TextareaField
+		{field}
+		{value}
+		{onUpdate}
+		{validationClasses}
+		{invalid}
+		{describedBy}
+		{readonly}
+	/>
 {:else if field.type === 'slug'}
 	<SlugField
 		{field}
@@ -98,18 +116,28 @@
 		{schemaType}
 		{onUpdate}
 		{validationClasses}
+		{invalid}
+		{describedBy}
 		{readonly}
 	/>
 {:else if field.type === 'url'}
-	<URLField {field} {value} {onUpdate} {validationClasses} {readonly} />
+	<URLField {field} {value} {onUpdate} {validationClasses} {invalid} {describedBy} {readonly} />
 {:else if field.type === 'number'}
-	<NumberField {field} {value} {onUpdate} {validationClasses} {readonly} />
+	<NumberField {field} {value} {onUpdate} {validationClasses} {invalid} {describedBy} {readonly} />
 {:else if field.type === 'boolean'}
-	<BooleanField {field} {value} {onUpdate} {validationClasses} {readonly} />
+	<BooleanField {field} {value} {onUpdate} {validationClasses} {invalid} {describedBy} {readonly} />
 {:else if field.type === 'date'}
-	<DateField {field} {value} {onUpdate} {validationClasses} {readonly} />
+	<DateField {field} {value} {onUpdate} {validationClasses} {invalid} {describedBy} {readonly} />
 {:else if field.type === 'datetime'}
-	<DateTimeField {field} {value} {onUpdate} {validationClasses} {readonly} />
+	<DateTimeField
+		{field}
+		{value}
+		{onUpdate}
+		{validationClasses}
+		{invalid}
+		{describedBy}
+		{readonly}
+	/>
 {:else if field.type === 'image'}
 	<ImageField
 		{field}
