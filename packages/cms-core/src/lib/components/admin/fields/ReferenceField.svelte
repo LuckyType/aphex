@@ -342,6 +342,7 @@
 				{#snippet child({ props })}
 					<button
 						{...props}
+						aria-label={i18n.t('Reference options')}
 						class="text-muted-foreground hover:text-foreground flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded transition-colors"
 					>
 						<Ellipsis class="h-4 w-4" />
