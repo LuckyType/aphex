@@ -12,6 +12,7 @@
 	} from '../../schema-utils/field-groups';
 	import { tick, untrack } from 'svelte';
 	import { Button } from '@aphexcms/ui/shadcn/button';
+	import * as DropdownMenu from '@aphexcms/ui/shadcn/dropdown-menu';
 	import { Badge } from '@aphexcms/ui/shadcn/badge';
 	import { documents } from '../../api/documents';
 	import { assets } from '../../api/assets';
@@ -1031,7 +1032,6 @@
 	let inspectPerspective = $state<'draft' | 'published'>('draft');
 
 	// Header options dropdown
-	let showHeaderMenu = $state(false);
 	let showScheduleDialog = $state(false);
 
 	// Pending scheduled publish/unpublish for this document (replace semantics → at most one).
@@ -2412,51 +2412,41 @@
 		{/if}
 
 		{#if documentId}
-			<div class="relative">
-				<Button
-					variant="ghost"
-					size="icon"
-					onclick={() => (showHeaderMenu = !showHeaderMenu)}
-					class="h-8 w-8 cursor-pointer"
-					aria-label={i18n.t('Document actions')}
-					aria-expanded={showHeaderMenu}
-				>
-					<Ellipsis class="h-4 w-4" />
-				</Button>
-				{#if showHeaderMenu}
-					<div
-						class="bg-background border-rule absolute top-full right-0 z-[60] mt-1 min-w-[160px] rounded-md border py-1 shadow-lg"
+			<!-- The ui kit's menu, like every other one in the Studio: Escape closes
+			     it and returns focus, the arrow keys walk the entries. -->
+			<DropdownMenu.Root>
+				<DropdownMenu.Trigger>
+					{#snippet child({ props })}
+						<Button
+							{...props}
+							variant="ghost"
+							size="icon"
+							class="h-8 w-8 cursor-pointer"
+							aria-label={i18n.t('Document actions')}
+						>
+							<Ellipsis class="h-4 w-4" />
+						</Button>
+					{/snippet}
+				</DropdownMenu.Trigger>
+				<DropdownMenu.Content align="end" class="min-w-[160px]">
+					<DropdownMenu.Item
+						onclick={() => {
+							if (onOpenVersionHistory && documentId) {
+								onOpenVersionHistory(documentId);
+							} else {
+								showVersionHistory = true;
+							}
+						}}
 					>
-						<button
-							onclick={() => {
-								showHeaderMenu = false;
-								if (onOpenVersionHistory && documentId) {
-									onOpenVersionHistory(documentId);
-								} else {
-									showVersionHistory = true;
-								}
-							}}
-							class="hover:bg-muted flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-left text-sm transition-colors"
-						>
-							<History class="h-3.5 w-3.5" />
-							{i18n.t('History')}
-						</button>
-						<button
-							onclick={() => {
-								showHeaderMenu = false;
-								showInspect = true;
-							}}
-							class="hover:bg-muted flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-left text-sm transition-colors"
-						>
-							<Code class="h-3.5 w-3.5" />
-							{i18n.t('Inspect')}
-						</button>
-					</div>
-					<!-- svelte-ignore a11y_click_events_have_key_events -->
-					<!-- svelte-ignore a11y_no_static_element_interactions -->
-					<div class="fixed inset-0 z-[55]" onclick={() => (showHeaderMenu = false)}></div>
-				{/if}
-			</div>
+						<History class="h-3.5 w-3.5" />
+						{i18n.t('History')}
+					</DropdownMenu.Item>
+					<DropdownMenu.Item onclick={() => (showInspect = true)}>
+						<Code class="h-3.5 w-3.5" />
+						{i18n.t('Inspect')}
+					</DropdownMenu.Item>
+				</DropdownMenu.Content>
+			</DropdownMenu.Root>
 		{/if}
 
 		<!-- Toggle presentation. In the visual editor it's a second way to switch off
@@ -2600,7 +2590,11 @@
 		</div>
 	{/if}
 
-	<!-- Hero Header -->
+	<!-- Hero Header. Visual editing hides it, and with it the title's h1, so
+	     a screen reader still finds the document by heading there. -->
+	{#if presentationMode}
+		<h1 class="sr-only">{getPreviewTitle()}</h1>
+	{/if}
 	{#if !presentationMode}
 		<div class="bg-background w-full min-w-0 overflow-x-clip px-4 pt-4 pb-5 lg:px-6 lg:pt-5">
 			<div class="w-full">

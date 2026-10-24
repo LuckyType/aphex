@@ -1417,6 +1417,7 @@
 					<Button
 						onclick={navigateBack}
 						variant="ghost"
+						aria-label={i18n.t('Back')}
 						class="text-muted-foreground hover:text-foreground text-sm"
 					>
 						<svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1444,7 +1445,9 @@
 	<!-- Main Content -->
 	<div class="flex-1 overflow-hidden">
 		<Tabs.Root value={activeTab.value} onValueChange={handleTabChange} class="h-full">
-			<Tabs.Content value="structure" class="h-full overflow-hidden">
+			<!-- No area panel is a tab stop of its own (bits-ui's default is
+			     tabindex 0): a stop with nothing visible to focus. -->
+			<Tabs.Content tabindex={-1} value="structure" class="h-full overflow-hidden">
 				<!-- One h1 per view, for screen reader navigation. -->
 				{#if !currentTypeIsSingleton}
 					<h1 class="sr-only">
@@ -2354,7 +2357,7 @@
 			</Tabs.Content>
 
 			{#if graphqlSettings?.enableGraphiQL}
-				<Tabs.Content value="vision" class="m-0 h-full p-0">
+				<Tabs.Content tabindex={-1} value="vision" class="m-0 h-full p-0">
 					<div class="bg-muted/10 flex h-full items-center justify-center">
 						<div class="space-y-4 text-center">
 							<div
@@ -2402,7 +2405,7 @@
 				</Tabs.Content>
 			{/if}
 
-			<Tabs.Content value="media" class="m-0 h-full p-0">
+			<Tabs.Content tabindex={-1} value="media" class="m-0 h-full p-0">
 				<MediaBrowser
 					active={activeTab.value === 'media'}
 					assetId={page.url.searchParams.get('assetId')}
@@ -2413,7 +2416,11 @@
 			<!-- Plugin admin tools — each rendered as its own top-level area. -->
 			{#each adminTools as tool (tool.id)}
 				{@const Tool = tool.component}
-				<Tabs.Content value={`plugin:${tool.id}`} class="m-0 h-full overflow-auto p-0">
+				<Tabs.Content
+					tabindex={-1}
+					value={`plugin:${tool.id}`}
+					class="m-0 h-full overflow-auto p-0"
+				>
 					<Tool tool={adminToolContext} />
 				</Tabs.Content>
 			{/each}
