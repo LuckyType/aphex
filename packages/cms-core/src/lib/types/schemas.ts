@@ -285,6 +285,8 @@ export interface SlugField extends BaseField {
 	 */
 	slugify?: (text: string) => string;
 	maxLength?: number;
+	/** An example such as `our-offer`; no placeholder when unset, never the field's own name. */
+	placeholder?: string;
 	initialValue?: string | (() => string | Promise<string>);
 }
 
