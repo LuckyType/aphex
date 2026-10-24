@@ -33,6 +33,7 @@ vi.mock('../src/lib/schema-context.svelte', () => ({ getSchemaContext: () => [] 
 
 import DateField from '../src/lib/components/admin/fields/DateField.svelte';
 import DateTimeField from '../src/lib/components/admin/fields/DateTimeField.svelte';
+import SlugField from '../src/lib/components/admin/fields/SlugField.svelte';
 import ObjectModal from '../src/lib/components/admin/ObjectModal.svelte';
 import SchemaField from '../src/lib/components/admin/SchemaField.svelte';
 import { configureStudioI18n } from '../src/lib/i18n/index';
@@ -149,4 +150,20 @@ it('is a dialog named by its title with a named close button and no backdrop but
 	]);
 	await fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Escape' });
 	expect(onClose).toHaveBeenCalledTimes(1);
+});
+
+it('gives a slug field no placeholder of its own name, only the example its schema sets', () => {
+	const { unmount } = render(SlugField, {
+		props: { field: { name: 'slug', type: 'slug' } as never, value: '', onUpdate: vi.fn() }
+	});
+	expect((screen.getByRole('textbox') as HTMLInputElement).placeholder).toBe('');
+	unmount();
+	render(SlugField, {
+		props: {
+			field: { name: 'slug', type: 'slug', placeholder: 'our-offer' } as never,
+			value: '',
+			onUpdate: vi.fn()
+		}
+	});
+	expect((screen.getByRole('textbox') as HTMLInputElement).placeholder).toBe('our-offer');
 });
