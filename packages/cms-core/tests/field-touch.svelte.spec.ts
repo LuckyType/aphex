@@ -135,6 +135,18 @@ describe('focusLeavesField', () => {
 		elsewhere.remove();
 	});
 
+	it('stays inside for focus in a popover the field opened, which has no dialog role', () => {
+		const field = document.createElement('div');
+		const popover = document.createElement('div');
+		popover.setAttribute('data-popover-content', '');
+		const search = document.createElement('input');
+		popover.append(search);
+		document.body.append(field, popover);
+		expect(focusLeavesField(field, search)).toBe(false);
+		field.remove();
+		popover.remove();
+	});
+
 	it('leaves for focus elsewhere in the dialog that holds the field', () => {
 		const dialog = document.createElement('div');
 		dialog.setAttribute('role', 'dialog');
