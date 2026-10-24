@@ -66,3 +66,30 @@ export function followedSlug(
 	const next = typeof source === 'string' ? slugify(source) : '';
 	return next === shown ? null : next;
 }
+
+/**
+ * `values` with every top-level slug field that is still empty filled from
+ * its source, as the slug field would fill it once drawn. A document
+ * created with values (say, a title asked for before the editor opens)
+ * would otherwise keep an empty slug until someone opens the slug's tab.
+ */
+export function withFollowedSlugs(
+	fields: ReadonlyArray<{
+		name: string;
+		type: string;
+		source?: string;
+		slugify?: (text: string) => string;
+	}>,
+	values: Record<string, unknown>
+): Record<string, unknown> {
+	const filled = { ...values };
+	for (const field of fields) {
+		if (field.type !== 'slug') continue;
+		const current = filled[field.name];
+		if (typeof current === 'string' && current !== '') continue;
+		const source = filled[field.source || 'title'];
+		if (typeof source !== 'string' || source.trim() === '') continue;
+		filled[field.name] = (field.slugify ?? generateSlug)(source);
+	}
+	return filled;
+}

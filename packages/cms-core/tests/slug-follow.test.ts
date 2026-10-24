@@ -5,7 +5,7 @@
  * Run: pnpm -F @aphexcms/cms-core test
  */
 import { describe, expect, it } from 'vitest';
-import { followedSlug } from '../src/lib/utils/slug';
+import { followedSlug, withFollowedSlugs } from '../src/lib/utils/slug';
 
 describe('followedSlug', () => {
 	it('fills an empty slug from the source', () => {
@@ -33,5 +33,29 @@ describe('followedSlug', () => {
 		const slugify = (text: string) => text.toLowerCase().replace('ü', 'ue').replace(/\s+/g, '-');
 		expect(followedSlug('', '', 'Über uns', slugify)).toBe('ueber-uns');
 		expect(followedSlug('ueber-uns', 'Über uns', 'Über uns hier', slugify)).toBe('ueber-uns-hier');
+	});
+});
+
+describe('withFollowedSlugs', () => {
+	const fields = [
+		{ name: 'title', type: 'string' },
+		{ name: 'slug', type: 'slug', source: 'title' }
+	];
+
+	it('fills an empty slug from the values it starts with', () => {
+		expect(withFollowedSlugs(fields, { title: 'Our team' })).toEqual({
+			title: 'Our team',
+			slug: 'our-team'
+		});
+	});
+
+	it('reads the title when the slug names no source, with its own slugify', () => {
+		const custom = [{ name: 'path', type: 'slug', slugify: (text: string) => `x-${text}` }];
+		expect(withFollowedSlugs(custom, { title: 'a' })).toEqual({ title: 'a', path: 'x-a' });
+	});
+
+	it('keeps a slug that has a value, and one whose source is empty', () => {
+		expect(withFollowedSlugs(fields, { title: 'Our team', slug: 'team' }).slug).toBe('team');
+		expect(withFollowedSlugs(fields, { title: '  ' })).toEqual({ title: '  ' });
 	});
 });
