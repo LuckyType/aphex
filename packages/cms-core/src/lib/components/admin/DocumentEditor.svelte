@@ -38,7 +38,7 @@
 	import { notifyCollectionChanged, notifyDocumentChanged } from '../../document-refresh.svelte';
 	import { collectReferenceIds } from '../../utils/reference-walk';
 	import { cmsLogger } from '../../utils/logger';
-	import { resolvePreviewTitle } from '../../utils/preview';
+	import { resolveItemTitle, resolvePreviewTitle } from '../../utils/preview';
 	import { toast } from 'svelte-sonner';
 	import { confirmDialog } from './confirm-dialog/confirm-dialog.svelte';
 	import {
@@ -2130,12 +2130,46 @@
 		return invalid;
 	}
 
+	// What deleting takes with it: the documents that link here lose those
+	// links, named so nobody deletes a page the navigation still points at
+	// without knowing. Best-effort, like the unpublish warning.
+	async function deleteDescription(id: string): Promise<string> {
+		const undone = i18n.t('This action cannot be undone.');
+		try {
+			const refs = await documents.getBackReferences(id);
+			const ids = refs.success ? (refs.data ?? []).map((r) => r.id) : [];
+			if (ids.length === 0) return undone;
+			const found = await documents.getMany(ids);
+			const titles = (found.data ?? []).map((doc: any) =>
+				resolvePreviewTitle(
+					doc,
+					schemas.find((s) => s.name === (doc._meta?.type ?? doc.type))
+				)
+			);
+			const named = titles.slice(0, 3).join(', ');
+			const remainder =
+				titles.length > 3 ? i18n.t(' and {value} more', { value: titles.length - 3 }) : '';
+			return i18n.tn(
+				ids.length,
+				'{titles}{remainder} links to it and loses that link. {undone}',
+				'{titles}{remainder} link to it and lose those links. {undone}',
+				{ titles: named || String(ids.length), remainder, undone }
+			);
+		} catch {
+			return undone;
+		}
+	}
+
 	async function deleteDocument() {
 		if (!documentId || saving) return;
 
+		// Named when its data names it, not by its type's title.
+		const namedTitle = resolveItemTitle(documentData, schema);
 		const confirmDelete = await confirmDialog({
-			title: i18n.t('Delete this document?'),
-			description: i18n.t('This action cannot be undone.'),
+			title: namedTitle
+				? i18n.t('Delete “{title}”?', { title: namedTitle })
+				: i18n.t('Delete this document?'),
+			description: await deleteDescription(documentId),
 			confirmText: i18n.t('Delete'),
 			variant: 'destructive'
 		});
