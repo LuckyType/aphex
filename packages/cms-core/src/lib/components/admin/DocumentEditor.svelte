@@ -23,7 +23,11 @@
 	import { validateDocumentData } from '../../field-validation/utils';
 	import { hasUnpublishedChanges } from '../../utils/content-hash';
 	import { setSchemaContext } from '../../schema-context.svelte';
-	import { hasBeenPublished, setSaveStateContext } from '../../save-state-context.svelte';
+	import {
+		hasBeenPublished,
+		scheduleBlockedReason,
+		setSaveStateContext
+	} from '../../save-state-context.svelte';
 	import { documentErrorsShown, setFieldTouchContext } from '../../field-touch-context.svelte';
 	import { type EditorCrumb, EditorTrail, setEditorTrail } from '../../editor-trail.svelte';
 	import { pluralize } from '../../utils/pluralize';
@@ -1277,6 +1281,25 @@
 	// scheduling an UNPUBLISH mirrors the Unpublish button (enabled whenever not mid-save).
 	const canScheduleActionNow = $derived(
 		scheduleAction === 'publish' ? Boolean(canPublish) : !saving
+	);
+	// The disabled schedule button's title names what actually blocks it.
+	const scheduleBlocked = $derived(
+		scheduleBlockedReason({
+			enabled: canScheduleActionNow,
+			action: scheduleAction,
+			saving,
+			hasChanges: hasUnpublishedContent || isUnpublished,
+			hasErrors: hasValidationErrors
+		})
+	);
+	const scheduleBlockedTitle = $derived(
+		scheduleBlocked === 'saving'
+			? i18n.t('Saving...')
+			: scheduleBlocked === 'errors'
+				? i18n.t('Fix the errors before scheduling a publish')
+				: scheduleBlocked === 'nothing'
+					? i18n.t('Nothing to publish. Make a change first')
+					: null
 	);
 
 	// Get preview title based on schema config. When viewing in published
@@ -3172,13 +3195,12 @@
 								class="h-8 w-8 {canScheduleActionNow ? 'cursor-pointer' : ''} {nextSchedule
 									? 'text-primary'
 									: ''}"
-								title={!canScheduleActionNow
-									? i18n.t('Nothing to publish — make a change first')
-									: nextSchedule
+								title={scheduleBlockedTitle ??
+									(nextSchedule
 										? i18n.t('Reschedule')
 										: scheduleAction === 'publish'
 											? i18n.t('Schedule publish')
-											: i18n.t('Schedule unpublish')}
+											: i18n.t('Schedule unpublish'))}
 							>
 								<CalendarClock class="h-4 w-4" />
 							</Button>
@@ -3216,11 +3238,8 @@
 								class="h-8 w-8 {canScheduleActionNow ? 'cursor-pointer' : ''} {nextSchedule
 									? 'text-primary'
 									: ''}"
-								title={!canScheduleActionNow
-									? i18n.t('Nothing to publish — make a change first')
-									: nextSchedule
-										? i18n.t('Reschedule')
-										: i18n.t('Schedule publish')}
+								title={scheduleBlockedTitle ??
+									(nextSchedule ? i18n.t('Reschedule') : i18n.t('Schedule publish'))}
 							>
 								<CalendarClock class="h-4 w-4" />
 							</Button>
