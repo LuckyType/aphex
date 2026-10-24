@@ -500,10 +500,12 @@
 		}
 	});
 
-	// Esc to exit focus mode.
+	// Esc to exit focus mode, unless something inside the editor already took
+	// the Escape for itself (a panel or a list of results closing).
 	$effect(() => {
 		if (typeof window === 'undefined') return;
 		const handler = (e: KeyboardEvent) => {
+			if (e.defaultPrevented) return;
 			if (e.key === 'Escape' && presentationModeOn) {
 				chooseExitPresentationMode();
 			}

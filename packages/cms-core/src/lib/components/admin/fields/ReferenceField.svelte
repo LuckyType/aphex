@@ -384,6 +384,14 @@
 			bind:this={inputWrapperEl}
 			class="relative min-w-0 flex-1"
 			use:clickOutside={() => (open = false)}
+			role="presentation"
+			onkeydown={(e) => {
+				// Escape closes the results first; the panel or dialog around waits for the next one.
+				if (e.key === 'Escape' && open) {
+					e.preventDefault();
+					open = false;
+				}
+			}}
 		>
 			<div
 				class="border-input bg-background focus-within:ring-ring flex h-9 items-center rounded-md border focus-within:ring-1"
