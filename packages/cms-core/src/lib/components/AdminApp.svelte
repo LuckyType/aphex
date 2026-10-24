@@ -1634,11 +1634,13 @@
 											(t) => t.name === selectedDocumentType
 										)}
 										<div class="border-border bg-muted/30 border-b p-3">
-											<div class="flex items-center justify-between">
-												<div class="flex items-center gap-3">
+											<!-- In a narrow list the buttons move under the heading rather than a
+											     long create label ("New job posting") pushing them out of the panel. -->
+											<div class="flex flex-wrap items-center justify-between gap-x-2 gap-y-2">
+												<div class="flex min-w-0 items-center gap-3">
 													{#if windowWidth > 620}
 														<!-- Desktop: Icon -->
-														<div class="flex h-6 w-6 items-center justify-center">
+														<div class="flex h-6 w-6 shrink-0 items-center justify-center">
 															{#if currentDocType?.icon}
 																{@const Icon = currentDocType.icon}
 																<Icon class="text-muted-foreground h-4 w-4" />
@@ -1647,11 +1649,11 @@
 															{/if}
 														</div>
 													{/if}
-													<div>
-														<h2 class="text-sm font-medium">
+													<div class="min-w-0">
+														<h2 class="truncate text-sm font-medium">
 															{pluralize(currentDocType?.title || selectedDocumentType)}
 														</h2>
-														<p class="text-muted-foreground text-xs">
+														<p class="text-muted-foreground truncate text-xs">
 															{i18n.tn(docTotalDocs, '{count} {type}', '{count} {types}', {
 																type: currentDocType?.title || typeLabel(selectedDocumentType),
 																types: pluralize(currentDocType?.title || selectedDocumentType)
@@ -1659,7 +1661,7 @@
 														</p>
 													</div>
 												</div>
-												<div class="flex items-center gap-1">
+												<div class="ml-auto flex min-w-0 items-center gap-1">
 													<Button
 														size="sm"
 														variant="ghost"
@@ -1674,10 +1676,13 @@
 															<Button
 																size="sm"
 																onclick={() => startCreate(selectedDocumentType!)}
-																class="h-8 gap-1.5 px-3"
+																class="h-8 min-w-0 shrink gap-1.5 px-3"
+																title={studioDocumentList(selectedDocumentType).createLabel?.()}
 															>
-																<Plus class="h-3.5 w-3.5" aria-hidden="true" />
-																{studioDocumentList(selectedDocumentType).createLabel?.()}
+																<Plus class="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+																<span class="truncate"
+																	>{studioDocumentList(selectedDocumentType).createLabel?.()}</span
+																>
 															</Button>
 														{:else}
 															<Button
