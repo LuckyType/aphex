@@ -8,6 +8,8 @@
 		value: number | null;
 		onUpdate: (value: number | null) => void;
 		validationClasses?: string;
+		invalid?: boolean;
+		describedBy?: string;
 		onBlur?: (event: any) => void;
 		onFocus?: (event: any) => void;
 		readonly?: boolean;
@@ -18,6 +20,8 @@
 		value,
 		onUpdate,
 		validationClasses,
+		invalid = false,
+		describedBy,
 		onBlur,
 		onFocus,
 		readonly = false
@@ -103,6 +107,8 @@
 				onblur={onBlur}
 				onfocus={onFocus}
 				class="h-8 w-16 text-sm tabular-nums {validationClasses ?? ''}"
+				aria-invalid={invalid || undefined}
+				aria-describedby={describedBy}
 				disabled={readonly}
 			/>
 			{#if unit}<span class="text-muted-foreground text-sm">{unit}</span>{/if}
@@ -122,6 +128,8 @@
 		onblur={onBlur}
 		onfocus={onFocus}
 		class={validationClasses}
+		aria-invalid={invalid || undefined}
+		aria-describedby={describedBy}
 		disabled={readonly}
 	/>
 {/if}
