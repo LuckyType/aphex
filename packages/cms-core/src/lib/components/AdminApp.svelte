@@ -27,6 +27,7 @@
 	import { goto } from '$app/navigation';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import type { SchemaType } from '../types/index';
+	import { withFollowedSlugs } from '../utils/slug';
 	import type { CMSPlugin, AdminToolProps } from '../plugins/types';
 	import { createPartResolver } from '../plugins/resolver';
 	import type { AdminArea } from '../admin/types';
@@ -343,7 +344,9 @@
 		const text = newTitle.trim();
 		const values = text ? createWithTitleValues(docType, text) : null;
 		if (!values) return;
-		createValues = values;
+		// The slug follows the title from the start, not from when its tab is opened.
+		const fields = schemas.find((s) => s.name === docType)?.fields ?? [];
+		createValues = withFollowedSlugs(fields, values);
 		titleFormOpen = false;
 		void navigateToCreateDocument(docType);
 	}
