@@ -99,7 +99,7 @@
 		<Input
 			id={field.name}
 			value={value || ''}
-			placeholder={i18n.t('document-slug')}
+			placeholder={field.placeholder}
 			oninput={handleInputChange}
 			onblur={onBlur}
 			onfocus={onFocus}
