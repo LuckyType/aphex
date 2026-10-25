@@ -213,7 +213,7 @@
 						<Tooltip.Provider delayDuration={150}>
 							<Tooltip.Root>
 								<Tooltip.Trigger
-									class="text-muted-foreground/60 hover:text-foreground focus-visible:text-foreground -my-1 hidden cursor-help rounded p-1 transition-colors outline-none lg:inline-flex"
+									class="text-muted-foreground/60 hover:text-foreground focus-visible:text-foreground focus-visible:ring-ring/50 -my-1 hidden cursor-help rounded p-1 transition-colors outline-none focus-visible:ring-[3px] lg:inline-flex"
 									aria-label={i18n.t('More info about {title}', { title: field.title })}
 								>
 									<Info class="size-3.5" />
