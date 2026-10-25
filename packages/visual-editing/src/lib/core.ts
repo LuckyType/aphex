@@ -302,20 +302,48 @@ export function enableAphexPreview(options: AphexPreviewOptions = {}): () => voi
 			if (onRefresh) onRefresh();
 			else location.reload();
 		} else if (type === 'aphex:field-focus' && fieldPath) {
-			const el = document.querySelector<HTMLElement>(`[data-aphex-field="${fieldPath}"]`);
-			if (!el) return;
-			el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-			showOn(el);
-			el.animate(
-				[
-					{ outline: `3px solid ${ACCENT}`, outlineOffset: '4px' },
-					{ outline: `3px solid ${ACCENT_FADE}`, outlineOffset: '8px' }
-				],
-				{ duration: 1200, easing: 'ease-out', fill: 'none' }
+			reveal(document.querySelector<HTMLElement>(`[data-aphex-field="${fieldPath}"]`));
+		} else if (type === 'aphex:block-focus') {
+			const path = (e.data as { path?: unknown }).path;
+			if (typeof path !== 'string') return;
+			reveal(
+				Array.from(document.querySelectorAll<HTMLElement>('[data-aphex-block-path]')).find(
+					(el) => el.dataset.aphexBlockPath === path
+				) ?? null
 			);
-			setTimeout(hide, 1200);
 		}
 	};
+
+	let revealTimer: ReturnType<typeof setTimeout> | null = null;
+
+	// Brings an element the editor picked into view and marks it briefly. Scrolling moves
+	// no focus, so the editor keeps the keyboard; an element already wholly on screen
+	// stays where it is.
+	function reveal(el: HTMLElement | null) {
+		if (!el) return;
+		const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+		const r = el.getBoundingClientRect();
+		if (r.top < 0 || r.bottom > window.innerHeight) {
+			el.scrollIntoView({
+				behavior: reduced ? 'auto' : 'smooth',
+				// Centred when it fits, otherwise its top edge first.
+				block: r.height < window.innerHeight ? 'center' : 'start'
+			});
+		}
+		showOn(el);
+		el.animate(
+			[
+				{ outline: `3px solid ${ACCENT}`, outlineOffset: '4px' },
+				{ outline: `3px solid ${ACCENT_FADE}`, outlineOffset: reduced ? '4px' : '8px' }
+			],
+			{ duration: 1200, easing: 'ease-out', fill: 'none' }
+		);
+		if (revealTimer) clearTimeout(revealTimer);
+		revealTimer = setTimeout(() => {
+			revealTimer = null;
+			if (activeEl === el) hide();
+		}, 1200);
+	}
 
 	document.addEventListener('mouseover', onMouseOver);
 	document.addEventListener('click', onClick, true);
@@ -324,6 +352,7 @@ export function enableAphexPreview(options: AphexPreviewOptions = {}): () => voi
 	window.parent.postMessage({ type: 'aphex:ready', stega }, '*');
 
 	return () => {
+		if (revealTimer) clearTimeout(revealTimer);
 		document.removeEventListener('mouseover', onMouseOver);
 		document.removeEventListener('click', onClick, true);
 		window.removeEventListener('scroll', onScroll, true);
