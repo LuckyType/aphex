@@ -636,12 +636,11 @@
 	// own type (updated after the navigation) still named the last one drew
 	// the column for a moment, and the list collapsed to its strip and back.
 	const onlyType = $derived(documentTypes.length === 1 ? documentTypes[0]?.name : undefined);
-	const typesColumnHidden = $derived(
-		focusModeOn ||
-			presentationModeOn ||
-			(onlyType !== undefined &&
-				(selectedDocumentType === onlyType || !!currentTree?.types.includes(onlyType)))
+	const singleTypeSpace = $derived(
+		onlyType !== undefined &&
+			(selectedDocumentType === onlyType || !!currentTree?.types.includes(onlyType))
 	);
+	const typesColumnHidden = $derived(focusModeOn || presentationModeOn || singleTypeSpace);
 
 	let layoutConfig = $derived(
 		computePaneLayout({
@@ -1396,7 +1395,12 @@
 	{#if (windowWidth < 620 || focusModeOn) && activeTab.value === 'structure'}
 		<div class="border-border bg-background border-b">
 			<div class="flex h-12 items-center px-4">
-				{#if mobileView === 'documents' && selectedDocumentType}
+				{#if mobileView === 'documents' && selectedDocumentType && singleTypeSpace}
+					<!-- No types list to go back to, as wide screens draw no types
+					     column: a back link led to a one-entry list, or straight back
+					     here when the app opens its one type for the bare space. -->
+					<span class="text-sm font-medium">{typesTitle ?? openTypePlural}</span>
+				{:else if mobileView === 'documents' && selectedDocumentType}
 					<button
 						onclick={async () => {
 							mobileView = 'types';
