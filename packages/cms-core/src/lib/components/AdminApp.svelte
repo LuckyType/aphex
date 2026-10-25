@@ -1016,14 +1016,28 @@
 		}
 	}
 
+	// On a phone History is a full-screen sheet over the editor, and the
+	// Restore button sits in the editor's footer under it: picking a version
+	// steps the sheet aside so the version and its Restore show.
+	let versionSheetHidden = $state(false);
+
 	function handleOpenVersionHistory(docId: string) {
 		showVersionPanel = true;
+		versionSheetHidden = false;
 		versionPanelDocId = docId;
 		nav.patch({ history: '1' });
 	}
 
+	// Duplicate made a copy: it joins the list (or tree) and opens in place.
+	async function handleDuplicated(docId: string, docType: string) {
+		if (currentTree) treeChanges++;
+		if (selectedDocumentType === docType) await fetchDocuments(docType);
+		await navigateToEditDocument(docId, docType);
+	}
+
 	function handleCloseVersionPanel() {
 		showVersionPanel = false;
+		versionSheetHidden = false;
 		versionPanelDocId = null;
 		versionPreviewData = null;
 		nav.patch({ history: null });
@@ -2202,6 +2216,7 @@
 											onBack={navigateBack}
 											onOpenReference={handleOpenReference}
 											onOpenVersionHistory={handleOpenVersionHistory}
+											onDuplicated={handleDuplicated}
 											externalVersionPreview={versionPanelDocId === editingDocumentId
 												? versionPreviewData
 												: null}
@@ -2251,7 +2266,8 @@
 												}
 											}}
 											onRestored={async (docId) => {
-												handleDocumentPublished(docId);
+												// What was restored is a draft to publish now: History steps aside.
+												if (versionPanelDocId === docId) handleCloseVersionPanel();
 												if (selectedDocumentType) {
 													await fetchDocuments(selectedDocumentType);
 												}
@@ -2349,7 +2365,7 @@
 						<!-- Version History Panel. Below 620px there is no room for a 280px
 						     column beside the editor — it left ~95px for the fields — so it
 						     becomes a full-screen sheet, dismissed with its own close button. -->
-						{#if showVersionPanel && versionPanelDocId}
+						{#if showVersionPanel && versionPanelDocId && !(windowWidth < 620 && versionSheetHidden)}
 							<div
 								class={windowWidth < 620
 									? 'bg-background fixed inset-0 z-50 overflow-y-auto'
@@ -2358,9 +2374,11 @@
 								<DocumentVersionPanel
 									bind:this={versionPanelRef}
 									documentId={versionPanelDocId}
+									{schemas}
 									onClose={handleCloseVersionPanel}
 									onPreviewVersion={(v) => {
 										versionPreviewData = v;
+										if (v && windowWidth < 620) versionSheetHidden = true;
 									}}
 									onRestored={async () => {
 										versionPreviewData = null;
@@ -2480,7 +2498,8 @@
 			}
 		}}
 		onRestored={async (docId) => {
-			handleDocumentPublished(docId);
+			// What was restored is a draft to publish now: History steps aside.
+			if (versionPanelDocId === docId) handleCloseVersionPanel();
 			if (selectedDocumentType) {
 				await fetchDocuments(selectedDocumentType);
 			}

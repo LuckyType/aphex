@@ -3,7 +3,7 @@
 // `configureStudio` before the Studio renders. Plain TS (the Svelte imports
 // are type-only), safe for the universal barrel.
 import type { Component } from 'svelte';
-import type { Field } from './types/schemas';
+import type { Field, SchemaType } from './types/schemas';
 
 export interface StudioListBadge {
 	label: string;
@@ -263,6 +263,35 @@ export interface StudioExtensions {
 	 * (put a new page into a menu, announce it).
 	 */
 	afterPublish?: (published: StudioPublished) => void;
+	/**
+	 * Which entries the editor's document actions menu shows. Each returns
+	 * false to leave its entry out for that document; unset, the entry shows
+	 * wherever cms-core would show it (Duplicate: documents of a non-singleton
+	 * type, for someone who may create one).
+	 */
+	documentActions?: {
+		duplicate?: (document: StudioDocumentActionTarget) => boolean;
+		inspect?: (document: StudioDocumentActionTarget) => boolean;
+	};
+	/**
+	 * Shapes the values a copy starts with, after cms-core's own shaping
+	 * (`duplicateValues`: title marked as a copy, slugs drawn again from it).
+	 * Return the values to create the copy with: clear what must stay unique,
+	 * drop what the copy must not inherit.
+	 */
+	prepareDuplicate?: (
+		values: Record<string, unknown>,
+		original: StudioDocumentActionTarget
+	) => Record<string, unknown>;
+}
+
+/** The document a document action is asked about. */
+export interface StudioDocumentActionTarget {
+	type: string;
+	id: string;
+	schema: SchemaType;
+	/** The document's draft values, without `_meta`. */
+	values: Record<string, unknown>;
 }
 
 /** What `afterPublish` receives. */
@@ -408,4 +437,16 @@ export function fieldDescriptionMode(
 	requested: FieldDescriptionMode
 ): FieldDescriptionMode {
 	return current.fieldDescription?.(field, requested) ?? requested;
+}
+
+/**
+ * Whether the document actions menu offers `action` for `target`: the
+ * app's `documentActions` hook when it set one, else true.
+ */
+export function studioDocumentActionShown(
+	action: 'duplicate' | 'inspect',
+	target: StudioDocumentActionTarget
+): boolean {
+	const decide = current.documentActions?.[action];
+	return decide ? decide(target) : true;
 }
