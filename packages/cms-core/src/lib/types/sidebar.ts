@@ -14,7 +14,10 @@ export interface SidebarNavItem {
 	href: string;
 	label: string;
 	icon?: Component<IconProps>;
+	/** Drawn beside the label, such as a count of new items. */
 	badge?: string | number;
+	/** How the badge reads to a screen reader ("3 new enquiries"); the bare badge is hidden from it. */
+	badgeLabel?: string;
 	/**
 	 * Open in a new tab instead of navigating the admin away. Use it for links
 	 * that leave the studio (the live site), so the editor keeps their place —

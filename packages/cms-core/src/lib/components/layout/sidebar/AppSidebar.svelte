@@ -100,6 +100,8 @@
 			url: item.href,
 			icon: item.icon,
 			newTab: item.newTab,
+			badge: item.badge,
+			badgeLabel: item.badgeLabel,
 			isActive: false,
 			// The bare fallback nav is a single /admin item, which would otherwise
 			// prefix-match every admin page and stay lit everywhere.
