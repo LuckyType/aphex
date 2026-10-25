@@ -103,7 +103,9 @@
 			isActive: false,
 			// The bare fallback nav is a single /admin item, which would otherwise
 			// prefix-match every admin page and stay lit everywhere.
-			exact: !data?.navGroups?.length && !data?.navItems?.length && item.href === '/admin'
+			exact:
+				item.exact ??
+				(!data?.navGroups?.length && !data?.navItems?.length && item.href === '/admin')
 		}));
 
 	// A tool names a group by id. One that names nothing — or a group this app
