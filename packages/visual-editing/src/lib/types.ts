@@ -19,6 +19,8 @@ export type AphexOutboundMessage =
 // Messages sent from the CMS parent → frontend iframe
 export type AphexInboundMessage =
 	| { type: 'aphex:field-focus'; fieldPath: string }
+	/** Scrolls the element whose `data-aphex-block-path` is `path` into view and marks it. */
+	| { type: 'aphex:block-focus'; path: string }
 	| {
 			type: 'aphex:data';
 			document: Record<string, unknown>;
