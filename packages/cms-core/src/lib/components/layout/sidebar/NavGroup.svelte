@@ -6,6 +6,7 @@
 		SidebarMenu,
 		SidebarMenuItem,
 		SidebarMenuButton,
+		SidebarMenuBadge,
 		SidebarMenuSub,
 		SidebarMenuSubItem,
 		SidebarMenuSubButton,
@@ -23,6 +24,9 @@
 		exact?: boolean;
 		/** Leaves the studio — open in a new tab and never light up as active. */
 		newTab?: boolean;
+		/** A count or word beside the title; see SidebarNavItem.badge. */
+		badge?: string | number;
+		badgeLabel?: string;
 		items?: {
 			title: string;
 			url: string;
@@ -147,6 +151,7 @@
 								href={item.url}
 								target={item.newTab ? '_blank' : undefined}
 								rel={item.newTab ? 'noopener noreferrer' : undefined}
+								aria-label={item.badgeLabel ? `${item.title}, ${item.badgeLabel}` : undefined}
 							>
 								{#if item.icon}
 									{@const Icon = item.icon}
@@ -156,6 +161,14 @@
 							</a>
 						{/snippet}
 					</SidebarMenuButton>
+					{#if item.badge !== undefined && item.badge !== ''}
+						<!-- Beside the link, not in it: the link's name already carries
+						     `badgeLabel`, so the bare number is not read twice. -->
+						<SidebarMenuBadge
+							class="bg-primary text-primary-foreground peer-hover/menu-button:text-primary-foreground peer-data-[active=true]/menu-button:text-primary-foreground rounded-full"
+							aria-hidden="true">{item.badge}</SidebarMenuBadge
+						>
+					{/if}
 				</SidebarMenuItem>
 			{/if}
 		{/each}

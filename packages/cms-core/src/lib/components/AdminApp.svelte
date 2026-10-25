@@ -1966,6 +1966,10 @@
 										</div>
 
 										<div class="flex-1 overflow-y-auto">
+											{#if selectedDocumentType && studioDocumentList(selectedDocumentType).header}
+												{@const ListHeader = studioDocumentList(selectedDocumentType).header!}
+												<ListHeader type={selectedDocumentType} />
+											{/if}
 											{#if error}
 												<div class="p-4">
 													<Alert variant="destructive">
@@ -2321,6 +2325,20 @@
 										</div>
 									</button>
 								{/if}
+							{/if}
+
+							<!-- The app's pane beside the types column while no type is open
+							     (`emptyPane`); without one that space stays empty. -->
+							{#if !selectedDocumentType && windowWidth >= 620 && !typesColumnHidden && studioExtensions().emptyPane}
+								{@const EmptyPane = studioExtensions().emptyPane!}
+								<div class="border-rule h-full min-w-0 flex-1 overflow-y-auto border-l">
+									<EmptyPane
+										types={documentTypes
+											.filter((docType) => !docType.hidden)
+											.map(({ name, title }) => ({ name, title }))}
+										onselect={(type) => navigateToDocumentType(type)}
+									/>
+								</div>
 							{/if}
 
 							<!-- Stacked Reference Panel — only the last entry in the stack is
