@@ -61,6 +61,7 @@ export {
 	type MessageParams
 } from './i18n/index';
 export * from './studio-extensions';
+export * from './duplicate-document';
 
 // Unified API client
 export * from './api/index';
