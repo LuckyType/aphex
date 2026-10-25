@@ -4,9 +4,13 @@
 	import { Button } from '@aphexcms/ui/shadcn/button';
 	import { documents } from '../../api/documents';
 	import { toast } from 'svelte-sonner';
+	import type { SchemaType } from '../../types/schemas';
+	import { summarizeVersions } from '../../utils/version-changes';
 
 	interface Props {
 		documentId: string;
+		/** The Studio's schemas, to name the fields each version changed. */
+		schemas?: SchemaType[];
 		onClose: () => void;
 		onRestored?: () => void;
 		onPreviewVersion?: (
@@ -22,12 +26,36 @@
 	// `onRestored` is supplied by the parent (AdminApp) as part of the panel contract;
 	// restores are currently driven through DocumentEditor, so it isn't called here.
 	// eslint-disable-next-line svelte/no-unused-props
-	let { documentId, onClose, onPreviewVersion }: Props = $props();
+	let { documentId, schemas = [], onClose, onPreviewVersion }: Props = $props();
 
 	let versions = $state<any[]>([]);
 	let loading = $state(true);
 	let previewVersion = $state<any>(null);
 	let filter = $state<'all' | 'publish' | 'draft'>('all');
+	// The document's type and whether it is published, for naming what each
+	// version changed and which one visitors see.
+	let documentType = $state<string | null>(null);
+	let published = $state(false);
+
+	const schema = $derived(schemas.find((s) => s.name === documentType) ?? null);
+	const summaries = $derived(
+		summarizeVersions(versions, {
+			fields: schema ? schema.fields.map((f) => f.name) : null,
+			published
+		})
+	);
+
+	function fieldTitle(name: string): string {
+		return schema?.fields.find((f) => f.name === name)?.title ?? name;
+	}
+
+	// "Title, Blocks, Address" and how many more, so a long list stays one line.
+	function changedText(names: string[]): string {
+		if (names.length === 0) return i18n.t('No changes');
+		const shown = names.slice(0, 3).map(fieldTitle).join(', ');
+		const fields = names.length > 3 ? `${shown} +${names.length - 3}` : shown;
+		return i18n.t('Changed: {fields}', { fields });
+	}
 
 	const filteredVersions = $derived(
 		filter === 'all' ? versions : versions.filter((v) => v.eventType === filter)
@@ -46,9 +74,17 @@
 	async function loadVersions() {
 		loading = true;
 		try {
-			const res = await documents.listVersions(documentId, { limit: 100 });
+			const [res, doc] = await Promise.all([
+				documents.listVersions(documentId, { limit: 100 }),
+				documents.getById(documentId).catch(() => null)
+			]);
 			if (res.success && res.data) {
 				versions = res.data;
+			}
+			if (doc?.success && doc.data) {
+				const meta = doc.data._meta;
+				documentType = (meta?.type as string | undefined) ?? null;
+				published = !!meta?.publishedHash && meta.status !== 'unpublished';
 			}
 		} catch {
 			toast.error(i18n.t('Failed to load versions'));
@@ -128,10 +164,12 @@
 			</div>
 		{:else}
 			{#each filteredVersions as version, i}
+				{@const summary = summaries.get(version.versionNumber)}
 				<div
 					role="button"
 					tabindex="0"
 					aria-pressed={previewVersion?.versionNumber === version.versionNumber}
+					data-current={summary?.current ? '' : undefined}
 					data-version-id={i}
 					class="hover:bg-muted w-full cursor-pointer border-b px-3 py-2.5 text-left transition-colors {previewVersion?.versionNumber ===
 					version.versionNumber
@@ -154,13 +192,25 @@
 								hour12: i18n.hour12() ?? true
 							})}
 						</span>
-						<Badge
-							variant={version.eventType === 'publish' ? 'default' : 'secondary'}
-							class="px-1.5 py-0 text-[9px]"
-						>
-							{i18n.t(version.eventType, undefined, 'version event')}
-						</Badge>
+						<span class="flex items-center gap-1">
+							{#if summary?.current}
+								<Badge variant="outline" class="border-green-600/40 px-1.5 py-0 text-[9px]">
+									{i18n.t('Currently published')}
+								</Badge>
+							{/if}
+							<Badge
+								variant={version.eventType === 'publish' ? 'default' : 'secondary'}
+								class="px-1.5 py-0 text-[9px]"
+							>
+								{i18n.t(version.eventType, undefined, 'version event')}
+							</Badge>
+						</span>
 					</div>
+					{#if summary?.changed}
+						<p class="text-foreground/80 mt-0.5 truncate text-[11px]" data-version-changes>
+							{changedText(summary.changed)}
+						</p>
+					{/if}
 					{#if version.createdByName}
 						<p class="text-muted-foreground mt-0.5 truncate text-[10px]">
 							{version.createdByName}

@@ -1,6 +1,11 @@
 <script lang="ts">
 	import * as i18n from '../../i18n/index';
-	import { studioExtensions, type StudioPublishRefusal } from '../../studio-extensions';
+	import {
+		studioDocumentActionShown,
+		studioExtensions,
+		type StudioPublishRefusal
+	} from '../../studio-extensions';
+	import { duplicateDocument } from '../../duplicate-document';
 	import { isFieldVisible } from '../../schema-utils/visibility';
 	import {
 		fieldGroupTab,
@@ -66,7 +71,8 @@
 		Lock,
 		Undo2,
 		GripVertical,
-		FileX
+		FileX,
+		Copy
 	} from '@lucide/svelte';
 	import { stegaEncodeDocument } from '../../preview/stega.js';
 	import { collectAssetRefs, injectAssetData, type ResolvedAsset } from '../../preview/assets.js';
@@ -94,6 +100,8 @@
 		onPublished?: (documentId: string) => void;
 		onUnpublished?: (documentId: string) => void;
 		onRestored?: (documentId: string) => void;
+		/** Called with the copy's id after Duplicate made one; the entry shows only when set. */
+		onDuplicated?: (documentId: string, documentType: string) => void;
 		onOpenReference?: (documentId: string, documentType: string) => void;
 		onOpenVersionHistory?: (documentId: string) => void;
 		externalVersionPreview?: {
@@ -154,6 +162,7 @@
 		onPublished,
 		onUnpublished,
 		onRestored,
+		onDuplicated,
 		onOpenReference,
 		onOpenVersionHistory,
 		externalVersionPreview = null,
@@ -1974,6 +1983,57 @@
 		}
 	}
 
+	// The document as the actions menu's hooks see it.
+	const actionTarget = $derived(
+		documentId && schema
+			? { type: effectiveType, id: documentId, schema, values: documentData }
+			: null
+	);
+	const canDuplicate = $derived(
+		!!onDuplicated &&
+			!!actionTarget &&
+			!schema?.singleton &&
+			canCreate &&
+			studioDocumentActionShown('duplicate', actionTarget)
+	);
+	const inspectShown = $derived(
+		!actionTarget || studioDocumentActionShown('inspect', actionTarget)
+	);
+	let duplicating = $state(false);
+	let publishButton = $state<HTMLButtonElement | null>(null);
+	// Set by a restore: the Publish button takes focus once it is back and
+	// enabled (the host closes History first, the hashes load after).
+	let focusPublishOnceEnabled = $state(false);
+	$effect(() => {
+		if (!focusPublishOnceEnabled || !publishButton || !canPublish) return;
+		publishButton.focus();
+		focusPublishOnceEnabled = false;
+	});
+
+	// Duplicate: a new draft from this one's values (saved first, so the copy
+	// has the latest edits), opened at once. Never published.
+	async function duplicate() {
+		if (!documentId || !schema || duplicating) return;
+		duplicating = true;
+		try {
+			if (autoSaveTimer) {
+				clearTimeout(autoSaveTimer);
+				autoSaveTimer = null;
+			}
+			if (hasUnsavedChanges) {
+				await saveDocument(false);
+				if (saveError) return;
+			}
+			const copyId = await duplicateDocument(documentId, schema, documentData);
+			toast.success(i18n.t('Duplicated'));
+			onDuplicated?.(copyId, effectiveType);
+		} catch {
+			toast.error(i18n.t('Failed to duplicate'));
+		} finally {
+			duplicating = false;
+		}
+	}
+
 	// Discard the draft: the server writes the published version back as the
 	// draft (the discarded edits stay in History), then the editor reloads it.
 	const canDiscardDraft = $derived(
@@ -2328,7 +2388,9 @@
 {/snippet}
 
 {#snippet editorActions()}
-	<div class="flex shrink-0 items-center gap-2">
+	<!-- Wraps rather than running off a narrow screen: with a changed draft the
+	     status pills, Discard and the actions menu are wider than a phone. -->
+	<div class="flex min-w-0 flex-wrap items-center justify-end gap-2">
 		{#if saving}
 			<span
 				class="text-muted-foreground hidden items-center gap-1.5 text-[10px] font-medium tracking-wider whitespace-nowrap uppercase sm:inline-flex"
@@ -2408,9 +2470,14 @@
 				class="text-muted-foreground h-7 cursor-pointer gap-1.5 px-2 text-xs"
 				onclick={discardDraft}
 				disabled={saving}
+				title={i18n.t('Discard changes', undefined, 'discard draft')}
 			>
-				<Undo2 class="h-3.5 w-3.5" />
-				{i18n.t('Discard changes', undefined, 'discard draft')}
+				<Undo2 class="h-3.5 w-3.5" aria-hidden="true" />
+				<!-- Below sm the label would push the actions menu off a phone screen;
+				     the icon stays, named for a screen reader and by its tooltip. -->
+				<span class="sr-only sm:not-sr-only">
+					{i18n.t('Discard changes', undefined, 'discard draft')}
+				</span>
 			</Button>
 		{/if}
 
@@ -2452,10 +2519,18 @@
 						<History class="h-3.5 w-3.5" />
 						{i18n.t('History')}
 					</DropdownMenu.Item>
-					<DropdownMenu.Item onclick={() => (showInspect = true)}>
-						<Code class="h-3.5 w-3.5" />
-						{i18n.t('Inspect')}
-					</DropdownMenu.Item>
+					{#if canDuplicate}
+						<DropdownMenu.Item onclick={duplicate} disabled={duplicating}>
+							<Copy class="h-3.5 w-3.5" />
+							{i18n.t('Duplicate')}
+						</DropdownMenu.Item>
+					{/if}
+					{#if inspectShown}
+						<DropdownMenu.Item onclick={() => (showInspect = true)}>
+							<Code class="h-3.5 w-3.5" />
+							{i18n.t('Inspect')}
+						</DropdownMenu.Item>
+					{/if}
 				</DropdownMenu.Content>
 			</DropdownMenu.Root>
 		{/if}
@@ -3144,50 +3219,81 @@
 							hour12: i18n.hour12() ?? true
 						})}
 					</p>
-					<Button
-						size="sm"
-						onclick={async () => {
-							if (!documentId || !activePreview) return;
-							try {
-								await documents.restoreVersion(documentId, activePreview.versionNumber, {
-									expectedRevision: fullDocument?._meta?.revision as number | undefined
-								});
-								const docRes = await documents.getById(documentId);
-								if (docRes.success && docRes.data) {
-									const doc = docRes.data as Record<string, any>;
-									fullDocument = doc;
-									const newData: Record<string, any> = {};
-									if (schema) {
-										for (const field of schema.fields) {
-											if (doc[field.name] !== undefined) {
-												newData[field.name] = doc[field.name];
+					<div class="flex items-center gap-2">
+						<!-- On a phone the host's History sheet stepped aside to show this
+					     version: the way back to the list, where closing ends the preview. -->
+						{#if externalVersionPreview && onOpenVersionHistory}
+							<Button
+								size="sm"
+								variant="ghost"
+								class="sm:hidden"
+								onclick={() => documentId && onOpenVersionHistory(documentId)}
+							>
+								{i18n.t('History')}
+							</Button>
+						{/if}
+						<Button
+							size="sm"
+							onclick={async () => {
+								if (!documentId || !activePreview) return;
+								try {
+									await documents.restoreVersion(documentId, activePreview.versionNumber, {
+										expectedRevision: fullDocument?._meta?.revision as number | undefined
+									});
+									const docRes = await documents.getById(documentId);
+									if (docRes.success && docRes.data) {
+										const doc = docRes.data as Record<string, any>;
+										fullDocument = doc;
+										const newData: Record<string, any> = {};
+										if (schema) {
+											for (const field of schema.fields) {
+												if (doc[field.name] !== undefined) {
+													newData[field.name] = doc[field.name];
+												}
 											}
 										}
+										documentData = newData;
+										hasUnsavedChanges = false;
+										lastSaved = new Date();
 									}
-									documentData = newData;
-									hasUnsavedChanges = false;
-									lastSaved = new Date();
-								}
-								previewingVersion = null;
-								perspective = 'draft';
-								publishedData = null;
-								toast.success(i18n.t('Revision restored'));
-								if (onRestored && documentId) {
-									onRestored(documentId);
-								}
-							} catch (err) {
-								if (isRevisionConflict(err)) {
-									toast.error(
-										i18n.t('This document was changed elsewhere. Reload to see the latest version.')
+									previewingVersion = null;
+									perspective = 'draft';
+									publishedData = null;
+									// The restored content is a draft until published. With something to
+									// publish (restoring what is published leaves nothing), the toast offers
+									// it and Publish takes focus once the host closed History.
+									const offerPublish = canPublishDoc && Boolean(canPublish);
+									toast.success(
+										i18n.t('Revision restored'),
+										offerPublish
+											? {
+													action: {
+														label: i18n.t('Publish now'),
+														onClick: () => void publishDocument()
+													}
+												}
+											: undefined
 									);
-								} else {
-									toast.error(i18n.t('Failed to restore revision'));
+									if (onRestored && documentId) {
+										onRestored(documentId);
+									}
+									focusPublishOnceEnabled = offerPublish;
+								} catch (err) {
+									if (isRevisionConflict(err)) {
+										toast.error(
+											i18n.t(
+												'This document was changed elsewhere. Reload to see the latest version.'
+											)
+										);
+									} else {
+										toast.error(i18n.t('Failed to restore revision'));
+									}
 								}
-							}
-						}}
-					>
-						{i18n.t('Restore')}
-					</Button>
+							}}
+						>
+							{i18n.t('Restore')}
+						</Button>
+					</div>
 				</div>
 			{:else if isViewingPublished}
 				<!-- Published view footer -->
@@ -3270,6 +3376,7 @@
 						{/if}
 						{#if canPublishDoc && !isViewingPublished}
 							<Button
+								bind:ref={publishButton}
 								onclick={publishDocument}
 								disabled={!canPublish}
 								size="sm"
