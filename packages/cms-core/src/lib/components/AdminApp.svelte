@@ -301,6 +301,13 @@
 	);
 	// The app's tree for the open type, which takes the list pane's place.
 	const currentTree = $derived(studioDocumentTree(selectedDocumentType));
+	// What remounts the list pane. A tree serves several types, and opening
+	// a document of another of its types must keep it mounted: a remount
+	// dropped keyboard focus from the row just opened and redrew the tree.
+	// The editor beside it keeps its own remount per type.
+	const paneKey = $derived(
+		`${currentView}-${currentTree ? `tree:${currentTree.types.join(',')}` : selectedDocumentType}`
+	);
 	// Goes up on every write the editor makes, so the tree can re-read.
 	let treeChanges = $state(0);
 	// Goes up when the tree wrote the open document, so the editor re-reads it.
@@ -624,10 +631,16 @@
 	// A space with a single type needs no types column beside its list. Shared by
 	// the collapse math and `typesPanel`, so the column is measured exactly when
 	// it is drawn.
+	// A tree serves several types as one list, so a space showing one of them
+	// still has a single type: opening another tree type while the space's
+	// own type (updated after the navigation) still named the last one drew
+	// the column for a moment, and the list collapsed to its strip and back.
+	const onlyType = $derived(documentTypes.length === 1 ? documentTypes[0]?.name : undefined);
 	const typesColumnHidden = $derived(
 		focusModeOn ||
 			presentationModeOn ||
-			(documentTypes.length === 1 && selectedDocumentType === documentTypes[0]?.name)
+			(onlyType !== undefined &&
+				(selectedDocumentType === onlyType || !!currentTree?.types.includes(onlyType)))
 	);
 
 	let layoutConfig = $derived(
@@ -1459,7 +1472,7 @@
 							: typesHeading}
 					</h1>
 				{/if}
-				{#key `${currentView}-${selectedDocumentType}`}
+				{#key paneKey}
 					<div
 						bind:clientWidth={contentWidth}
 						class={windowWidth < 620 ? 'h-full w-full' : 'flex h-full w-full overflow-hidden'}
@@ -2166,94 +2179,96 @@
 										: 'overflow-y-auto'} {primaryEditorState.expanded ? '' : 'hidden'}"
 									style={windowWidth >= 620 ? 'min-width: 0;' : ''}
 								>
-									<DocumentEditor
-										{schemas}
-										{plugins}
-										documentType={selectedDocumentType!}
-										documentId={editingDocumentId}
-										isCreating={isCreatingDocument}
-										initialValues={isCreatingDocument ? createValues : null}
-										focusMode={focusModeOn}
-										onToggleFocus={toggleFocusMode}
-										presentationMode={presentationModeOn}
-										onTogglePresentation={choosePresentationMode}
-										hideActionBar={presentationModeOn && editorStack.length > 0}
-										refreshToken={baseRefreshToken}
-										reloadToken={editorReloads}
-										organizationId={currentOrgId}
-										onBack={navigateBack}
-										onOpenReference={handleOpenReference}
-										onOpenVersionHistory={handleOpenVersionHistory}
-										externalVersionPreview={versionPanelDocId === editingDocumentId
-											? versionPreviewData
-											: null}
-										onSaved={async (docId) => {
-											if (selectedDocumentType) {
-												await fetchDocuments(selectedDocumentType);
-											}
-											// For first-time creation, update URL and local state.
-											// Use goto with replaceState:true so page.url stays in sync —
-											// raw replaceState() from $app/navigation updates the URL bar
-											// but leaves page.url.searchParams stale, which breaks any
-											// subsequent navigation that reads from it (e.g. opening a
-											// stacked reference editor) because the old ?action=create
-											// gets carried forward.
-											if (isCreatingDocument) {
-												createValues = null;
-												// Update local state FIRST so the URL Effect's EDIT branch
-												// sees consistent values when goto fires it.
-												isCreatingDocument = false;
-												editingDocumentId = docId;
+									{#key selectedDocumentType}
+										<DocumentEditor
+											{schemas}
+											{plugins}
+											documentType={selectedDocumentType!}
+											documentId={editingDocumentId}
+											isCreating={isCreatingDocument}
+											initialValues={isCreatingDocument ? createValues : null}
+											focusMode={focusModeOn}
+											onToggleFocus={toggleFocusMode}
+											presentationMode={presentationModeOn}
+											onTogglePresentation={choosePresentationMode}
+											hideActionBar={presentationModeOn && editorStack.length > 0}
+											refreshToken={baseRefreshToken}
+											reloadToken={editorReloads}
+											organizationId={currentOrgId}
+											onBack={navigateBack}
+											onOpenReference={handleOpenReference}
+											onOpenVersionHistory={handleOpenVersionHistory}
+											externalVersionPreview={versionPanelDocId === editingDocumentId
+												? versionPreviewData
+												: null}
+											onSaved={async (docId) => {
+												if (selectedDocumentType) {
+													await fetchDocuments(selectedDocumentType);
+												}
+												// For first-time creation, update URL and local state.
+												// Use goto with replaceState:true so page.url stays in sync —
+												// raw replaceState() from $app/navigation updates the URL bar
+												// but leaves page.url.searchParams stale, which breaks any
+												// subsequent navigation that reads from it (e.g. opening a
+												// stacked reference editor) because the old ?action=create
+												// gets carried forward.
+												if (isCreatingDocument) {
+													createValues = null;
+													// Update local state FIRST so the URL Effect's EDIT branch
+													// sees consistent values when goto fires it.
+													isCreatingDocument = false;
+													editingDocumentId = docId;
 
-												const params = new SvelteURLSearchParams(page.url.searchParams);
-												params.set('docId', docId);
-												if (selectedDocumentType) params.set('docType', selectedDocumentType);
-												params.delete('action');
-												await goto(`/admin?${params.toString()}`, {
-													replaceState: true,
-													keepFocus: true,
-													noScroll: true
-												});
-											} else {
-												// For subsequent saves, use normal navigation
-												navigateToEditDocument(docId, selectedDocumentType!);
-											}
-										}}
-										onAutoSaved={handleAutoSave}
-										onPublished={async (docId) => {
-											handleDocumentPublished(docId);
-											if (selectedDocumentType) {
-												await fetchDocuments(selectedDocumentType);
-											}
-										}}
-										onUnpublished={async (docId) => {
-											handleDocumentPublished(docId);
-											if (selectedDocumentType) {
-												await fetchDocuments(selectedDocumentType);
-											}
-										}}
-										onRestored={async (docId) => {
-											handleDocumentPublished(docId);
-											if (selectedDocumentType) {
-												await fetchDocuments(selectedDocumentType);
-											}
-										}}
-										onDeleted={async () => {
-											if (selectedDocumentType) {
-												await fetchDocuments(selectedDocumentType);
-												const params = new SvelteURLSearchParams(page.url.searchParams);
-												params.set('docType', selectedDocumentType);
-												params.delete('docId');
-												params.delete('action');
-												await goto(`/admin?${params.toString()}`, { replaceState: false });
-											} else {
-												const orgId = page.url.searchParams.get('orgId');
-												const url = orgId ? `/admin?orgId=${orgId}` : '/admin';
-												await goto(url, { replaceState: false });
-											}
-										}}
-										{isReadOnly}
-									/>
+													const params = new SvelteURLSearchParams(page.url.searchParams);
+													params.set('docId', docId);
+													if (selectedDocumentType) params.set('docType', selectedDocumentType);
+													params.delete('action');
+													await goto(`/admin?${params.toString()}`, {
+														replaceState: true,
+														keepFocus: true,
+														noScroll: true
+													});
+												} else {
+													// For subsequent saves, use normal navigation
+													navigateToEditDocument(docId, selectedDocumentType!);
+												}
+											}}
+											onAutoSaved={handleAutoSave}
+											onPublished={async (docId) => {
+												handleDocumentPublished(docId);
+												if (selectedDocumentType) {
+													await fetchDocuments(selectedDocumentType);
+												}
+											}}
+											onUnpublished={async (docId) => {
+												handleDocumentPublished(docId);
+												if (selectedDocumentType) {
+													await fetchDocuments(selectedDocumentType);
+												}
+											}}
+											onRestored={async (docId) => {
+												handleDocumentPublished(docId);
+												if (selectedDocumentType) {
+													await fetchDocuments(selectedDocumentType);
+												}
+											}}
+											onDeleted={async () => {
+												if (selectedDocumentType) {
+													await fetchDocuments(selectedDocumentType);
+													const params = new SvelteURLSearchParams(page.url.searchParams);
+													params.set('docType', selectedDocumentType);
+													params.delete('docId');
+													params.delete('action');
+													await goto(`/admin?${params.toString()}`, { replaceState: false });
+												} else {
+													const orgId = page.url.searchParams.get('orgId');
+													const url = orgId ? `/admin?orgId=${orgId}` : '/admin';
+													await goto(url, { replaceState: false });
+												}
+											}}
+											{isReadOnly}
+										/>
+									{/key}
 
 									<!-- Presentation-mode reference: a left-anchored panel over the fields
 									     column only (no dimming backdrop), so the base editor's live
