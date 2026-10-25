@@ -51,6 +51,12 @@ export interface StudioDocumentList {
 	/** The hint the empty list shows, in place of the generic one. */
 	emptyText?: () => string;
 	/**
+	 * Drawn above the list's rows, empty or not: a line about the type as a
+	 * whole (where its documents appear, say). Below cms-core's own header and
+	 * search.
+	 */
+	header?: Component<{ type: string }>;
+	/**
 	 * Asks for the new document's title before creating it: the create button
 	 * opens a one-line form in the list, and Enter opens the editor with the
 	 * text already in `field` (`title` when true), so the document is stored
@@ -181,9 +187,20 @@ export interface StudioFieldGroups {
 	allFields?: boolean;
 }
 
+/** What `emptyPane` gets: the types the Content area lists, and the way to open one. */
+export interface StudioEmptyPaneProps {
+	types: readonly { name: string; title: string }[];
+	onselect: (type: string) => void;
+}
+
 export interface StudioExtensions {
 	/** A badge beside a document's title in the document list. */
 	listBadge?: (type: string, id: string) => StudioListBadge | null;
+	/**
+	 * Fills the space right of the types column while no type is open, on a
+	 * screen wide enough to show both. Left out, that space stays empty.
+	 */
+	emptyPane?: Component<StudioEmptyPaneProps>;
 	/**
 	 * Per document type, the list that replaces cms-core's and the words
 	 * around it. A bare component is the list with the generic words.
@@ -354,6 +371,7 @@ export function studioDocumentList(type: string | null | undefined): StudioDocum
 			'component' in entry ||
 			'createLabel' in entry ||
 			'emptyText' in entry ||
+			'header' in entry ||
 			'createWithTitle' in entry ||
 			'actions' in entry
 		)

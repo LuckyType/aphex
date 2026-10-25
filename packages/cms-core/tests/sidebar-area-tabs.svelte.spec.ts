@@ -33,3 +33,28 @@ describe('the header area tabs', () => {
 		expect(document.querySelector('header .ml-auto')).not.toBeNull();
 	});
 });
+
+describe('a nav item badge', () => {
+	it('shows beside the label and reads as its label, not as a bare number', () => {
+		render(SidebarHarness, {
+			data: {
+				...data,
+				navGroups: [
+					{
+						id: 'main',
+						items: [
+							{ href: '/admin/inbox', label: 'Inbox', badge: 3, badgeLabel: '3 new messages' },
+							{ href: '/admin/pages', label: 'Pages' }
+						]
+					}
+				]
+			}
+		} as never);
+		const link = screen.getByRole('link', { name: 'Inbox, 3 new messages' });
+		const badge = link.parentElement?.querySelector('[data-sidebar="menu-badge"]');
+		expect(badge?.textContent?.trim()).toBe('3');
+		expect(badge?.getAttribute('aria-hidden')).toBe('true');
+		const pages = screen.getByRole('link', { name: 'Pages' });
+		expect(pages.parentElement?.querySelector('[data-sidebar="menu-badge"]')).toBeNull();
+	});
+});
