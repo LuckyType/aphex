@@ -21,6 +21,12 @@ export interface SidebarNavItem {
 	 * and never mark such an item active, since it isn't a studio location.
 	 */
 	newTab?: boolean;
+	/**
+	 * Active only on `href`'s own path, never on a path beneath it. An item at
+	 * the admin root otherwise stays lit on every admin page no longer item
+	 * covers, such as an account page.
+	 */
+	exact?: boolean;
 }
 
 /**
