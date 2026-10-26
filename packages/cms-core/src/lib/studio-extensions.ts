@@ -194,8 +194,16 @@ export interface StudioEmptyPaneProps {
 }
 
 export interface StudioExtensions {
-	/** A badge beside a document's title in the document list. */
-	listBadge?: (type: string, id: string) => StudioListBadge | null;
+	/**
+	 * A badge beside a document's title in the document list. `values` is
+	 * the listed document as the list read it (its fields at the top level),
+	 * so a badge can follow the content, say a window that has ended.
+	 */
+	listBadge?: (
+		type: string,
+		id: string,
+		values?: Record<string, unknown>
+	) => StudioListBadge | null;
 	/**
 	 * Fills the space right of the types column while no type is open, on a
 	 * screen wide enough to show both. Left out, that space stays empty.
@@ -296,6 +304,16 @@ export interface StudioExtensions {
 	 * Return the values to create the copy with: clear what must stay unique,
 	 * drop what the copy must not inherit.
 	 */
+	/**
+	 * A line the "Duplicated" toast adds under its title for this copy, or
+	 * null for none: what the copy left out or changed (a date moved to
+	 * today, children not copied). `copy` holds the values it was created
+	 * with, after `prepareDuplicate`.
+	 */
+	duplicateNote?: (
+		copy: Record<string, unknown>,
+		original: StudioDocumentActionTarget
+	) => string | null;
 	prepareDuplicate?: (
 		values: Record<string, unknown>,
 		original: StudioDocumentActionTarget

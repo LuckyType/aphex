@@ -5,7 +5,7 @@
 		studioExtensions,
 		type StudioPublishRefusal
 	} from '../../studio-extensions';
-	import { duplicateDocument } from '../../duplicate-document';
+	import { duplicateDocumentWithNote } from '../../duplicate-document';
 	import { isFieldVisible } from '../../schema-utils/visibility';
 	import {
 		fieldGroupTab,
@@ -2027,8 +2027,9 @@
 				await saveDocument(false);
 				if (saveError) return;
 			}
-			const copyId = await duplicateDocument(documentId, schema, documentData);
-			toast.success(i18n.t('Duplicated'));
+			const copy = await duplicateDocumentWithNote(documentId, schema, documentData);
+			toast.success(i18n.t('Duplicated'), copy.note ? { description: copy.note } : undefined);
+			const copyId = copy.id;
 			onDuplicated?.(copyId, effectiveType);
 		} catch {
 			toast.error(i18n.t('Failed to duplicate'));

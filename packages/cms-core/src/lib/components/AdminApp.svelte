@@ -1244,7 +1244,7 @@
 		const title = resolvePreviewTitle(doc, schema);
 		const untitled = resolveItemTitle(doc, schema) === null;
 		const subtitle = resolvePreviewSubtitle(doc, schema) ?? undefined;
-		const badge = studioExtensions().listBadge?.(docType, doc.id) ?? null;
+		const badge = studioExtensions().listBadge?.(docType, doc.id, doc) ?? null;
 
 		// Metadata is in _meta field (from LocalAPI transformation)
 		const meta = doc._meta || {};
