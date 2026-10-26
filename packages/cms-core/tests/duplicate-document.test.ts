@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 const { getById, create } = vi.hoisted(() => ({ getById: vi.fn(), create: vi.fn() }));
 vi.mock('../src/lib/api/documents', () => ({ documents: { getById, create } }));
 
-import { duplicateDocument } from '../src/lib/duplicate-document';
+import { duplicateDocument, duplicateDocumentWithNote } from '../src/lib/duplicate-document';
 import { configureStudio, studioDocumentActionShown } from '../src/lib/studio-extensions';
 import { duplicateTitleField, duplicateValues } from '../src/lib/utils/duplicate';
 import type { SchemaType } from '../src/lib/types/schemas';
@@ -81,6 +81,34 @@ describe('duplicateDocument', () => {
 		create.mockResolvedValue({ success: false, error: 'Forbidden' });
 		await expect(duplicateDocument('p1', page, { title: 'A' })).rejects.toThrow('Forbidden');
 		expect(getById).not.toHaveBeenCalled();
+	});
+});
+
+describe('duplicateDocumentWithNote', () => {
+	it("hands back the app's note for the copy it created", async () => {
+		create.mockResolvedValue({ success: true, data: { id: 'p2' } });
+		const note = vi.fn(() => 'Dates moved to today');
+		configureStudio({
+			prepareDuplicate: (values) => ({ ...values, at: 'now' }),
+			duplicateNote: note
+		});
+
+		await expect(duplicateDocumentWithNote('p1', page, { title: 'A' })).resolves.toEqual({
+			id: 'p2',
+			note: 'Dates moved to today'
+		});
+		expect(note).toHaveBeenCalledWith(
+			{ title: 'A (copy)', slug: 'a-copy', at: 'now' },
+			expect.objectContaining({ id: 'p1', values: { title: 'A' } })
+		);
+	});
+
+	it('has no note without the hook', async () => {
+		create.mockResolvedValue({ success: true, data: { id: 'p2' } });
+		await expect(duplicateDocumentWithNote('p1', page, { title: 'A' })).resolves.toEqual({
+			id: 'p2',
+			note: null
+		});
 	});
 });
 
