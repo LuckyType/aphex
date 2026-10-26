@@ -22,6 +22,12 @@ async function draftValues(id: string, schema: SchemaType): Promise<Record<strin
 	return values;
 }
 
+/** A new copy's id, and the app's `duplicateNote` for it (null for none). */
+export interface DuplicatedDocument {
+	id: string;
+	note: string | null;
+}
+
 /**
  * Creates a copy of the document `id` of `schema`'s type as a new draft
  * (never published) and returns the copy's id. The copy's values come
@@ -33,6 +39,18 @@ export async function duplicateDocument(
 	schema: SchemaType,
 	values?: Record<string, unknown>
 ): Promise<string> {
+	return (await duplicateDocumentWithNote(id, schema, values)).id;
+}
+
+/**
+ * `duplicateDocument`, with the app's `duplicateNote` for the copy, for a
+ * caller that tells the Operator what the copy left out or changed.
+ */
+export async function duplicateDocumentWithNote(
+	id: string,
+	schema: SchemaType,
+	values?: Record<string, unknown>
+): Promise<DuplicatedDocument> {
 	const original: StudioDocumentActionTarget = {
 		type: schema.name,
 		id,
@@ -42,9 +60,9 @@ export async function duplicateDocument(
 	let copy = duplicateValues(schema, original.values, (title) =>
 		i18n.t('{title} (copy)', { title })
 	);
-	const prepare = studioExtensions().prepareDuplicate;
-	if (prepare) copy = prepare(copy, original);
+	const { prepareDuplicate, duplicateNote } = studioExtensions();
+	if (prepareDuplicate) copy = prepareDuplicate(copy, original);
 	const res = await documents.create({ type: schema.name, draftData: copy });
 	if (!res.success || !res.data) throw new Error(res.error || 'Failed to duplicate');
-	return res.data.id;
+	return { id: res.data.id, note: duplicateNote?.(copy, original) ?? null };
 }
