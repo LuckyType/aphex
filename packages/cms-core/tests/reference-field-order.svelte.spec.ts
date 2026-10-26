@@ -92,3 +92,56 @@ describe('ReferenceField Escape', () => {
 		expect(second.defaultPrevented).toBe(false);
 	});
 });
+
+describe('ReferenceField keyboard', () => {
+	const field = { name: 'page', type: 'reference', title: 'Page', to: [{ type: 'page' }] };
+
+	function key(input: HTMLElement, name: string) {
+		const event = new KeyboardEvent('keydown', { key: name, bubbles: true, cancelable: true });
+		input.dispatchEvent(event);
+		return event;
+	}
+
+	it('picks the first match with Enter after typing', async () => {
+		const onUpdate = vi.fn();
+		render(ReferenceField, { props: { id: 'page', field: field as never, value: null, onUpdate } });
+		const input = screen.getByRole('combobox');
+		await fireEvent.focus(input);
+		await fireEvent.input(input, { target: { value: 'Cont' } });
+		await vi.waitFor(() => expect(offered()).toEqual(['Contact']));
+
+		expect(key(input, 'Enter').defaultPrevented).toBe(true);
+		expect(onUpdate).toHaveBeenCalledWith({ _type: 'reference', _ref: 'p2' });
+	});
+
+	it('walks the results with the arrow keys and names the highlighted one', async () => {
+		const onUpdate = vi.fn();
+		render(ReferenceField, { props: { id: 'page', field: field as never, value: null, onUpdate } });
+		const input = screen.getByRole('combobox');
+		await fireEvent.focus(input);
+		expect(input.getAttribute('aria-expanded')).toBe('true');
+		const highlighted = () =>
+			document.getElementById(input.getAttribute('aria-activedescendant') ?? '')?.textContent;
+		await vi.waitFor(() => expect(highlighted()).toContain('Home'));
+		// Command.Root highlights its first item a couple of ticks after the items mount.
+		await new Promise((resolve) => setTimeout(resolve, 20));
+
+		key(input, 'ArrowDown');
+		await vi.waitFor(() => expect(highlighted()).toContain('About'));
+		key(input, 'ArrowUp');
+		key(input, 'ArrowUp');
+		await vi.waitFor(() => expect(highlighted()).toContain('Contact'));
+		expect(screen.getByRole('option', { selected: true }).textContent).toContain('Contact');
+		key(input, 'Enter');
+		expect(onUpdate).toHaveBeenCalledWith({ _type: 'reference', _ref: 'p2' });
+	});
+
+	it('is a combobox named by its label, with a named list', async () => {
+		render(ReferenceField, { props: { field: field as never, value: null, onUpdate: () => {} } });
+		const input = screen.getByRole('combobox', { name: 'Page' });
+		expect(input.getAttribute('aria-expanded')).toBe('false');
+		await fireEvent.focus(input);
+		await vi.waitFor(() => expect(screen.getByRole('listbox', { name: 'Results' })).toBeTruthy());
+		expect(input.getAttribute('aria-controls')).toBe(screen.getByRole('listbox').id);
+	});
+});

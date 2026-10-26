@@ -161,7 +161,7 @@
 		{organizationId}
 	/>
 {:else if field.type === 'reference' && field.to}
-	<ReferenceField {field} {value} {onUpdate} {onOpenReference} {readonly} />
+	<ReferenceField id={field.name} {field} {value} {onUpdate} {onOpenReference} {readonly} />
 {:else}
 	<div class="border-muted-foreground/30 rounded-md border border-dashed p-4 text-center">
 		<p class="text-muted-foreground text-sm">
