@@ -2000,6 +2000,9 @@
 		!actionTarget || studioDocumentActionShown('inspect', actionTarget)
 	);
 	let duplicating = $state(false);
+	// Bound so Duplicate can close the menu itself: the editor swaps to the
+	// copy while the menu would still be open over its header.
+	let documentActionsOpen = $state(false);
 	let publishButton = $state<HTMLButtonElement | null>(null);
 	// Set by a restore: the Publish button takes focus once it is back and
 	// enabled (the host closes History first, the hashes load after).
@@ -2492,7 +2495,7 @@
 		{#if documentId}
 			<!-- The ui kit's menu, like every other one in the Studio: Escape closes
 			     it and returns focus, the arrow keys walk the entries. -->
-			<DropdownMenu.Root>
+			<DropdownMenu.Root bind:open={documentActionsOpen}>
 				<DropdownMenu.Trigger>
 					{#snippet child({ props })}
 						<Button
@@ -2520,7 +2523,15 @@
 						{i18n.t('History')}
 					</DropdownMenu.Item>
 					{#if canDuplicate}
-						<DropdownMenu.Item onclick={duplicate} disabled={duplicating}>
+						<!-- Not disabled while duplicating: an item that turns disabled
+						     inside its own click skips the menu's close on select.
+						     duplicate() ignores a second click itself. -->
+						<DropdownMenu.Item
+							onclick={() => {
+								documentActionsOpen = false;
+								duplicate();
+							}}
+						>
 							<Copy class="h-3.5 w-3.5" />
 							{i18n.t('Duplicate')}
 						</DropdownMenu.Item>

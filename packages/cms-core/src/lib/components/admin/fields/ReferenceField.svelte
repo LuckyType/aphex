@@ -32,6 +32,7 @@
 		readonly?: boolean;
 		onRemove?: () => void; // When set, the "Remove" menu item calls this instead of clearing the value (used by array-of-references rows)
 		preloadedDoc?: unknown; // When provided AND its id matches `value._ref`, skip the per-row getById and use this doc as `selectedDocument` (used by ArrayField to batch-hydrate reference rows in one HTTP call)
+		id?: string; // The search input's id, so the field's label names it; without one the input is named by the field title
 	}
 
 	let {
@@ -41,7 +42,8 @@
 		onOpenReference,
 		readonly = false,
 		onRemove,
-		preloadedDoc
+		preloadedDoc,
+		id
 	}: Props = $props();
 
 	// Pull the target ID off the wrapper (or null when nothing's selected).
@@ -96,6 +98,12 @@
 	let loading = $state(false);
 	let creating = $state(false);
 	let query = $state('');
+	// The highlighted result, by document id. Bound to Command.Root so a hover
+	// moves it too; the arrow keys on the search input move it here, because
+	// the input sits outside Command.Root and its keys never reach it.
+	let activeId = $state('');
+	const listId = $props.id();
+	const optionId = (docId: string) => `${listId}-option-${docId}`;
 
 	/** "pages", or "pages or posts" for a multi-type reference. */
 	const targetLabel = $derived(
@@ -208,6 +216,41 @@
 			return title.includes(q) || subtitle.includes(q);
 		});
 	});
+
+	// Typing highlights the first match, so Enter picks it.
+	$effect(() => {
+		const results = searchResults;
+		if (!results.some((doc: any) => doc.id === activeId)) activeId = results[0]?.id ?? '';
+	});
+
+	function moveActive(step: 1 | -1) {
+		if (searchResults.length === 0) return;
+		const index = searchResults.findIndex((doc: any) => doc.id === activeId);
+		const next =
+			index === -1
+				? step === 1
+					? 0
+					: searchResults.length - 1
+				: (index + step + searchResults.length) % searchResults.length;
+		activeId = searchResults[next].id;
+		document.getElementById(optionId(activeId))?.scrollIntoView({ block: 'nearest' });
+	}
+
+	function onSearchKeydown(e: KeyboardEvent) {
+		if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+			e.preventDefault();
+			if (!open) {
+				updateDropdownPos();
+				open = true;
+				return;
+			}
+			moveActive(e.key === 'ArrowDown' ? 1 : -1);
+		} else if (e.key === 'Enter' && open) {
+			e.preventDefault();
+			const doc = searchResults.find((d: any) => d.id === activeId);
+			if (doc) selectDocument(doc);
+		}
+	}
 
 	function updateDropdownPos() {
 		if (!inputWrapperEl) return;
@@ -398,7 +441,15 @@
 				class="border-input bg-background focus-within:ring-ring flex h-9 items-center rounded-md border focus-within:ring-1"
 			>
 				<Input
+					{id}
 					bind:value={query}
+					role="combobox"
+					aria-label={id ? undefined : field.title}
+					aria-autocomplete="list"
+					aria-expanded={open}
+					aria-controls={open ? listId : undefined}
+					aria-activedescendant={open && activeId ? optionId(activeId) : undefined}
+					onkeydown={onSearchKeydown}
 					placeholder={i18n.t('Type to search...')}
 					onfocus={() => {
 						updateDropdownPos();
@@ -426,8 +477,12 @@
 						dropdownPos.width
 					)}px;"
 				>
-					<Command.Root shouldFilter={false}>
-						<Command.List class="max-h-[300px] overflow-y-auto">
+					<Command.Root shouldFilter={false} bind:value={activeId}>
+						<Command.List
+							id={listId}
+							aria-label={i18n.t('Results')}
+							class="max-h-[300px] overflow-y-auto"
+						>
 							{#if loading}
 								<Command.Loading>{i18n.t('Loading...')}</Command.Loading>
 							{:else if searchResults.length === 0}
@@ -442,6 +497,7 @@
 								<Command.Group>
 									{#each searchResults as doc (doc.id)}
 										<Command.Item
+											id={optionId(doc.id)}
 											value={doc.id}
 											onSelect={() => selectDocument(doc)}
 											class="flex items-center justify-between"
