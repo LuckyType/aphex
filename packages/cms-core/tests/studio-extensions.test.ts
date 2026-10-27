@@ -9,6 +9,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import {
 	configureStudio,
+	createTemplates,
 	createTitleField,
 	createWithTitleValues,
 	orderedGroups,
@@ -153,6 +154,50 @@ describe('createWithTitleValues', () => {
 			title: 'About us'
 		});
 		expect(createWithTitleValues('product', 'Tea')).toEqual({ name: 'Tea' });
+	});
+
+	it("takes the picked template's values in place of the list's own", () => {
+		configureStudio({
+			documentLists: {
+				page: {
+					createWithTitle: {
+						values: (title) => ({ heading: title }),
+						templates: () => [
+							{ name: 'blank', title: 'Blank', values: (title) => ({ heading: title }) },
+							{
+								name: 'contact',
+								title: 'Contact',
+								suggestedTitle: 'Contact',
+								values: (title) => ({ heading: title, form: true })
+							}
+						]
+					}
+				}
+			}
+		});
+		expect(createTemplates('page').map((entry) => entry.name)).toEqual(['blank', 'contact']);
+		expect(createWithTitleValues('page', 'Reach us', 'contact')).toEqual({
+			heading: 'Reach us',
+			form: true,
+			title: 'Reach us'
+		});
+		// An unknown or missing pick falls back to the list's values.
+		expect(createWithTitleValues('page', 'About', 'gone')).toEqual({
+			heading: 'About',
+			title: 'About'
+		});
+		expect(createWithTitleValues('page', 'About', null)).toEqual({
+			heading: 'About',
+			title: 'About'
+		});
+	});
+});
+
+describe('createTemplates', () => {
+	it('is empty for a list without templates', () => {
+		configureStudio({ documentLists: { page: { createWithTitle: true } } });
+		expect(createTemplates('page')).toEqual([]);
+		expect(createTemplates('product')).toEqual([]);
 	});
 });
 

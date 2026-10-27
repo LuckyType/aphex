@@ -7,6 +7,7 @@
 		studioExtensions,
 		createTitleField,
 		createWithTitleValues,
+		createTemplates,
 		studioListActions,
 		studioDocumentList,
 		studioListOrderings,
@@ -336,9 +337,25 @@
 	// What the new document starts with, handed to the editor until it is stored.
 	let createValues = $state<Record<string, unknown> | null>(null);
 
+	// The template the create form starts from (`createWithTitle.templates`).
+	let newTemplate = $state<string | null>(null);
+
+	function pickTemplate(docType: string, name: string) {
+		const templates = createTemplates(docType);
+		const before = templates.find((entry) => entry.name === newTemplate);
+		const next = templates.find((entry) => entry.name === name);
+		newTemplate = next?.name ?? null;
+		// A suggestion follows the pick until the title is typed by hand.
+		const typed = newTitle.trim() !== '' && newTitle !== before?.suggestedTitle;
+		if (!typed) newTitle = next?.suggestedTitle ?? '';
+	}
+
 	function startCreate(docType: string) {
 		if (createTitleField(docType)) {
 			newTitle = '';
+			newTemplate = null;
+			const [first] = createTemplates(docType);
+			if (first) pickTemplate(docType, first.name);
 			titleFormOpen = true;
 			tick().then(() => newTitleInputEl?.focus());
 			return;
@@ -349,7 +366,7 @@
 
 	function submitNewTitle(docType: string) {
 		const text = newTitle.trim();
-		const values = text ? createWithTitleValues(docType, text) : null;
+		const values = text ? createWithTitleValues(docType, text, newTemplate) : null;
 		if (!values) return;
 		// The slug follows the title from the start, not from when its tab is opened.
 		const fields = schemas.find((s) => s.name === docType)?.fields ?? [];
@@ -1889,6 +1906,49 @@
 
 											{#if titleFormOpen && selectedDocumentType}
 												{@const formType = selectedDocumentType}
+												{@const templates = createTemplates(formType)}
+												{@const picked = templates.find((entry) => entry.name === newTemplate)}
+												{#if templates.length > 0}
+													<div class="mt-2 flex flex-col gap-1" data-create-template>
+														<span id="create-template-label" class="text-xs font-medium"
+															>{i18n.t('Template')}</span
+														>
+														<Select.Root
+															type="single"
+															value={newTemplate ?? undefined}
+															onValueChange={(value) => {
+																if (value) pickTemplate(formType, value);
+															}}
+														>
+															<Select.Trigger
+																size="sm"
+																class="h-8 w-full text-sm"
+																aria-labelledby="create-template-label"
+															>
+																{picked?.title ?? ''}
+															</Select.Trigger>
+															<!-- As wide as the picker, so it stays over the list it belongs to. -->
+															<Select.Content class="w-(--bits-select-anchor-width)">
+																{#each templates as template (template.name)}
+																	<Select.Item value={template.name} label={template.title}>
+																		<!-- A div: the item lays out its last span as a centred row. -->
+																		<div class="flex min-w-0 flex-col gap-0.5 text-left">
+																			<span>{template.title}</span>
+																			{#if template.description}
+																				<span class="text-muted-foreground text-xs"
+																					>{template.description}</span
+																				>
+																			{/if}
+																		</div>
+																	</Select.Item>
+																{/each}
+															</Select.Content>
+														</Select.Root>
+														{#if picked?.description}
+															<p class="text-muted-foreground text-xs">{picked.description}</p>
+														{/if}
+													</div>
+												{/if}
 												<form
 													class="mt-2 flex items-end gap-1.5"
 													data-create-with-title
