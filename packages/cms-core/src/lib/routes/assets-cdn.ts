@@ -106,13 +106,42 @@ function toArrayBuffer(buffer: Buffer): ArrayBuffer {
  * `<img src="...">` untouched — scripts never run in an image context — so the
  * format stays useful for the thing people actually upload it for.
  *
- * Applied to every branch that echoes `asset.mimeType`, not just the main one: the
- * ranged branch sends no `Content-Disposition`, so the `attachment` rule below does
- * not reach it and this is what covers it.
+ * Applied to every branch that echoes `asset.mimeType`, not just the main one,
+ * beside `assetContentDisposition`'s `attachment`: either alone keeps a top-level
+ * navigation from running the document's script.
  */
-function assetSecurityHeaders(mimeType: string | null | undefined): Record<string, string> {
-	if (mimeType !== 'image/svg+xml') return {};
+export function assetSecurityHeaders(mimeType: string | null | undefined): Record<string, string> {
+	if (baseMimeType(mimeType) !== 'image/svg+xml') return {};
 	return { 'Content-Security-Policy': "default-src 'none'; sandbox" };
+}
+
+/**
+ * The media type a browser acts on: lower-cased, without parameters. Every
+ * check below compares this, never the stored string, so a row recorded as
+ * `image/SVG+xml` or `image/svg+xml; charset=utf-8` is still recognised as SVG
+ * rather than slipping past an exact comparison into `inline` with no sandbox.
+ */
+function baseMimeType(mimeType: string | null | undefined): string {
+	return (mimeType ?? '').toLowerCase().split(';', 1)[0]?.trim() ?? '';
+}
+
+const SAFE_INLINE_TYPES = ['image/', 'application/pdf', 'video/', 'audio/'];
+
+/**
+ * `Content-Disposition` for the original file, on the full and the ranged
+ * response alike. Only media a browser renders without running script inline;
+ * SVG and every other type downloads.
+ *
+ * HTTP headers are ByteString-restricted (codepoints 0-255), so a raw character
+ * like U+202F NARROW NO-BREAK SPACE, which macOS inserts before AM/PM in default
+ * screenshot filenames, would otherwise crash the Response constructor:
+ * `filename` carries an ASCII fallback, `filename*` the percent-encoded UTF-8.
+ */
+export function assetContentDisposition(mimeType: string | null | undefined, name: string): string {
+	const base = baseMimeType(mimeType);
+	const canInline =
+		base !== 'image/svg+xml' && SAFE_INLINE_TYPES.some((type) => base.startsWith(type));
+	return `${canInline ? 'inline' : 'attachment'}; filename="${asciiFilename(name)}"; filename*=UTF-8''${encodeURIComponent(name)}`;
 }
 
 /**
@@ -450,6 +479,10 @@ export const GET: RequestHandler = async ({ params, locals, setHeaders, request 
 				'Content-Range': `bytes ${range.start}-${range.end}/${totalSize}`,
 				'Accept-Ranges': 'bytes',
 				'Cache-Control': isPrivate ? 'private, no-store' : 'public, max-age=31536000, immutable',
+				'Content-Disposition': assetContentDisposition(
+					asset.mimeType,
+					asset.originalFilename || asset.filename
+				),
 				'X-Content-Type-Options': 'nosniff',
 				...assetSecurityHeaders(asset.mimeType)
 			});
@@ -466,27 +499,6 @@ export const GET: RequestHandler = async ({ params, locals, setHeaders, request 
 			contentLength = fileBuffer.length;
 		}
 
-		// RFC 6266 Content-Disposition: dual-encode the filename so it survives
-		// non-ASCII characters in HTTP headers. HTTP headers are ByteString-
-		// restricted (codepoints 0–255), so a raw character like U+202F NARROW
-		// NO-BREAK SPACE — which macOS inserts before AM/PM in default
-		// screenshot filenames — would otherwise crash the Response
-		// constructor. We provide:
-		//   filename="..."        — ASCII fallback for legacy clients
-		//   filename*=UTF-8''...  — percent-encoded UTF-8 for modern clients
-		const rawFilename = asset.originalFilename || asset.filename;
-		const asciiFallback = rawFilename
-			.replace(/[^\x20-\x7E]/g, '_') // strip anything outside printable ASCII
-			.replace(/["\\]/g, ''); // drop quotes and backslashes that'd break the quoted-string
-		const utf8Encoded = encodeURIComponent(rawFilename);
-
-		const safeInlineTypes = ['image/', 'application/pdf', 'video/', 'audio/'];
-		const canInline =
-			asset.mimeType &&
-			asset.mimeType !== 'image/svg+xml' &&
-			safeInlineTypes.some((t) => asset.mimeType!.startsWith(t));
-		const disposition = canInline ? 'inline' : 'attachment';
-
 		setHeaders({
 			'Content-Type': asset.mimeType || 'application/octet-stream',
 			...(contentLength != null && { 'Content-Length': contentLength.toString() }),
@@ -496,7 +508,10 @@ export const GET: RequestHandler = async ({ params, locals, setHeaders, request 
 			// of the app hand the file to the next caller without the checks above
 			// ever running again.
 			'Cache-Control': isPrivate ? 'private, no-store' : 'public, max-age=31536000, immutable',
-			'Content-Disposition': `${disposition}; filename="${asciiFallback}"; filename*=UTF-8''${utf8Encoded}`,
+			'Content-Disposition': assetContentDisposition(
+				asset.mimeType,
+				asset.originalFilename || asset.filename
+			),
 			'X-Content-Type-Options': 'nosniff',
 			...assetSecurityHeaders(asset.mimeType),
 			// Advertised for every type, not just images. It used to be image-only
