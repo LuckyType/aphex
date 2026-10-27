@@ -1676,6 +1676,31 @@
 			.join(' › ');
 	}
 
+	function tileClass(asset: Asset): string {
+		const ring =
+			selectedIds.has(asset.id) || selectedAsset?.id === asset.id
+				? 'border-primary ring-primary/40 ring-2'
+				: 'hover:border-muted-foreground/40 hover:shadow-sm';
+		return `group border-border bg-card relative flex flex-col overflow-hidden rounded-md border text-left transition-all ${ring}`;
+	}
+
+	function listRowTint(asset: Asset): string {
+		if (selectedAsset?.id === asset.id) return 'bg-muted';
+		return selectedIds.has(asset.id) ? 'bg-muted/70' : 'hover:bg-muted/50';
+	}
+
+	function openListRow(asset: Asset, e: MouseEvent) {
+		if (selectable && multiSelect) {
+			openAssetDetail(asset);
+		} else if (isSelectMode) {
+			handleSelectClick(asset.id, e);
+		} else if (selectable && onSelect) {
+			onSelect(asset);
+		} else {
+			openAssetDetail(asset);
+		}
+	}
+
 	function isVectorOrTransparent(asset: Asset): boolean {
 		const mime = asset.mimeType ?? '';
 		return mime === 'image/svg+xml' || mime === 'image/png';
@@ -1866,6 +1891,148 @@
 			onclick={(e) => e.stopPropagation()}
 		/>
 	</div>
+{/snippet}
+
+{#snippet tileThumb(asset: Asset)}
+	<!-- Private assets are marked, because nothing else on the tile
+	     distinguishes one. Privacy is declared on a schema field rather
+	     than chosen here, so without a badge an editor has no way to see
+	     which assets a `private: true` actually covers — and the honest
+	     answer (only those uploaded through that field) is surprising.
+	     Read-only: it reports the schema's decision rather than offering
+	     to change it. -->
+	{#if asset.isPrivate}
+		<span
+			class="pointer-events-none absolute top-1.5 left-1.5 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-black/70"
+			title={i18n.t('Private — needs a session or a signed URL')}
+		>
+			<Lock class="h-3 w-3 text-white" />
+		</span>
+	{/if}
+	<!-- Playable media reads as playable at a glance. Without this a
+	     video and a PDF differ only by a small glyph, which the
+	     media-kind filter made obvious: narrowing to Video produced a
+	     grid of near-identical cards. -->
+	{#if isVideo(asset) || isAudio(asset)}
+		{@const duration = formatDuration(asset)}
+		<!-- The play glyph belongs over a picture, where it says "this
+		     still is a video". Over the placeholder icon used for audio, or
+		     for a video with no poster yet, it stacks a second symbol on a
+		     first — which is what made a WAV tile look cluttered. -->
+		{#if getPosterUrl(asset)}
+			<div class="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
+				<span
+					class="flex h-9 w-9 items-center justify-center rounded-full bg-black/45 backdrop-blur-[1px]"
+				>
+					<Play class="h-4 w-4 translate-x-[1px] fill-white text-white" />
+				</span>
+			</div>
+		{/if}
+		{#if duration}
+			<span
+				class="pointer-events-none absolute right-1.5 bottom-1.5 z-10 rounded-sm bg-black/70 px-1 py-0.5 text-[10px] font-medium text-white tabular-nums"
+			>
+				{duration}
+			</span>
+		{/if}
+	{/if}
+	{#if isImage(asset)}
+		<AssetImage
+			src={getThumbnailUrl(asset)}
+			alt={asset.alt || asset.originalFilename}
+			mimeType={asset.mimeType}
+			class="h-full w-full {isVectorOrTransparent(asset) ? 'object-contain p-3' : 'object-cover'}"
+			loading="lazy"
+		/>
+	{:else if getPosterUrl(asset)}
+		<!-- A frame extracted at upload. Cropped like a photo: it is a
+		     still from a rectangular video, not artwork with edges to
+		     preserve. -->
+		<AssetImage
+			src={getPosterUrl(asset)}
+			alt={asset.alt || asset.originalFilename}
+			class="h-full w-full object-cover"
+			loading="lazy"
+		/>
+	{:else}
+		<div class="flex h-full items-center justify-center">
+			{@render fileIcon(asset.mimeType, 'h-1/3 w-1/3 min-h-8 min-w-8 max-h-20 max-w-20')}
+		</div>
+	{/if}
+{/snippet}
+
+{#snippet tileCaption(asset: Asset)}
+	<div class="border-border min-w-0 border-t px-2 py-1.5">
+		<p class="text-foreground truncate text-xs" title={asset.originalFilename}>
+			{asset.originalFilename}
+		</p>
+		<p class="text-muted-foreground truncate text-[11px]">
+			{assetMetaLine(asset)}
+		</p>
+	</div>
+{/snippet}
+
+{#snippet listThumb(asset: Asset)}
+	{#if isImage(asset)}
+		<AssetImage
+			src={getThumbnailUrl(asset)}
+			alt={asset.alt || asset.originalFilename}
+			mimeType={asset.mimeType}
+			class="h-full w-full object-cover"
+			loading="lazy"
+		/>
+	{:else if getPosterUrl(asset)}
+		<!-- Same poster the grid uses. The list had only the placeholder
+		     icon branch, so a video with a perfectly good frame still
+		     rendered as a generic film glyph here. -->
+		<AssetImage
+			src={getPosterUrl(asset)}
+			alt={asset.alt || asset.originalFilename}
+			class="h-full w-full object-cover"
+			loading="lazy"
+		/>
+	{:else}
+		<div class="flex h-full items-center justify-center">
+			{@render fileIcon(asset.mimeType, 'h-4 w-4')}
+		</div>
+	{/if}
+{/snippet}
+
+{#snippet pager()}
+	{#if totalPages > 1}
+		<div class="border-border flex items-center justify-center gap-1 border-t px-4 py-3">
+			<button
+				onclick={() => goToPage(currentPage - 1)}
+				disabled={currentPage <= 1 || loading}
+				class="hover:bg-muted rounded p-1.5 transition-colors disabled:pointer-events-none disabled:opacity-30"
+			>
+				<ChevronLeft size={16} />
+			</button>
+			{#each visiblePages as pg}
+				{#if pg === '...'}
+					<span class="text-muted-foreground px-1.5 text-sm">...</span>
+				{:else}
+					<button
+						onclick={() => goToPage(pg)}
+						disabled={loading}
+						class="min-w-[32px] rounded px-2 py-1 text-sm font-medium transition-colors {pg ===
+						currentPage
+							? 'bg-foreground text-background'
+							: 'text-muted-foreground hover:bg-muted hover:text-foreground'}"
+					>
+						{pg}
+					</button>
+				{/if}
+			{/each}
+			<button
+				onclick={() => goToPage(currentPage + 1)}
+				disabled={currentPage >= totalPages || loading}
+				class="hover:bg-muted rounded p-1.5 transition-colors disabled:pointer-events-none disabled:opacity-30"
+			>
+				<ChevronRight size={16} />
+			</button>
+		</div>
+	{/if}
 {/snippet}
 
 <div
@@ -2201,101 +2368,17 @@
 											openAssetDetail(asset);
 										}
 									}}
-									class="group border-border bg-card relative flex flex-col overflow-hidden rounded-md border text-left transition-all {selectedIds.has(
-										asset.id
-									)
-										? 'border-primary ring-primary/40 ring-2'
-										: selectedAsset?.id === asset.id
-											? 'border-primary ring-primary/40 ring-2'
-											: 'hover:border-muted-foreground/40 hover:shadow-sm'}"
+									class={tileClass(asset)}
 								>
 									<div class="bg-muted/30 relative aspect-square overflow-hidden">
-										<!-- Private assets are marked, because nothing else on the tile
-										     distinguishes one. Privacy is declared on a schema field rather
-										     than chosen here, so without a badge an editor has no way to see
-										     which assets a `private: true` actually covers — and the honest
-										     answer (only those uploaded through that field) is surprising.
-										     Read-only: it reports the schema's decision rather than offering
-										     to change it. -->
-										{#if asset.isPrivate}
-											<span
-												class="pointer-events-none absolute top-1.5 left-1.5 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-black/70"
-												title={i18n.t('Private — needs a session or a signed URL')}
-											>
-												<Lock class="h-3 w-3 text-white" />
-											</span>
-										{/if}
-										<!-- Playable media reads as playable at a glance. Without this a
-										     video and a PDF differ only by a small glyph, which the
-										     media-kind filter made obvious: narrowing to Video produced a
-										     grid of near-identical cards. -->
-										{#if isVideo(asset) || isAudio(asset)}
-											{@const duration = formatDuration(asset)}
-											<!-- The play glyph belongs over a picture, where it says "this
-											     still is a video". Over the placeholder icon used for audio, or
-											     for a video with no poster yet, it stacks a second symbol on a
-											     first — which is what made a WAV tile look cluttered. -->
-											{#if getPosterUrl(asset)}
-												<div
-													class="pointer-events-none absolute inset-0 z-10 flex items-center justify-center"
-												>
-													<span
-														class="flex h-9 w-9 items-center justify-center rounded-full bg-black/45 backdrop-blur-[1px]"
-													>
-														<Play class="h-4 w-4 translate-x-[1px] fill-white text-white" />
-													</span>
-												</div>
-											{/if}
-											{#if duration}
-												<span
-													class="pointer-events-none absolute right-1.5 bottom-1.5 z-10 rounded-sm bg-black/70 px-1 py-0.5 text-[10px] font-medium text-white tabular-nums"
-												>
-													{duration}
-												</span>
-											{/if}
-										{/if}
-										{#if isImage(asset)}
-											<AssetImage
-												src={getThumbnailUrl(asset)}
-												alt={asset.alt || asset.originalFilename}
-												mimeType={asset.mimeType}
-												class="h-full w-full {isVectorOrTransparent(asset)
-													? 'object-contain p-3'
-													: 'object-cover'}"
-												loading="lazy"
-											/>
-										{:else if getPosterUrl(asset)}
-											<!-- A frame extracted at upload. Cropped like a photo: it is a
-											     still from a rectangular video, not artwork with edges to
-											     preserve. -->
-											<AssetImage
-												src={getPosterUrl(asset)}
-												alt={asset.alt || asset.originalFilename}
-												class="h-full w-full object-cover"
-												loading="lazy"
-											/>
-										{:else}
-											<div class="flex h-full items-center justify-center">
-												{@render fileIcon(
-													asset.mimeType,
-													'h-1/3 w-1/3 min-h-8 min-w-8 max-h-20 max-w-20'
-												)}
-											</div>
-										{/if}
+										{@render tileThumb(asset)}
 										{#if isSelectMode && !selectable}
 											<div class="absolute top-1.5 left-1.5">
 												{@render selectCheckbox(asset)}
 											</div>
 										{/if}
 									</div>
-									<div class="border-border min-w-0 border-t px-2 py-1.5">
-										<p class="text-foreground truncate text-xs" title={asset.originalFilename}>
-											{asset.originalFilename}
-										</p>
-										<p class="text-muted-foreground truncate text-[11px]">
-											{assetMetaLine(asset)}
-										</p>
-									</div>
+									{@render tileCaption(asset)}
 								</button>
 							{/each}
 							{#each sortedAssets as asset (asset.id)}
@@ -2307,87 +2390,10 @@
 											openAssetDetail(asset);
 										}
 									}}
-									class="group border-border bg-card relative flex flex-col overflow-hidden rounded-md border text-left transition-all {selectedIds.has(
-										asset.id
-									)
-										? 'border-primary ring-primary/40 ring-2'
-										: selectedAsset?.id === asset.id
-											? 'border-primary ring-primary/40 ring-2'
-											: 'hover:border-muted-foreground/40 hover:shadow-sm'}"
+									class={tileClass(asset)}
 								>
 									<div class="bg-muted/30 relative aspect-square overflow-hidden">
-										<!-- Private assets are marked, because nothing else on the tile
-										     distinguishes one. Privacy is declared on a schema field rather
-										     than chosen here, so without a badge an editor has no way to see
-										     which assets a `private: true` actually covers — and the honest
-										     answer (only those uploaded through that field) is surprising.
-										     Read-only: it reports the schema's decision rather than offering
-										     to change it. -->
-										{#if asset.isPrivate}
-											<span
-												class="pointer-events-none absolute top-1.5 left-1.5 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-black/70"
-												title={i18n.t('Private — needs a session or a signed URL')}
-											>
-												<Lock class="h-3 w-3 text-white" />
-											</span>
-										{/if}
-										<!-- Playable media reads as playable at a glance. Without this a
-										     video and a PDF differ only by a small glyph, which the
-										     media-kind filter made obvious: narrowing to Video produced a
-										     grid of near-identical cards. -->
-										{#if isVideo(asset) || isAudio(asset)}
-											{@const duration = formatDuration(asset)}
-											<!-- The play glyph belongs over a picture, where it says "this
-											     still is a video". Over the placeholder icon used for audio, or
-											     for a video with no poster yet, it stacks a second symbol on a
-											     first — which is what made a WAV tile look cluttered. -->
-											{#if getPosterUrl(asset)}
-												<div
-													class="pointer-events-none absolute inset-0 z-10 flex items-center justify-center"
-												>
-													<span
-														class="flex h-9 w-9 items-center justify-center rounded-full bg-black/45 backdrop-blur-[1px]"
-													>
-														<Play class="h-4 w-4 translate-x-[1px] fill-white text-white" />
-													</span>
-												</div>
-											{/if}
-											{#if duration}
-												<span
-													class="pointer-events-none absolute right-1.5 bottom-1.5 z-10 rounded-sm bg-black/70 px-1 py-0.5 text-[10px] font-medium text-white tabular-nums"
-												>
-													{duration}
-												</span>
-											{/if}
-										{/if}
-										{#if isImage(asset)}
-											<AssetImage
-												src={getThumbnailUrl(asset)}
-												alt={asset.alt || asset.originalFilename}
-												mimeType={asset.mimeType}
-												class="h-full w-full {isVectorOrTransparent(asset)
-													? 'object-contain p-3'
-													: 'object-cover'}"
-												loading="lazy"
-											/>
-										{:else if getPosterUrl(asset)}
-											<!-- A frame extracted at upload. Cropped like a photo: it is a
-											     still from a rectangular video, not artwork with edges to
-											     preserve. -->
-											<AssetImage
-												src={getPosterUrl(asset)}
-												alt={asset.alt || asset.originalFilename}
-												class="h-full w-full object-cover"
-												loading="lazy"
-											/>
-										{:else}
-											<div class="flex h-full items-center justify-center">
-												{@render fileIcon(
-													asset.mimeType,
-													'h-1/3 w-1/3 min-h-8 min-w-8 max-h-20 max-w-20'
-												)}
-											</div>
-										{/if}
+										{@render tileThumb(asset)}
 										{#if selectable}
 											<div
 												role="button"
@@ -2443,53 +2449,13 @@
 											</div>
 										{/if}
 									</div>
-									<div class="border-border min-w-0 border-t px-2 py-1.5">
-										<p class="text-foreground truncate text-xs" title={asset.originalFilename}>
-											{asset.originalFilename}
-										</p>
-										<p class="text-muted-foreground truncate text-[11px]">
-											{assetMetaLine(asset)}
-										</p>
-									</div>
+									{@render tileCaption(asset)}
 								</button>
 							{/each}
 						</div>
 
 						<!-- Pagination -->
-						{#if totalPages > 1}
-							<div class="border-border flex items-center justify-center gap-1 border-t px-4 py-3">
-								<button
-									onclick={() => goToPage(currentPage - 1)}
-									disabled={currentPage <= 1 || loading}
-									class="hover:bg-muted rounded p-1.5 transition-colors disabled:pointer-events-none disabled:opacity-30"
-								>
-									<ChevronLeft size={16} />
-								</button>
-								{#each visiblePages as pg}
-									{#if pg === '...'}
-										<span class="text-muted-foreground px-1.5 text-sm">...</span>
-									{:else}
-										<button
-											onclick={() => goToPage(pg)}
-											disabled={loading}
-											class="min-w-[32px] rounded px-2 py-1 text-sm font-medium transition-colors {pg ===
-											currentPage
-												? 'bg-foreground text-background'
-												: 'text-muted-foreground hover:bg-muted hover:text-foreground'}"
-										>
-											{pg}
-										</button>
-									{/if}
-								{/each}
-								<button
-									onclick={() => goToPage(currentPage + 1)}
-									disabled={currentPage >= totalPages || loading}
-									class="hover:bg-muted rounded p-1.5 transition-colors disabled:pointer-events-none disabled:opacity-30"
-								>
-									<ChevronRight size={16} />
-								</button>
-							</div>
-						{/if}
+						{@render pager()}
 					{:else}
 						<!-- List View -->
 						<div class="w-full select-none">
@@ -2526,51 +2492,16 @@
 							{#each orderedAssets as asset (asset.id)}
 								<!-- Desktop row -->
 								<button
-									onclick={(e) => {
-										if (selectable && multiSelect) {
-											openAssetDetail(asset);
-										} else if (isSelectMode) {
-											handleSelectClick(asset.id, e);
-										} else if (selectable && onSelect) {
-											onSelect(asset);
-										} else {
-											openAssetDetail(asset);
-										}
-									}}
-									class="border-border hidden w-full items-center gap-4 border-b px-4 py-2 text-left transition-colors md:grid md:grid-cols-[auto_40px_1fr_100px_100px_80px_50px_100px] {selectedAsset?.id ===
-									asset.id
-										? 'bg-muted'
-										: selectedIds.has(asset.id)
-											? 'bg-muted/70'
-											: 'hover:bg-muted/50'}"
+									onclick={(e) => openListRow(asset, e)}
+									class="border-border hidden w-full items-center gap-4 border-b px-4 py-2 text-left transition-colors md:grid md:grid-cols-[auto_40px_1fr_100px_100px_80px_50px_100px] {listRowTint(
+										asset
+									)}"
 								>
 									<div class="w-4">
 										{@render selectCheckbox(asset)}
 									</div>
 									<div class="bg-muted/30 h-10 w-10 overflow-hidden rounded">
-										{#if isImage(asset)}
-											<AssetImage
-												src={getThumbnailUrl(asset)}
-												alt={asset.alt || asset.originalFilename}
-												mimeType={asset.mimeType}
-												class="h-full w-full object-cover"
-												loading="lazy"
-											/>
-										{:else if getPosterUrl(asset)}
-											<!-- Same poster the grid uses. The list had only the placeholder
-											     icon branch, so a video with a perfectly good frame still
-											     rendered as a generic film glyph here. -->
-											<AssetImage
-												src={getPosterUrl(asset)}
-												alt={asset.alt || asset.originalFilename}
-												class="h-full w-full object-cover"
-												loading="lazy"
-											/>
-										{:else}
-											<div class="flex h-full items-center justify-center">
-												{@render fileIcon(asset.mimeType, 'h-4 w-4')}
-											</div>
-										{/if}
+										{@render listThumb(asset)}
 									</div>
 									<div class="min-w-0">
 										<p class="truncate text-sm">{asset.originalFilename}</p>
@@ -2587,51 +2518,16 @@
 								</button>
 								<!-- Mobile row -->
 								<button
-									onclick={(e) => {
-										if (selectable && multiSelect) {
-											openAssetDetail(asset);
-										} else if (isSelectMode) {
-											handleSelectClick(asset.id, e);
-										} else if (selectable && onSelect) {
-											onSelect(asset);
-										} else {
-											openAssetDetail(asset);
-										}
-									}}
-									class="border-border flex w-full items-center gap-3 border-b px-4 py-2 text-left transition-colors md:hidden {selectedAsset?.id ===
-									asset.id
-										? 'bg-muted'
-										: selectedIds.has(asset.id)
-											? 'bg-muted/70'
-											: 'hover:bg-muted/50'}"
+									onclick={(e) => openListRow(asset, e)}
+									class="border-border flex w-full items-center gap-3 border-b px-4 py-2 text-left transition-colors md:hidden {listRowTint(
+										asset
+									)}"
 								>
 									<div class="w-4">
 										{@render selectCheckbox(asset)}
 									</div>
 									<div class="bg-muted/30 h-10 w-10 shrink-0 overflow-hidden rounded">
-										{#if isImage(asset)}
-											<AssetImage
-												src={getThumbnailUrl(asset)}
-												alt={asset.alt || asset.originalFilename}
-												mimeType={asset.mimeType}
-												class="h-full w-full object-cover"
-												loading="lazy"
-											/>
-										{:else if getPosterUrl(asset)}
-											<!-- Same poster the grid uses. The list had only the placeholder
-											     icon branch, so a video with a perfectly good frame still
-											     rendered as a generic film glyph here. -->
-											<AssetImage
-												src={getPosterUrl(asset)}
-												alt={asset.alt || asset.originalFilename}
-												class="h-full w-full object-cover"
-												loading="lazy"
-											/>
-										{:else}
-											<div class="flex h-full items-center justify-center">
-												{@render fileIcon(asset.mimeType, 'h-4 w-4')}
-											</div>
-										{/if}
+										{@render listThumb(asset)}
 									</div>
 									<div class="min-w-0 flex-1">
 										<p class="truncate text-sm">{asset.originalFilename}</p>
@@ -2641,42 +2537,7 @@
 							{/each}
 
 							<!-- Pagination -->
-							{#if totalPages > 1}
-								<div
-									class="border-border flex items-center justify-center gap-1 border-t px-4 py-3"
-								>
-									<button
-										onclick={() => goToPage(currentPage - 1)}
-										disabled={currentPage <= 1 || loading}
-										class="hover:bg-muted rounded p-1.5 transition-colors disabled:pointer-events-none disabled:opacity-30"
-									>
-										<ChevronLeft size={16} />
-									</button>
-									{#each visiblePages as pg}
-										{#if pg === '...'}
-											<span class="text-muted-foreground px-1.5 text-sm">...</span>
-										{:else}
-											<button
-												onclick={() => goToPage(pg)}
-												disabled={loading}
-												class="min-w-[32px] rounded px-2 py-1 text-sm font-medium transition-colors {pg ===
-												currentPage
-													? 'bg-foreground text-background'
-													: 'text-muted-foreground hover:bg-muted hover:text-foreground'}"
-											>
-												{pg}
-											</button>
-										{/if}
-									{/each}
-									<button
-										onclick={() => goToPage(currentPage + 1)}
-										disabled={currentPage >= totalPages || loading}
-										class="hover:bg-muted rounded p-1.5 transition-colors disabled:pointer-events-none disabled:opacity-30"
-									>
-										<ChevronRight size={16} />
-									</button>
-								</div>
-							{/if}
+							{@render pager()}
 						</div>
 					{/if}
 				{/if}
