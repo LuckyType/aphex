@@ -62,16 +62,40 @@ export interface StudioDocumentList {
 	 * text already in `field` (`title` when true), so the document is stored
 	 * with its title from the first save. Escape closes the form. `values`
 	 * adds what else the new document starts with, derived from the title
-	 * (a heading that repeats it).
+	 * (a heading that repeats it). `templates` lets the form offer starting
+	 * points: the picked one's `values` replace the list's own.
 	 */
 	createWithTitle?:
 		| boolean
-		| { field?: string; values?: (title: string) => Record<string, unknown> };
+		| {
+				field?: string;
+				values?: (title: string) => Record<string, unknown>;
+				templates?: () => readonly StudioCreateTemplate[];
+		  };
 	/**
 	 * Actions the list's menu offers above its orderings (say, clearing out
 	 * leftover drafts). The list re-reads its documents once one has run.
 	 */
 	actions?: () => readonly StudioListAction[];
+}
+
+/**
+ * A starting point the create form offers (`createWithTitle.templates`): a
+ * page laid out for one purpose, say. The first one is preselected.
+ */
+export interface StudioCreateTemplate {
+	name: string;
+	/** What the form's picker calls it. */
+	title: string;
+	/** One line under the picker saying what the new document starts with. */
+	description?: string;
+	/**
+	 * The title the form fills in when this template is picked, while the
+	 * field is empty or still holds another template's suggestion.
+	 */
+	suggestedTitle?: string;
+	/** What the new document starts with, from the title typed. */
+	values: (title: string) => Record<string, unknown>;
 }
 
 /** One entry of a document list's menu (`StudioDocumentList.actions`). */
@@ -437,18 +461,33 @@ export function createTitleField(type: string | null | undefined): string | null
 	return ask === true ? 'title' : (ask.field ?? 'title');
 }
 
+/** The templates `type`'s create form offers, none when the app gives none. */
+export function createTemplates(type: string | null | undefined): readonly StudioCreateTemplate[] {
+	const ask = studioDocumentList(type).createWithTitle;
+	return typeof ask === 'object' ? (ask.templates?.() ?? []) : [];
+}
+
 /**
  * What a new document of `type` starts with when the list asked for
- * `title`: the title in its field, plus the list's `values` for it.
+ * `title`: the title in its field, plus the picked template's `values` for
+ * it, else the list's own.
  */
 export function createWithTitleValues(
 	type: string | null | undefined,
-	title: string
+	title: string,
+	templateName?: string | null
 ): Record<string, unknown> | null {
 	const field = createTitleField(type);
 	if (!field) return null;
 	const ask = studioDocumentList(type).createWithTitle;
-	const extra = typeof ask === 'object' ? (ask.values?.(title) ?? {}) : {};
+	const template = templateName
+		? createTemplates(type).find((entry) => entry.name === templateName)
+		: undefined;
+	const extra = template
+		? template.values(title)
+		: typeof ask === 'object'
+			? (ask.values?.(title) ?? {})
+			: {};
 	return { ...extra, [field]: title };
 }
 
