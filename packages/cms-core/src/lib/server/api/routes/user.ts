@@ -16,7 +16,9 @@ import type { AphexEnv } from '../index';
 //
 // Two buckets per endpoint, because either one alone is porous: the address bucket stops
 // one host hammering many mailboxes, and the email/token bucket still holds when the
-// address is forged, which `x-forwarded-for` always permits.
+// address is forged, which `x-forwarded-for` always permits. The address bucket prefers
+// the host's own reading (`c.env.clientAddress`, SvelteKit's `getClientAddress`, which
+// honours only the proxy depth the deployment configured) over the raw header.
 const RESET_REQUEST_WINDOW_MS = 60_000;
 const resetRequestByAddress = new RateLimiter({ windowMs: RESET_REQUEST_WINDOW_MS, max: 5 });
 // Tighter than the address bucket: nobody legitimately asks for the same mailbox's reset
@@ -298,7 +300,10 @@ export const userRouter: Hono<AphexEnv> = new Hono<AphexEnv>()
 
 				// Keyed on the normalized address so casing/whitespace can't mint a fresh bucket.
 				const limited = enforceRateLimits(c, [
-					{ limiter: resetRequestByAddress, key: clientAddress(c.req.raw.headers) },
+					{
+						limiter: resetRequestByAddress,
+						key: c.env.clientAddress ?? clientAddress(c.req.raw.headers)
+					},
 					{ limiter: resetRequestByEmail, key: email.trim().toLowerCase() }
 				]);
 				if (limited) return limited;
@@ -349,7 +354,10 @@ export const userRouter: Hono<AphexEnv> = new Hono<AphexEnv>()
 				const { token, newPassword } = c.req.valid('json');
 
 				const limited = enforceRateLimits(c, [
-					{ limiter: resetSubmitByAddress, key: clientAddress(c.req.raw.headers) },
+					{
+						limiter: resetSubmitByAddress,
+						key: c.env.clientAddress ?? clientAddress(c.req.raw.headers)
+					},
 					{ limiter: resetSubmitByToken, key: token }
 				]);
 				if (limited) return limited;
