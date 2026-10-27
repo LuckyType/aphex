@@ -1927,17 +1927,19 @@
 															>
 																{picked?.title ?? ''}
 															</Select.Trigger>
-															<Select.Content>
+															<!-- As wide as the picker, so it stays over the list it belongs to. -->
+															<Select.Content class="w-(--bits-select-anchor-width)">
 																{#each templates as template (template.name)}
 																	<Select.Item value={template.name} label={template.title}>
-																		<span class="flex flex-col gap-0.5">
+																		<!-- A div: the item lays out its last span as a centred row. -->
+																		<div class="flex min-w-0 flex-col gap-0.5 text-left">
 																			<span>{template.title}</span>
 																			{#if template.description}
 																				<span class="text-muted-foreground text-xs"
 																					>{template.description}</span
 																				>
 																			{/if}
-																		</span>
+																		</div>
 																	</Select.Item>
 																{/each}
 															</Select.Content>
