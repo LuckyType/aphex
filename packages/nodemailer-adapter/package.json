@@ -31,7 +31,7 @@
 		"postpack": "node ../../scripts/swap-package-paths.js ./package.json src"
 	},
 	"dependencies": {
-		"nodemailer": "^9.0.3"
+		"nodemailer": "^10.1.7"
 	},
 	"peerDependencies": {
 		"@aphexcms/cms-core": "workspace:>=11.0.0"
