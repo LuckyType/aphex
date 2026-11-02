@@ -39,7 +39,7 @@
 	import { pluralize } from '../../utils/pluralize';
 	import { revealInRow, scrollEdges } from '../../utils/scroll-edges';
 	import EditorBreadcrumbs from './EditorBreadcrumbs.svelte';
-	import { SvelteSet } from 'svelte/reactivity';
+	import { MediaQuery, SvelteSet } from 'svelte/reactivity';
 	import { usePermissions } from '../../permissions-context.svelte';
 	import AdminSlot from './AdminSlot.svelte';
 	import ScheduleDialog from './ScheduleDialog.svelte';
@@ -73,7 +73,9 @@
 		Undo2,
 		GripVertical,
 		FileX,
-		Copy
+		Copy,
+		Eye,
+		Pencil
 	} from '@lucide/svelte';
 	import { stegaEncodeDocument } from '../../preview/stega.js';
 	import { collectAssetRefs, injectAssetData, type ResolvedAsset } from '../../preview/assets.js';
@@ -412,6 +414,14 @@
 	// Preview canvas — a viewport width and a zoom level so the preview reads like
 	// a real device canvas rather than a cramped pane.
 	let previewViewport = $state<'desktop' | 'tablet' | 'mobile'>('desktop');
+
+	// Below `lg` there is no room for the side-by-side visual editor, so a phone
+	// or narrow tablet switches the editor between its fields and a full-size
+	// preview instead (`phonePreview`). Both feed the same live preview.
+	const narrow = new MediaQuery('max-width: 1023px');
+	let phonePreview = $state(false);
+	const phonePreviewShown = $derived(phonePreview && narrow.current && !presentationMode);
+	const previewLive = $derived(presentationMode || phonePreviewShown);
 	let previewZoom = $state(1);
 	const VIEWPORT_WIDTH: Record<'desktop' | 'tablet' | 'mobile', number> = {
 		desktop: 0, // 0 = fill available width
@@ -550,7 +560,7 @@
 	const iframeDisplayUrl = $derived(iframeUrl ? displayPreviewUrl(iframeUrl) : null);
 
 	$effect(() => {
-		if (!presentationMode) return;
+		if (!previewLive) return;
 		const handler = (e: MessageEvent) => {
 			// Only handle messages from *this* editor's own preview iframe. Presentation
 			// editors can be nested (a base editor + a reference modal), and both listen
@@ -584,6 +594,8 @@
 					onOpenReference?.(msg.documentId, msg.documentType);
 					return;
 				}
+				// On a phone the fields are hidden behind the preview: show them first.
+				if (phonePreviewShown) phonePreview = false;
 				focusFieldByName(msg.fieldPath, {
 					blockIndex: msg.blockIndex,
 					blockKey: msg.blockKey,
@@ -598,7 +610,7 @@
 	});
 
 	$effect(() => {
-		if (!presentationMode || perspective === 'published' || !iframeRef?.contentWindow) return;
+		if (!previewLive || perspective === 'published' || !iframeRef?.contentWindow) return;
 		// Track documentData so this effect re-runs on every edit; the debounce coalesces.
 		void documentData;
 		const timer = setTimeout(() => {
@@ -619,7 +631,7 @@
 	// re-fetch its server-loaded data. The overlay maps this to `invalidateAll()`.
 	$effect(() => {
 		if (refreshToken === 0) return; // initial value — nothing to refresh yet
-		if (!presentationMode || !iframeRef?.contentWindow) return;
+		if (!previewLive || !iframeRef?.contentWindow) return;
 		iframeRef.contentWindow.postMessage({ type: 'aphex:refresh' }, '*');
 	});
 
@@ -1752,7 +1764,7 @@
 			lastSaved = new Date();
 			hasUnsavedChanges = false;
 			if (fullDocument?.id) notifyDocumentChanged(fullDocument.id);
-			if (presentationMode && iframeRef?.contentWindow) {
+			if (previewLive && iframeRef?.contentWindow) {
 				iframeRef.contentWindow.postMessage({ type: 'aphex:refresh' }, '*');
 			}
 			if (isAutoSave) {
@@ -2553,6 +2565,25 @@
 			</DropdownMenu.Root>
 		{/if}
 
+		<!-- Below lg: switch between the fields and a full-size preview. -->
+		{#if schema?.previewUrl && !presentationMode}
+			<Button
+				variant="ghost"
+				size="sm"
+				onclick={() => (phonePreview = !phonePreview)}
+				class="h-8 gap-1.5 px-2 hover:cursor-pointer lg:hidden"
+				aria-pressed={phonePreviewShown}
+			>
+				{#if phonePreviewShown}
+					<Pencil class="h-4 w-4" />
+					<span class="text-sm font-medium">{i18n.t('Edit')}</span>
+				{:else}
+					<Eye class="h-4 w-4" />
+					<span class="text-sm font-medium">{i18n.t('Preview')}</span>
+				{/if}
+			</Button>
+		{/if}
+
 		<!-- Toggle presentation. In the visual editor it's a second way to switch off
 		     (alongside the breadcrumb back arrow); highlighted while active. -->
 		{#if onTogglePresentation && schema?.previewUrl}
@@ -2791,7 +2822,9 @@
 		     column in presentation mode instead of covering the preview iframe. Scroll
 		     lives on the inner container so the overlay doesn't scroll with the content. -->
 		<div
-			class="relative flex min-h-0 flex-col {presentationMode ? 'shrink-0' : 'flex-1'}"
+			class="relative min-h-0 flex-col {presentationMode ? 'shrink-0' : 'flex-1'} {phonePreviewShown
+				? 'hidden'
+				: 'flex'}"
 			style={presentationMode ? `width: ${fieldsWidth}px; min-width: 500px` : undefined}
 		>
 			<!-- Field Group Tabs — a fixed header OUTSIDE the scroll container, so they
@@ -3048,6 +3081,54 @@
 				</div>
 			</div>
 		</div>
+
+		<!-- The phone preview: the fields stay mounted (hidden) so nothing typed is lost,
+		     and a tap on a marked element in the preview returns to its field. -->
+		{#if phonePreviewShown}
+			<div class="bg-muted/20 flex min-h-0 flex-1 flex-col">
+				{#if iframeUrl}
+					<div
+						class="border-rule bg-background flex h-10 shrink-0 items-center gap-1 border-b px-2"
+					>
+						<button
+							onclick={refreshPreview}
+							class="hover:bg-muted text-muted-foreground hover:text-foreground flex size-9 cursor-pointer items-center justify-center rounded transition-colors"
+							title={i18n.t('Refresh preview')}
+							aria-label={i18n.t('Refresh preview')}
+						>
+							<RefreshCw class="h-4 w-4" />
+						</button>
+						<div class="bg-muted mx-1 min-w-0 flex-1 rounded px-2.5 py-1">
+							<span class="text-muted-foreground block truncate text-center font-mono text-[11px]"
+								>{iframeDisplayUrl}</span
+							>
+						</div>
+						<button
+							onclick={openPreviewInNewTab}
+							class="hover:bg-muted text-muted-foreground hover:text-foreground flex size-9 cursor-pointer items-center justify-center rounded transition-colors"
+							title={i18n.t('Open in new tab')}
+							aria-label={i18n.t('Open in new tab')}
+						>
+							<ExternalLink class="h-4 w-4" />
+						</button>
+					</div>
+					<iframe
+						bind:this={iframeRef}
+						src={iframeUrl}
+						class="bg-background min-h-0 w-full flex-1 border-none"
+						title={i18n.t('Page preview')}
+					></iframe>
+				{:else}
+					<div class="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
+						<Monitor class="text-muted-foreground/30 h-10 w-10" />
+						<p class="text-muted-foreground text-sm">{i18n.t('No preview URL yet.')}</p>
+						<p class="text-muted-foreground/50 text-xs">
+							{i18n.t('Fill in the required fields to enable preview.')}
+						</p>
+					</div>
+				{/if}
+			</div>
+		{/if}
 
 		<!-- Preview iframe (presentation mode only) -->
 		{#if presentationMode}
