@@ -37,6 +37,7 @@
 	import { documentErrorsShown, setFieldTouchContext } from '../../field-touch-context.svelte';
 	import { type EditorCrumb, EditorTrail, setEditorTrail } from '../../editor-trail.svelte';
 	import { pluralize } from '../../utils/pluralize';
+	import { revealInRow, scrollEdges } from '../../utils/scroll-edges';
 	import EditorBreadcrumbs from './EditorBreadcrumbs.svelte';
 	import { SvelteSet } from 'svelte/reactivity';
 	import { usePermissions } from '../../permissions-context.svelte';
@@ -989,9 +990,11 @@
 		event.preventDefault();
 		const bar = event.currentTarget as HTMLElement;
 		activeGroup = next;
-		void tick().then(() =>
-			bar.querySelector<HTMLElement>(`[data-field-group-tab="${next}"]`)?.focus()
-		);
+		void tick().then(() => {
+			const tab = bar.querySelector<HTMLElement>(`[data-field-group-tab="${next}"]`);
+			tab?.focus();
+			revealInRow(tab);
+		});
 	}
 
 	// Whether `tab` holds a field whose error the form shows (all fields for 'all').
@@ -2362,7 +2365,10 @@
 		aria-selected={selected}
 		tabindex={selected ? 0 : -1}
 		data-field-group-tab={name}
-		onclick={() => (activeGroup = name)}
+		onclick={(event) => {
+			activeGroup = name;
+			revealInRow(event.currentTarget);
+		}}
 		class="text-muted-foreground hover:text-foreground aria-selected:border-primary aria-selected:text-foreground focus-visible:ring-ring/50 flex shrink-0 cursor-pointer items-center gap-1.5 border-b-2 border-transparent px-1.5 pt-2.5 pb-2 text-sm font-medium whitespace-nowrap outline-none focus-visible:ring-[3px]"
 	>
 		{#if icon}
@@ -2800,6 +2806,7 @@
 					data-field-group-tabs
 					tabindex={-1}
 					onkeydown={groupTabKeydown}
+					{@attach scrollEdges}
 					class="border-rule/60 flex shrink-0 [scrollbar-width:none] items-center gap-1 overflow-x-auto border-b px-3 lg:px-5 [&::-webkit-scrollbar]:hidden"
 				>
 					{#if allFieldsTab}
@@ -2811,6 +2818,7 @@
 				</div>
 			{:else if schema && showGroupTabs}
 				<div
+					{@attach scrollEdges}
 					class="border-rule/60 flex shrink-0 [scrollbar-width:none] items-center gap-1 overflow-x-auto border-b px-4 py-2 lg:px-6 [&::-webkit-scrollbar]:hidden"
 				>
 					{#if allFieldsTab}
