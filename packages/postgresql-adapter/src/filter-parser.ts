@@ -404,7 +404,9 @@ export function parseSort(
 				for (let i = 0; i < pathParts.length - 1; i++) {
 					pathSql = sql`${pathSql}->${pathParts[i]}`;
 				}
-				const finalPath = sql`${pathSql}->>${pathParts[pathParts.length - 1]}`;
+				// `->` keeps the JSONB value, whose ordering compares numbers numerically
+				// and strings as text does; `->>` sorted 10 between 1 and 2.
+				const finalPath = sql`${pathSql}->${pathParts[pathParts.length - 1]}`;
 
 				orderBy.push(descending ? sql`${finalPath} DESC` : sql`${finalPath} ASC`);
 			}
