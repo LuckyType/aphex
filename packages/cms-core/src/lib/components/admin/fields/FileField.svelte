@@ -463,7 +463,7 @@
 	{:else}
 		<!-- Upload bar -->
 		<div
-			class="border-border flex h-12 items-center overflow-hidden rounded-md border transition-colors {validationClasses} {isReadOnly
+			class="border-border @container flex h-12 items-center overflow-hidden rounded-md border transition-colors {validationClasses} {isReadOnly
 				? ''
 				: isDragging
 					? 'border-primary bg-primary/5'
@@ -477,15 +477,17 @@
 				]
 			}}
 		>
-			<div class="flex flex-1 items-center gap-2 px-3">
+			<!-- In a narrow column (a phone, a side panel) the hint would wrap and be
+			     clipped by the fixed height; the icon and the buttons say enough there. -->
+			<div class="flex min-w-0 flex-1 items-center gap-2 px-3">
 				{#if isUploading}
 					<div
 						class="border-primary h-4 w-4 animate-spin rounded-full border-2 border-t-transparent"
 					></div>
-					<span class="text-muted-foreground text-sm">{i18n.t('Uploading...')}</span>
+					<span class="text-muted-foreground truncate text-sm">{i18n.t('Uploading...')}</span>
 				{:else}
-					<FileIcon size={16} class="text-muted-foreground" />
-					<span class="text-muted-foreground text-sm">
+					<FileIcon size={16} class="text-muted-foreground shrink-0" />
+					<span class="text-muted-foreground hidden truncate text-sm @sm:inline">
 						{isReadOnly
 							? i18n.t('No file')
 							: isDragging
@@ -495,12 +497,12 @@
 				{/if}
 			</div>
 
-			<div class="flex items-center gap-1 pr-2">
+			<div class="flex shrink-0 items-center gap-1 pr-2">
 				<button
 					onclick={openFileDialog}
 					disabled={isUploading || isReadOnly}
 					type="button"
-					class="text-muted-foreground hover:text-foreground flex items-center gap-1 px-2 py-1 text-sm transition-colors disabled:opacity-50"
+					class="text-muted-foreground hover:text-foreground flex items-center gap-1 px-2 py-1 text-sm whitespace-nowrap transition-colors disabled:opacity-50"
 				>
 					<Upload size={14} />
 					{i18n.t('Upload')}
@@ -511,7 +513,7 @@
 					onclick={() => {
 						showAssetBrowser = true;
 					}}
-					class="text-muted-foreground hover:text-foreground flex items-center gap-1 px-2 py-1 text-sm transition-colors disabled:opacity-50"
+					class="text-muted-foreground hover:text-foreground flex items-center gap-1 px-2 py-1 text-sm whitespace-nowrap transition-colors disabled:opacity-50"
 				>
 					<FileIcon size={14} />
 					{i18n.t('Select')}
